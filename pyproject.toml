@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cmb-lensing"
+version = "0.1.0"
+description = "CMB lensing analysis with JAX"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "jax>=0.4.0",
+    "jaxlib>=0.4.0",
+    "numpy>=1.24.0",
+    "flax>=0.8.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "jupyter>=1.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["cmb_lensing*"]

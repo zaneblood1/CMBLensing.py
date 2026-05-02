@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMB Lensing — Test Figures</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>CMB Lensing Test Figures</h1>
+    <p class="subtitle">Auto-generated visualizations from test runs</p>
+  </header>
+
+  <nav id="category-bar"></nav>
+  <nav id="signal-bar"></nav>
+  <nav id="action-bar"></nav>
+  <main id="gallery"></main>
+
+  <div id="nav-buttons">
+    <button id="btn-top" title="Jump to top">&#9650;</button>
+    <button id="btn-bottom" title="Jump to bottom">&#9660;</button>
+  </div>
+
+  <script>
+    const BASE = "test_generated_figures";
+
+    const CATEGORY_ORDER = ["lensing", "gradients", "map_joint", "wiener_filter"];
+    const SIGNAL_ORDER = ["intensity_only", "polarization_only", "intensity_and_polarization"];
+
+    const DISPLAY_NAMES = {
+      lensing: "Lensing",
+      gradients: "Gradients",
+      map_joint: "MAP Joint",
+      wiener_filter: "Wiener Filter",
+      intensity_only: "Intensity",
+      polarization_only: "Polarization",
+      intensity_and_polarization: "Intensity & Polarization",
+    };
+
+    function displayName(key) {
+      if (DISPLAY_NAMES[key]) return DISPLAY_NAMES[key];
+      return key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    async function listChildren(dirPath) {
+      try {
+        const resp = await fetch(dirPath);
+        if (!resp.ok) return [];
+        const html = await resp.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+
+        const parentPrefix = new URL(dirPath, location.href).pathname.replace(/\/$/, "");
+        return [...doc.querySelectorAll("a")]
+          .map(a => decodeURIComponent(a.getAttribute("href") || ""))
+          .filter(h => {
+            const norm = h.replace(/\/$/, "");
+            return norm.startsWith(parentPrefix + "/")
+              && norm.slice(parentPrefix.length + 1).indexOf("/") === -1;
+          })
+          .map(h => h.replace(/\/$/, "").split("/").pop());
+      } catch { return []; }
+    }
+
+    async function scanCategory(category, signal) {
+      const groupDir = `${BASE}/${category}/${signal}/`;
+      const groups = await listChildren(groupDir);
+
+      const entries = [];
+      await Promise.all(groups.map(async group => {
+        const fileDir = `${BASE}/${category}/${signal}/${group}/`;
+        const children = await listChildren(fileDir);
+        const pngs = children.filter(f => f.toLowerCase().endsWith(".png"));
+        for (const file of pngs) {
+          entries.push({
+            path: `${category}/${signal}/${group}/${file}`,
+            category, signal, group, file,
+          });
+        }
+      }));
+
+      entries.sort((a, b) => {
+        if (a.group !== b.group) return a.group.localeCompare(b.group);
+        return a.file.localeCompare(b.file);
+      });
+      return entries;
+    }
+
+    let activeCategory = CATEGORY_ORDER[0];
+    let activeSignal = SIGNAL_ORDER[0];
+
+    const categoryBar = document.getElementById("category-bar");
+    const signalBar = document.getElementById("signal-bar");
+    const actionBar = document.getElementById("action-bar");
+    const gallery = document.getElementById("gallery");
+
+    document.getElementById("btn-top").addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+    document.getElementById("btn-bottom").addEventListener("click", () => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
+
+    function buildActionBar() {
+      actionBar.innerHTML = "";
+      const expandBtn = document.createElement("button");
+      expandBtn.textContent = "Expand All";
+      expandBtn.className = "tab";
+      expandBtn.addEventListener("click", () => {
+        gallery.querySelectorAll("details.group-section").forEach(d => d.open = true);
+      });
+      actionBar.appendChild(expandBtn);
+
+      const collapseBtn = document.createElement("button");
+      collapseBtn.textContent = "Collapse All";
+      collapseBtn.className = "tab";
+      collapseBtn.addEventListener("click", () => {
+        gallery.querySelectorAll("details.group-section").forEach(d => d.open = false);
+      });
+      actionBar.appendChild(collapseBtn);
+    }
+
+    function buildTabs(container, items, active, onClick) {
+      container.innerHTML = "";
+      for (const item of items) {
+        const btn = document.createElement("button");
+        btn.textContent = displayName(item);
+        btn.className = "tab" + (item === active ? " active" : "");
+        btn.addEventListener("click", () => onClick(item));
+        container.appendChild(btn);
+      }
+    }
+
+    async function render() {
+      buildTabs(categoryBar, CATEGORY_ORDER, activeCategory, cat => {
+        activeCategory = cat;
+        render();
+      });
+
+      buildTabs(signalBar, SIGNAL_ORDER, activeSignal, sig => {
+        activeSignal = sig;
+        render();
+      });
+
+      buildActionBar();
+      gallery.innerHTML = '<p class="empty">Loading...</p>';
+
+      const items = await scanCategory(activeCategory, activeSignal);
+
+      gallery.innerHTML = "";
+
+      if (items.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "No figures in this category yet.";
+        gallery.appendChild(empty);
+        return;
+      }
+
+      const groups = [];
+      const groupMap = {};
+      for (const fig of items) {
+        if (!groupMap[fig.group]) {
+          groupMap[fig.group] = [];
+          groups.push(fig.group);
+        }
+        groupMap[fig.group].push(fig);
+      }
+
+      for (const group of groups) {
+        const details = document.createElement("details");
+        details.className = "group-section";
+
+        const summary = document.createElement("summary");
+        summary.className = "group-heading";
+        summary.innerHTML = '<span class="chevron"></span>' + displayName(group);
+        details.appendChild(summary);
+
+        const content = document.createElement("div");
+        content.className = "group-content";
+
+        for (const fig of groupMap[group]) {
+          const card = document.createElement("div");
+          card.className = "card";
+
+          const img = document.createElement("img");
+          img.src = BASE + "/" + fig.path;
+          img.alt = fig.file.replace(/\.png$/i, "");
+          img.loading = "lazy";
+
+          card.appendChild(img);
+          content.appendChild(card);
+        }
+
+        details.appendChild(content);
+        gallery.appendChild(details);
+      }
+    }
+
+    render();
+  </script>
+</body>
+</html>
