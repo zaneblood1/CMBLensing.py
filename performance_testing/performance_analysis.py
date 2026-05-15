@@ -71,7 +71,7 @@ def load_time(language_dir, map_size, polarity, seed, trial, cached=True):
     return np.loadtxt(path)
 
 
-JULIA_FIELD_MAP = {"t_field": "fJ_t", "e_field": "fJ_e", "b_field": "fJ_b"}
+JULIA_FIELD_MAP = {"t_field": "t_field_julia_predict", "e_field": "e_field_julia_predict", "b_field": "b_field_julia_predict"}
 
 
 def load_array(path):
@@ -97,7 +97,7 @@ def load_field(language_dir, map_size, polarity, seed, trial, field_name):
 
 def load_phi(language_dir, map_size, polarity, seed, trial, phi_name):
     if language_dir == JULIA_DIR:
-        filename = f"phiJ_{trial}.npz"
+        filename = f"phi_julia_predict_{trial}.npz"
     else:
         filename = f"{phi_name}_{trial}.npz"
     path = os.path.join(

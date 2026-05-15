@@ -13,11 +13,11 @@ BEAM_TRANSFER_SCALAR = 8*jnp.log(2)
 #The default field and operator constants are defined for a square 256 x 256 map
 #with 2 arcminute resolution...
 NSIDE_DEFAULT = 256
-THETA_PIX_DEFAULT = 2
+THETA_PIX_DEFAULT = 2.5
 PIX_WIDTH_DEFAULT = float(jnp.deg2rad(THETA_PIX_DEFAULT / ARCMIN_PER_DEGREE))
 FOURIER_WEIGHTS_DEFAULT = 2 * jnp.ones(NSIDE_DEFAULT//2+1, dtype =jnp.complex128).at[0].set(0.5).at[-1].set(0.5)
 FOURIER_MATRIX_DEFAULT = jnp.zeros((NSIDE_DEFAULT, NSIDE_DEFAULT // 2 + 1), dtype=jnp.complex128)
-MAP_MATRIX_DEFAULT = jnp.zeros((NSIDE_DEFAULT, NSIDE_DEFAULT), dtype=jnp.complex64)
+MAP_MATRIX_DEFAULT = jnp.zeros((NSIDE_DEFAULT, NSIDE_DEFAULT), dtype=jnp.float64)
 
 #Enum for different possible parametrizations (i.e. Stokes' parameters)
 class Parametrization:

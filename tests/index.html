@@ -25,7 +25,7 @@
   <script>
     const BASE = "test_generated_figures";
 
-    const CATEGORY_ORDER = ["lensing", "gradients", "map_joint", "wiener_filter"];
+    const CATEGORY_ORDER = ["lensing", "gradients", "map_joint", "wiener_filter", "simulated_cls", "covariance_matrices"];
     const SIGNAL_ORDER = ["intensity_only", "polarization_only", "intensity_and_polarization"];
 
     const DISPLAY_NAMES = {
@@ -33,6 +33,13 @@
       gradients: "Gradients",
       map_joint: "MAP Joint",
       wiener_filter: "Wiener Filter",
+      simulated_cls: "Simulated Cls",
+      covariance_matrices: "Covariance Matrices",
+      noise_covariance: "Noise Covariance",
+      beam: "Beam",
+      mask: "Mask",
+      field_covariance: "Field Covariance",
+      quadratic_estimate: "Quadratic Estimate",
       intensity_only: "Intensity",
       polarization_only: "Polarization",
       intensity_and_polarization: "Intensity & Polarization",
@@ -63,14 +70,24 @@
     }
 
     async function scanCategory(category, signal) {
-      const groupDir = `${BASE}/${category}/${signal}/`;
-      const groups = await listChildren(groupDir);
+      const signalDir = `${BASE}/${category}/${signal}/`;
+      const children = await listChildren(signalDir);
+
+      const directPngs = children.filter(f => f.toLowerCase().endsWith(".png"));
+      if (directPngs.length > 0) {
+        return directPngs
+          .map(file => ({
+            path: `${category}/${signal}/${file}`,
+            category, signal, group: null, file,
+          }))
+          .sort((a, b) => a.file.localeCompare(b.file));
+      }
 
       const entries = [];
-      await Promise.all(groups.map(async group => {
+      await Promise.all(children.map(async group => {
         const fileDir = `${BASE}/${category}/${signal}/${group}/`;
-        const children = await listChildren(fileDir);
-        const pngs = children.filter(f => f.toLowerCase().endsWith(".png"));
+        const groupChildren = await listChildren(fileDir);
+        const pngs = groupChildren.filter(f => f.toLowerCase().endsWith(".png"));
         for (const file of pngs) {
           entries.push({
             path: `${category}/${signal}/${group}/${file}`,
@@ -150,6 +167,25 @@
         empty.className = "empty";
         empty.textContent = "No figures in this category yet.";
         gallery.appendChild(empty);
+        return;
+      }
+
+      const hasGroups = items.some(fig => fig.group !== null);
+
+      if (!hasGroups) {
+        const content = document.createElement("div");
+        content.className = "group-content";
+        for (const fig of items) {
+          const card = document.createElement("div");
+          card.className = "card";
+          const img = document.createElement("img");
+          img.src = BASE + "/" + fig.path;
+          img.alt = fig.file.replace(/\.png$/i, "");
+          img.loading = "lazy";
+          card.appendChild(img);
+          content.appendChild(card);
+        }
+        gallery.appendChild(content);
         return;
       }
 

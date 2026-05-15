@@ -1,7 +1,13 @@
-#imports
 import os
+import shutil
 os.environ["PYTHON_JULIAPKG_PROJECT"] = "/resnick/groups/wugroup/zblood/CMBLensing.jl"
 os.environ["PYTHON_JULIAPKG_OFFLINE"] = "yes"
+#Pre-populate juliapkg's STATE so resolve() returns immediately at its fast-path
+#check (STATE["resolved"] == True) without ever acquiring the NFS file lock that
+#causes contention across hundreds of concurrent SLURM jobs
+from juliapkg.state import STATE
+STATE["resolved"] = True
+STATE["executable"] = shutil.which("julia")
 from cmb_lensing.map_joint import *
 from juliacall import Main as jl
 import time
@@ -13,19 +19,16 @@ parser.add_argument("--map_size", type = int)
 parser.add_argument("--seed", type = int)
 parser.add_argument("--trial", type = int)
 parser.add_argument("--pol", type = str)
+parser.add_argument("--theta_pix", type = float)
 args = parser.parse_args()
 
 #call julia load_sim via julia call to get the julia generated simulation data
 #in order to better compare apples to apples
-jl.seval(f"""
-         
+jl.seval(f"""   
 using CMBLensing
-#using PythonPlot #NOTE why is this so finicky!!!!!!!!!!!!!!!
-
-theta_pix = 2.5  
 data_set = load_sim(
     seed = {args.seed},
-    θpix = theta_pix,
+    θpix = {args.theta_pix},
     T = Float64,
     Nside = {args.map_size},
     pol = :{args.pol}
@@ -34,7 +37,7 @@ data_set = load_sim(
 
 #These terms are common to all I, P, and IP polarization keys
 fourier_weights = get_fourier_weights((args.map_size, args.map_size//2+1))
-pix_width = float(jnp.deg2rad(jl.theta_pix / ARCMIN_PER_DEGREE))
+pix_width = float(jnp.deg2rad(args.theta_pix / ARCMIN_PER_DEGREE))
 
 #branching logic based on polarity key for how to construct python data set object
 #given julia matrix data for either I, P, or IP
@@ -63,7 +66,7 @@ if args.pol == "I":
     phi_covariance = DiagonalScalar(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         scalar_matrix = jnp.array(jl.cphi_I)
     )
@@ -72,7 +75,7 @@ if args.pol == "I":
     phi = FlatS0(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         basis = Basis.FOURIER,
         parametrization = Parametrization.T,
@@ -128,7 +131,7 @@ elif args.pol == "P":
     phi_covariance = DiagonalScalar(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         scalar_matrix = jnp.array(jl.cphi_P)
     )
@@ -136,7 +139,7 @@ elif args.pol == "P":
     noise_covariance = DiagonalEB(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         matrix_EE = jnp.array(jl.cn_ee_P),
         matrix_BB = jnp.array(jl.cn_bb_P)
@@ -146,7 +149,7 @@ elif args.pol == "P":
     phi = FlatS0(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         basis = Basis.FOURIER,
         parametrization = Parametrization.T,
@@ -156,7 +159,7 @@ elif args.pol == "P":
     data = FlatS2(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         basis = Basis.FOURIER,
         parametrization = Parametrization.EB,
@@ -229,7 +232,7 @@ else:
     phi_covariance = DiagonalScalar(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         scalar_matrix = jnp.array(jl.cphi_IP)
     )
@@ -237,7 +240,7 @@ else:
     noise_covariance = BlockTEB(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         matrix_TT = jnp.array(jl.cn_tt_IP),
         matrix_TE = jnp.array(jl.cn_te_IP),
@@ -250,7 +253,7 @@ else:
     phi = FlatS0(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         basis = Basis.FOURIER,
         parametrization = Parametrization.T,
@@ -260,7 +263,7 @@ else:
     data = FlatS02(
         fourier_weights = fourier_weights,
         nside = args.map_size,
-        theta_pix = jl.theta_pix,
+        theta_pix = args.theta_pix,
         pix_width = pix_width,
         basis = Basis.FOURIER,
         parametrization = Parametrization.EB,
