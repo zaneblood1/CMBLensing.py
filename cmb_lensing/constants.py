@@ -2,6 +2,8 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
+MUK_FACTOR = 1e6
+CPJ_MAX_ELL = 2507
 ARCMIN_PER_DEGREE = 60
 INVERSE_LENSE = -1
 FORWARD_LENSE = +1
@@ -29,3 +31,8 @@ class Parametrization:
 class Basis:
     MAP = 0
     FOURIER = 1
+
+class Polarity:
+    I = "I"
+    P = "P"
+    IP = "IP"

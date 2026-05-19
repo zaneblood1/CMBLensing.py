@@ -1,7 +1,8 @@
 import sys, os
+import jax.numpy as jnp
 sys.path.insert(0, os.path.dirname(__file__))
 from _preamble import init_julia
-
+from cosmopower_jax.cosmopower_jax import CosmoPowerJAX as CPJ
 
 def run(jl):
     jl.seval("""
@@ -267,5 +268,20 @@ def run(jl):
 
 
 if __name__ == "__main__":
+    #First generate julia comparison data
     jl = init_julia()
     run(jl)
+
+    #Then compute Cosmo Power Ground Truth Cls as well
+    cosmo_params = jnp.array([0.0224567, 0.118489, 0.68, 0.055, 0.968602, 3.043])
+
+    emulator = CPJ(probe = "cmb_tt")
+    ell = emulator.modes
+    jnp.savez(jl.FILE_PATH + "ell_CP.npz", ell)
+    cl_tt = emulator.predict(cosmo_params)
+    jnp.savez(jl.FILE_PATH + "cl_ll_avg_CP.npz", cl_tt)
+
+    emulator = CPJ(probe = "cmb_pp")
+    cl_pp = emulator.predict(cosmo_params)
+    jnp.savez(jl.FILE_PATH + "cl_pp_avg_CP.npz", cl_pp)
+

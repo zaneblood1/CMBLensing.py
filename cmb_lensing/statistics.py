@@ -1,3 +1,4 @@
+import math
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
@@ -7,6 +8,7 @@ from cmb_lensing.fields import *
 from cmb_lensing.matrix_operators import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
+from functools import partial
 
 #wrapper function to return an array of percent differences 
 #for each of the matrices in the field objects
@@ -76,6 +78,57 @@ def primal_power_spectra(field_1, theta_pix, field_2 = None, delta_l = 50, lmax 
     ell_normalized = ell_normalized[ell_nan_mask]
 
     return ell_normalized, cl_normalized
+
+# We mark box_size_deg as static so JAX can use it to determine array shapes
+@partial(jax.jit, static_argnums=(1,))
+def calculate_unbinned_cl(field, box_size_deg):
+    """
+    Calculates the unbinned 1D power spectrum Cl from a square 2D realization.
+    
+    Parameters:
+    -----------
+    field : jnp.ndarray
+        A square (N, N) real-space map realization.
+    box_size_deg : float
+        The physical side length of the map in degrees (Compile-time static).
+    """
+    N = field.shape[0]
+    
+    box_size_rad = jnp.radians(box_size_deg)
+    
+    # 1. Compute 2D Real FFT
+    fft_field = jnp.fft.rfft2(field)
+    
+    # 2. Compute 2D Power Spectrum P(k)
+    p_2d = (box_size_rad**2 / (N**4)) * jnp.abs(fft_field)**2
+    
+    # 3. Generate the 2D angular frequencies (ell)
+    kx = jnp.fft.fftfreq(N, d=box_size_rad/N) * 2 * jnp.pi
+    ky = jnp.fft.rfftfreq(N, d=box_size_rad/N) * 2 * jnp.pi
+    
+    KX, KY = jnp.meshgrid(kx, ky, indexing='ij')
+    ell_2d = jnp.sqrt(KX**2 + KY**2)
+    ell_2d_int = jnp.round(ell_2d).astype(jnp.int32)
+    
+    # 4. Calculate max_ell analytically using static Python math.
+    # The maximum frequency component is at the corner of the FFT grid (Nyquist * sqrt(2))
+    # Using python builtins/numpy here ensures it evaluates to a static int at compile time
+    delta_theta_static = math.radians(box_size_deg) / N
+    ly_nyquist = math.pi / delta_theta_static
+    max_ell = int(math.ceil(ly_nyquist * math.sqrt(2)))
+    
+    # 5. Flat-sky azimuthal averaging using segment operations
+    flat_ell = ell_2d_int.ravel()
+    flat_p2d = p_2d.ravel()
+    
+    # num_segments is now a static Python integer!
+    cl_sum = jax.ops.segment_sum(flat_p2d, flat_ell, num_segments=max_ell + 1)
+    mode_counts = jax.ops.segment_sum(jnp.ones_like(flat_p2d), flat_ell, num_segments=max_ell + 1)
+    
+    Cl = jnp.where(mode_counts > 0, cl_sum / mode_counts, 0.0)
+    ell = jnp.arange(max_ell + 1)
+    
+    return ell, Cl
 
 #The objective function we are minimizing during MLE gradient descent
 #NOTE there is actually a lot going on under the hood here due to the field overrides

@@ -27,6 +27,7 @@
 
     const CATEGORY_ORDER = ["lensing", "gradients", "map_joint", "wiener_filter", "simulated_cls", "covariance_matrices"];
     const SIGNAL_ORDER = ["intensity_only", "polarization_only", "intensity_and_polarization"];
+    const EXTRA_SIGNALS = { simulated_cls: ["cosmo_power"] };
 
     const DISPLAY_NAMES = {
       lensing: "Lensing",
@@ -43,6 +44,7 @@
       intensity_only: "Intensity",
       polarization_only: "Polarization",
       intensity_and_polarization: "Intensity & Polarization",
+      cosmo_power: "Cosmo Power",
     };
 
     function displayName(key) {
@@ -150,7 +152,12 @@
         render();
       });
 
-      buildTabs(signalBar, SIGNAL_ORDER, activeSignal, sig => {
+      const signals = EXTRA_SIGNALS[activeCategory]
+        ? [...SIGNAL_ORDER, ...EXTRA_SIGNALS[activeCategory]]
+        : SIGNAL_ORDER;
+      if (!signals.includes(activeSignal)) activeSignal = signals[0];
+
+      buildTabs(signalBar, signals, activeSignal, sig => {
         activeSignal = sig;
         render();
       });

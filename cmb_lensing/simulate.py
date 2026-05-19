@@ -405,7 +405,7 @@ def _lens_fields(field_t, field_e, field_b, phi, pix_width, nside, theta_pix):
 
 # ── Dataset Construction ─────────────────────────────────────────────────
 
-def _build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real):
+def build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real):
     fourier_weights = get_fourier_weights((nside, nside // 2 + 1))
     phi_cov = DiagonalScalar(
         fourier_weights=fourier_weights, nside=nside,
@@ -424,7 +424,7 @@ def _build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real):
 def _build_dataset_t(nside, theta_pix, pix_width, cphi, qe, phi_real,
                      cf, cn, d_tt, mask, beam,
                      field_t, lensed_t, data_t):
-    _, phi_cov, qe_op, phi = _build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
+    _, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     return DataSetT(
         noise_covariance=phi_cov.replace(scalar_matrix=cn["TT"]),
         field_covariance=phi_cov.replace(scalar_matrix=cf["TT"]),
@@ -443,7 +443,7 @@ def _build_dataset_t(nside, theta_pix, pix_width, cphi, qe, phi_real,
 def _build_dataset_eb(nside, theta_pix, pix_width, cphi, qe, phi_real,
                       cf, cn, d_ee, d_bb, mask, beam,
                       field_e, field_b, lensed_e, lensed_b, data_e, data_b):
-    fw, phi_cov, qe_op, phi = _build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
+    fw, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     noise_cov = DiagonalEB(
         fourier_weights=fw, nside=nside,
         theta_pix=theta_pix, pix_width=pix_width,
@@ -475,7 +475,7 @@ def _build_dataset_teb(nside, theta_pix, pix_width, cphi, qe, phi_real,
                        field_t, field_e, field_b,
                        lensed_t, lensed_e, lensed_b,
                        data_t, data_e, data_b):
-    fw, phi_cov, qe_op, phi = _build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
+    fw, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     zero = jnp.zeros(cn["TT"].shape)
     noise_cov = BlockTEB(
         fourier_weights=fw, nside=nside,
@@ -639,7 +639,7 @@ def batch_simulated_trials(num_trials=10, nside=256, theta_pix=2,
     seeds = jnp.asarray([np.random.randint(0, 2**31) for _ in range(num_trials)])
     return jax.vmap(parallel_sim)(seeds)
 
-def _get_field_specs(pol):
+def get_field_specs(pol):
     specs = []
     if pol in ("I", "IP"):
         for ds_attr, prefix in [("data", "data"), ("unlensed_field", "unlensed"),
@@ -662,7 +662,7 @@ def get_avg_cls(theta_pix, num_trials=100, pol="I", nside=256,
         uk_arcmin_t=uk_arcmin_t, lmax=lmax, pol=pol
     )
 
-    specs = _get_field_specs(pol)
+    specs = get_field_specs(pol)
     results = {}
 
     for key, ds_attr, component in specs:

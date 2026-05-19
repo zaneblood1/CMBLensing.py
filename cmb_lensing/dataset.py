@@ -21,7 +21,7 @@ class DataSet:
 
 #Temperature only data set
 @struct.dataclass
-class DataSetT:
+class DataSetT(DataSet):
 
     #diagonal matrix operators
     noise_covariance: DiagonalScalar = flax.struct.field(default_factory = lambda: DiagonalScalar())
@@ -41,7 +41,7 @@ class DataSetT:
 
 #Polarization only data set
 @struct.dataclass
-class DataSetEB:
+class DataSetEB(DataSet):
 
     #block diagonal matrix operators
     noise_covariance: DiagonalEB = flax.struct.field(default_factory = lambda: DiagonalEB())
@@ -61,7 +61,7 @@ class DataSetEB:
 
 #Full temperature and polarization parametrization data set
 @struct.dataclass
-class DataSetTEB:
+class DataSetTEB(DataSet):
 
     noise_covariance: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
     mixing_d: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
@@ -77,3 +77,11 @@ class DataSetTEB:
     unlensed_field: FlatS02 = flax.struct.field(default_factory = lambda: FlatS02())
     lensed_field: FlatS02 = flax.struct.field(default_factory = lambda: FlatS02())
     phi: FlatS02 = flax.struct.field(default_factory = lambda: FlatS02())
+
+#@jax.jit
+def data_set_polarity(data_set):
+    if isinstance(data_set, DataSetT):
+        return Polarity.I
+    elif isinstance(data_set, DataSetEB):
+        return Polarity.P
+    return Polarity.IP

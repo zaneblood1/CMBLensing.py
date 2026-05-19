@@ -4,6 +4,7 @@ jax.config.update("jax_enable_x64", True)
 import numpy as np
 import jax.numpy.fft as jfft
 from cmb_lensing.constants import *
+from functools import partial
 
 @jax.jit
 def teb_matrix_mult(tt1, te1, et1, ee1, bb1, 
