@@ -26,6 +26,7 @@ class DataSetT(DataSet):
     #diagonal matrix operators
     noise_covariance: DiagonalScalar = flax.struct.field(default_factory = lambda: DiagonalScalar())
     mixing_d: DiagonalScalar = flax.struct.field(default_factory = lambda: DiagonalScalar())
+    mixing_g: DiagonalScalar = flax.struct.field(default_factory = lambda: DiagonalScalar())
     field_covariance: DiagonalScalar = flax.struct.field(default_factory = lambda: DiagonalScalar())
     lensed_field_covariance: DiagonalScalar = flax.struct.field(default_factory = lambda: DiagonalScalar())
     phi_covariance: DiagonalScalar = flax.struct.field(default_factory = lambda: DiagonalScalar())
@@ -46,6 +47,7 @@ class DataSetEB(DataSet):
     #block diagonal matrix operators
     noise_covariance: DiagonalEB = flax.struct.field(default_factory = lambda: DiagonalEB())
     mixing_d: DiagonalEB = flax.struct.field(default_factory = lambda: DiagonalEB())
+    mixing_g: DiagonalEB = flax.struct.field(default_factory = lambda: DiagonalEB())
     field_covariance: DiagonalEB = flax.struct.field(default_factory = lambda: DiagonalEB())
     lensed_field_covariance: DiagonalEB = flax.struct.field(default_factory = lambda: DiagonalEB())
     phi_covariance: DiagonalEB = flax.struct.field(default_factory = lambda: DiagonalEB())
@@ -65,6 +67,7 @@ class DataSetTEB(DataSet):
 
     noise_covariance: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
     mixing_d: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
+    mixing_g: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
     field_covariance: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
     lensed_field_covariance: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
     phi_covariance: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
@@ -77,11 +80,3 @@ class DataSetTEB(DataSet):
     unlensed_field: FlatS02 = flax.struct.field(default_factory = lambda: FlatS02())
     lensed_field: FlatS02 = flax.struct.field(default_factory = lambda: FlatS02())
     phi: FlatS02 = flax.struct.field(default_factory = lambda: FlatS02())
-
-#@jax.jit
-def data_set_polarity(data_set):
-    if isinstance(data_set, DataSetT):
-        return Polarity.I
-    elif isinstance(data_set, DataSetEB):
-        return Polarity.P
-    return Polarity.IP

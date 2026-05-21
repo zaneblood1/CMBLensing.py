@@ -28,13 +28,21 @@ def dl2cl(dl_xx, lmax, lmax_prime, is_phi=False):
     else:
         cl_xx = dl_xx[2:] * 2 * jnp.pi / (ell_prime * (ell_prime + 1))
 
-    if jnp.all(cl_xx > 0):
-        cl_xx = jnp.exp(jnp.interp(
+    def exponential_interpolate(cl_xx):
+        return jnp.exp(jnp.interp(
             jnp.log(ell), jnp.log(ell_prime), jnp.log(cl_xx),
             left="extrapolate", right="extrapolate"
         ))
-    else:
-        cl_xx = jnp.interp(ell, ell_prime, cl_xx, left=0.0, right=0.0)
+
+    def linear_interpolate(cl_xx):
+        return jnp.interp(ell, ell_prime, cl_xx, left=0.0, right=0.0)
+
+    cl_xx = jax.lax.cond(
+        jnp.all(cl_xx > 0),
+        exponential_interpolate,
+        linear_interpolate,
+        cl_xx
+    )
 
     return cl_xx
 
@@ -59,19 +67,28 @@ def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
 
 # ── Covariance and Field Generation ──────────────────────────────────────
 
+@partial(jax.jit, static_argnames=["nside", "rescale"])
 def covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls, origin_value=None,
                           rescale=True, use_linear_interpolation=False, fill_value=None):
     shape = (nside, nside // 2 + 1)
 
-    if jnp.all(cls > 0) and not use_linear_interpolation:
+    def exponential_interpolate(ell_grid, ells, cls):
         ls_safe = jnp.where(ell_grid.flatten() == 0, 1e-10, ell_grid.flatten())
-        result = jnp.exp(jnp.interp(
+        return jnp.exp(jnp.interp(
             jnp.log(ls_safe), jnp.log(ells), jnp.log(cls),
             left="extrapolate", right="extrapolate"
         )).reshape(shape)
-    else:
+
+    def linear_interpolate(ell_grid, ells, cls):
         fv = fill_value if fill_value is not None else 0.0
-        result = jnp.interp(ell_grid.flatten(), ells, cls, left=fv, right=fv).reshape(shape)
+        return jnp.interp(ell_grid.flatten(), ells, cls, left=fv, right=fv).reshape(shape)
+
+    result = jax.lax.cond(
+        jnp.logical_and(jnp.all(cls > 0), jnp.logical_not(use_linear_interpolation)),
+        exponential_interpolate,
+        linear_interpolate,
+        ell_grid, ells, cls
+    )
 
     if origin_value is not None:
         result = result.at[0, 0].set(origin_value)
@@ -80,25 +97,19 @@ def covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls, origin_value=No
     return result
 
 
-def get_fresh_key(keys, key_counter):
-    if key_counter >= len(keys):
-        raise RuntimeError("Out of Keys Error. Please split on more keys.")
-    return keys[key_counter], key_counter + 1
+def field_from_covar(nside, covar_matrix, rng_keys, key_counter):
+    seed = rng_keys[key_counter]
+    key_counter = key_counter + 1
+    field = field_from_covar_single_key(nside, covar_matrix, seed)
+    return field, key_counter
 
-
-def field_from_covar(nside, covar_matrix, rng_keys=None, key_counter=None):
-    if rng_keys is None or key_counter is None:
-        seed = jax.random.key(np.random.randint(0, 2**31))
-    else:
-        seed, key_counter = get_fresh_key(rng_keys, key_counter)
-
+def field_from_covar_single_key(nside, covar_matrix, seed):
     shape = (nside, nside // 2 + 1)
     real_dist = jax.random.normal(seed, shape=shape)
     imag_dist = 1j * jax.random.normal(seed, shape=shape)
     field = jnp.sqrt(covar_matrix / 2) * (real_dist + imag_dist)
     field = jfft.irfft2(field, norm="ortho")
-    return field, key_counter
-
+    return field
 
 # ── Instrument Response ───────────────────────────────────────────────────
 
@@ -367,19 +378,43 @@ def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
     return power_spectra, lens_potential
 
 
-def _extract_all_cls(power_spectra, lens_potential, lmax, lmax_prime):
+def _camb_callback_fn(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
+                      lmax_prime, k_pivot, Alens):
+    """Eagerly runs CAMB and returns flat arrays for use inside JIT via pure_callback."""
+    power_spectra, lens_potential = _run_camb(
+        H0, float(ombh2), float(omch2), float(cosmomc_theta),
+        float(r), float(mnu), float(tau), float(As), float(nt), float(ns),
+        int(lmax_prime), float(k_pivot), float(Alens)
+    )
+    unlensed_scalar = jnp.asarray(power_spectra["unlensed_scalar"], dtype=jnp.float64)
+    tensor = jnp.asarray(power_spectra["tensor"], dtype=jnp.float64)
+    total = jnp.asarray(power_spectra["total"], dtype=jnp.float64)
+    return unlensed_scalar, tensor, total, lens_potential
+
+
+def _camb_via_callback(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
+                       lmax_prime, k_pivot, Alens):
+    """Calls CAMB through jax.pure_callback so the surrounding function can be JIT-ted."""
+    result_shapes = (
+        jax.ShapeDtypeStruct((lmax_prime, 4), jnp.float64),
+        jax.ShapeDtypeStruct((lmax_prime, 4), jnp.float64),
+        jax.ShapeDtypeStruct((lmax_prime, 4), jnp.float64),
+        jax.ShapeDtypeStruct((lmax_prime,), jnp.float64),
+    )
+    return jax.pure_callback(
+        _camb_callback_fn, result_shapes,
+        H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
+        lmax_prime, k_pivot, Alens
+    )
+
+
+def _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime):
     cls = {}
     for stokes, col in _CAMB_COLS.items():
-        cls[f"scalar_{stokes}"] = dl2cl(
-            jnp.asarray(power_spectra["unlensed_scalar"][:, col]), lmax, lmax_prime
-        )
-        cls[f"tensor_{stokes}"] = dl2cl(
-            jnp.asarray(power_spectra["tensor"][:, col]), lmax, lmax_prime
-        )
+        cls[f"scalar_{stokes}"] = dl2cl(unlensed_scalar[:, col], lmax, lmax_prime)
+        cls[f"tensor_{stokes}"] = dl2cl(tensor[:, col], lmax, lmax_prime)
     for stokes in ("TT", "EE", "BB"):
-        cls[f"total_{stokes}"] = dl2cl(
-            jnp.asarray(power_spectra["total"][:, _CAMB_COLS[stokes]]), lmax, lmax_prime
-        )
+        cls[f"total_{stokes}"] = dl2cl(total[:, _CAMB_COLS[stokes]], lmax, lmax_prime)
     cls["phi"] = dl2cl(lens_potential, lmax, lmax_prime, is_phi=True)
     return cls
 
@@ -416,7 +451,7 @@ def build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real):
         fourier_weights=fourier_weights, nside=nside,
         theta_pix=theta_pix, pix_width=pix_width,
         basis=Basis.FOURIER, parametrization=Parametrization.T,
-        scalar_matrix=jfft.rfft2(phi_real)
+        scalar_matrix=phi_real
     )
     return fourier_weights, phi_cov, qe_op, phi
 
@@ -522,31 +557,31 @@ def _build_dataset_teb(nside, theta_pix, pix_width, cphi, qe, phi_real,
 
 # ── Main Simulation Entry Point ──────────────────────────────────────────
 
-def load_sim(nside, theta_pix, pol, master_seed=None, uk_arcmin_t=3, H0=None,
+@partial(jax.jit, static_argnames=["nside", "theta_pix", "pol", "lmax"])
+def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
              ombh2=0.0224567, omch2=0.118489, cosmomc_theta=0.0104098,
              r=0.2, mnu=0.06, tau=0.055, As=jnp.exp(3.043) * 1e-10,
              nt=-0.2/8, ns=0.968602, lmax=17_000,
-             k_pivot=0.002, Alens=1, nphi_fac=2):
+             k_pivot=0.002, Alens=1, nphi_fac=2, a_phi = 1):
 
     lmax_prime = min(lmax, 5000)
 
-    power_spectra, lens_potential = _run_camb(
+    unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
         H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         lmax_prime, k_pivot, Alens
     )
-    cls = _extract_all_cls(power_spectra, lens_potential, lmax, lmax_prime)
+    cls = _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime)
 
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    if master_seed is None:
-        master_seed = np.random.randint(0, 2**31)
     keys = jax.random.split(jax.random.PRNGKey(master_seed), 100)
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
-    # Lensing potential
-    cphi = covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls["phi"], origin_value=0)
+    #Lensing potential
+    cphi = a_phi * covar_matrix_from_cls(nside, pix_width, ell_grid, 
+                                         ells, cls["phi"], origin_value=0)
     phi, kc = field_from_covar(nside, cphi, keys, 0)
 
-    # Unlensed field covariances (scalar + tensor)
+    #Unlensed field covariances (scalar + tensor)
     cf = {}
     for comp in ("TT", "TE", "EE", "BB"):
         cf_scalar = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
@@ -555,26 +590,26 @@ def load_sim(nside, theta_pix, pol, master_seed=None, uk_arcmin_t=3, H0=None,
                                           cls[f"tensor_{comp}"], origin_value=0)
         cf[comp] = cf_scalar + cf_tensor
 
-    # Lensed field covariances
+    #Lensed field covariances
     cfl = {comp: covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
                                        cls[f"total_{comp}"], origin_value=0)
            for comp in ("TT", "EE", "BB")}
 
-    # Unlensed random fields
+    #Unlensed random fields
     field_t, kc = field_from_covar(nside, cf["TT"], keys, kc)
     field_e, kc = field_from_covar(nside, cf["EE"], keys, kc)
     field_b, kc = field_from_covar(nside, cf["BB"], keys, kc)
 
-    # Lensing
+    #Lensing
     lensed_t, lensed_e, lensed_b = _lens_fields(
         field_t, field_e, field_b, phi, pix_width, nside, theta_pix
     )
 
-    # Instrument response
+    #Instrument response
     mask = get_mask(3000, nside, pix_width, ell_grid)
     beam = get_beam(nside, pix_width, ell_grid, lmax_prime)
 
-    # Noise covariance and white noise
+    #Noise covariance and white noise
     n_tt, n_te, n_ee, n_bb = noise_cls(lmax_prime, uk_arcmin_t)
     ell_prime = jnp.arange(2, lmax_prime)
     cn = {}
@@ -585,21 +620,21 @@ def load_sim(nside, theta_pix, pol, master_seed=None, uk_arcmin_t=3, H0=None,
     wn_e, kc = field_from_covar(nside, cn["EE"], keys, kc)
     wn_b, kc = field_from_covar(nside, cn["BB"], keys, kc)
 
-    # Data = Mask * Beam * Lensed + Noise
+    #Data = Mask * Beam * Lensed + Noise
     data_t = mask * beam * lensed_t + jfft.rfft2(wn_t)
     data_e = mask * beam * lensed_e + jfft.rfft2(wn_e)
     data_b = mask * beam * lensed_b + jfft.rfft2(wn_b)
 
-    # Convert unlensed fields to Fourier space
+    #Convert unlensed fields to Fourier space
     field_t, field_e, field_b = jfft.rfft2(field_t), jfft.rfft2(field_e), jfft.rfft2(field_b)
 
-    # D matrix
+    #D matrix
     d_tt, d_te, d_ee, d_bb = get_d_matrix(
         cf["TT"], cf["TE"], cf["EE"], cf["BB"],
         cn["TT"], cn["TE"], cn["EE"], cn["BB"]
     )
 
-    # Quadratic estimate
+    #Quadratic estimate
     if pol == "I":
         qe = scalar_quadratic_estimate(cn["TT"], cf["TT"], cfl["TT"],
                                        mask, beam, pix_width) / nphi_fac
@@ -608,7 +643,9 @@ def load_sim(nside, theta_pix, pol, master_seed=None, uk_arcmin_t=3, H0=None,
                                       cn["EE"], cn["BB"], mask, mask,
                                       beam, beam, pix_width) / nphi_fac
 
-    # Build dataset for the requested polarization
+    #convert phi back to fourier space
+    phi = jfft.rfft2(phi)
+    #Build dataset for the requested polarization
     if pol == "I":
         return _build_dataset_t(
             nside, theta_pix, pix_width, cphi, qe, phi,

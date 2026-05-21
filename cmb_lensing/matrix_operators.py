@@ -61,7 +61,7 @@ class DiagonalScalar(FieldOperator):
     
     def __rmul__(self, other):
         return self.__mul__(other)
-    
+
 @struct.dataclass
 class DiagonalEB(FieldOperator):
 

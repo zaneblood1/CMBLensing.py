@@ -98,7 +98,7 @@ def get_beam(nside, pix_width, ell_grid, lmax_prime, beam_fwhm=0):
                                  origin_value=0, rescale=False,
                                  use_linear_interpolation=True, fill_value=1.0)
 
-# ── D Temperature-Only Matrix ──────────────────────────────────────────────
+# ── D & G Temperature-Only Mixing Matrices ─────────────────────────────────────────
 
 def get_d_matrix(cf_tt, cn_tt):
     pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
@@ -107,6 +107,11 @@ def get_d_matrix(cf_tt, cn_tt):
     sum_tt = cf_tt + pre_factor * identity + 2 * cn_tt
     d_tt = jnp.sqrt(sum_tt* cf_inv_tt)
     return d_tt
+
+def get_g_matrix(qe, cphi, a_phi):
+    g_0 = jnp.sqrt(jnp.ones_like(cphi) + 2 * qe * reciprocal_matrix(cphi))
+    g_aphi = jnp.sqrt(jnp.ones_like(cphi) + 2 * qe * reciprocal_matrix(a_phi * cphi))
+    return reciprocal_matrix(g_0) * g_aphi
 
 # ── CosmoPowerJAX Interface ────────────────────────────────────────────────────────
 
@@ -127,13 +132,14 @@ def _extract_all_cls(power_spectra, lens_potential, lmax, lmax_prime):
 # ── Dataset Construction ─────────────────────────────────────────────────
 
 def _build_dataset_t(nside, theta_pix, pix_width, cphi, qe, phi_real,
-                     cf, cn, d_tt, mask, beam,
+                     cf, cn, d_tt, g_tt, mask, beam,
                      field_t, lensed_t, data_t):
     _, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     return DataSetT(
         noise_covariance=phi_cov.replace(scalar_matrix = cn),
         field_covariance=phi_cov.replace(scalar_matrix = cf),
         mixing_d=phi_cov.replace(scalar_matrix=d_tt),
+        mixing_g=phi_cov.replace(scalar_matrix=g_tt),
         phi_covariance=phi_cov,
         mask=phi_cov.replace(scalar_matrix=mask),
         beam=phi_cov.replace(scalar_matrix=beam),
@@ -144,11 +150,10 @@ def _build_dataset_t(nside, theta_pix, pix_width, cphi, qe, phi_real,
         phi=phi,
     )
 
-
 # ── Main Simulation Entry Point ──────────────────────────────────────────
 
 @partial(jax.jit, static_argnames = ["nside", "theta_pix", "lmax"])
-def load_sim(nside, theta_pix, master_seed = None, uk_arcmin_t = 3, 
+def load_sim(nside, theta_pix, master_seed = None, uk_arcmin_t = 3, a_phi = 1,
              om_b = 0.0224567, om_cdm = 0.118489, h = 0.68, tau_reio = 0.055, 
              ns = 0.968602, As = 3.043, nphi_fac = 2, lmax = 17_000):
 
@@ -164,7 +169,8 @@ def load_sim(nside, theta_pix, master_seed = None, uk_arcmin_t = 3,
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
     #Lensing potential
-    cphi = covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls["phi"], origin_value=0)
+    cphi = a_phi * covar_matrix_from_cls(nside, pix_width, ell_grid, 
+                                         ells, cls["phi"], origin_value = 0)
     phi, kc = field_from_covar(nside, cphi, keys, 0)
 
     #Lensed field covariances
@@ -208,11 +214,14 @@ def load_sim(nside, theta_pix, master_seed = None, uk_arcmin_t = 3,
     # Quadratic estimate
     qe = scalar_quadratic_estimate(cn_tt, cf_tt, cfl_tt,
                                    mask, beam, pix_width) / nphi_fac
+    
+    # G matrix
+    g_tt = get_g_matrix(qe, cphi, a_phi)
 
     # Build dataset for the requested polarization
     return _build_dataset_t(
         nside, theta_pix, pix_width, cphi, qe, phi,
-        cf_tt, cn_tt, d_tt, mask, beam,
+        cf_tt, cn_tt, d_tt, g_tt, mask, beam,
         field_t, lensed_t, data_t
     )
 
@@ -252,7 +261,8 @@ def get_avg_cls(theta_pix, num_trials=100, nside=256,
 if __name__ == "__main__":
 
     start_time = time.time()
-    results = get_avg_cls(theta_pix = 2, num_trials = 100, nside = 256,
-                          uk_arcmin_t = 10, lmax = 17000, delta_l = 50)
+    # results = get_avg_cls(theta_pix = 2, num_trials = 100, nside = 256,
+    #                       uk_arcmin_t = 10, lmax = 17000, delta_l = 50)
+    sim = load_sim(nside = 256, theta_pix = 2)
     end_time = time.time()
     print(f"Total run time = {end_time - start_time}")

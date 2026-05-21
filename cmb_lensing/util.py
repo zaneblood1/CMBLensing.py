@@ -5,6 +5,7 @@ import numpy as np
 import jax.numpy.fft as jfft
 from cmb_lensing.constants import *
 from functools import partial
+import math
 
 @jax.jit
 def teb_matrix_mult(tt1, te1, et1, ee1, bb1, 
@@ -145,7 +146,7 @@ def primal_qu2eb(q_field, u_field, nside, theta_pix):
 
 def gen_mesh_grid(nside, theta_pix):
     #1 deg = 60' so convert arcmins per pixel to deg per pixel and then deg per pixel to rad per pixel
-    d = jnp.deg2rad(theta_pix / ARCMIN_PER_DEGREE)
+    d = math.radians(theta_pix / ARCMIN_PER_DEGREE)
     #create an array of real frequencies in the x-direction lx[] using fft.rfreq
     lx = 2 * jnp.pi * jfft.rfftfreq(nside, d) #d is the spacing in radians per pixel
     #create an array of fully complex frequencies in the y-direction ly[] using fft.freq
@@ -166,3 +167,27 @@ def gen_ell_grid(nside, theta_pix):
 def real_fourier_2_full_plane(real_fourier_field):
     full_fourier_field = jfft.fft2(jfft.irfft2(real_fourier_field))
     return full_fourier_field
+
+#JAX-JIT compatible version of a loess smoothing method which 
+#creates a smooth distribution of y-value outputs with x-value inputs
+#given the corresponding discrete input vectors x and y
+@partial(jax.jit, static_argnums=(2, 3))
+def loess(x, y, frac=0.3, degree=1):
+    n = x.shape[0]
+    h = max(math.ceil(frac * n), degree + 1)
+
+    def fit_point(x0):
+        dists = jnp.abs(x - x0)
+        sorted_dists = jnp.sort(dists)
+        max_dist = sorted_dists[h - 1]
+        u = jnp.clip(dists / jnp.maximum(max_dist, 1e-10), 0, 1)
+        w = (1 - u**3)**3
+
+        V = jnp.stack([x**p for p in range(degree + 1)], axis=-1)
+        W = jnp.diag(w)
+        VtW = V.T @ W
+        beta = jnp.linalg.solve(VtW @ V, VtW @ y)
+        x0_vec = jnp.array([x0**p for p in range(degree + 1)])
+        return x0_vec @ beta
+
+    return jax.vmap(fit_point)(x)

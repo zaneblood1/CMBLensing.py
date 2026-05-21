@@ -134,7 +134,11 @@ def calculate_unbinned_cl(field, box_size_deg):
 #NOTE there is actually a lot going on under the hood here due to the field overrides
 #of plus, minus, (*), (/), and pseudo-inverse... 
 @jax.jit
-def logpdf(field, phi, data, noise_covariance, phi_covariance, field_covariance, mask, beam):
+def logpdf(field, phi, data, noise_covariance, 
+           phi_covariance, field_covariance, mask, beam, a_phi = 1):
+
+    #rescale phi covariance by the appropriate band power
+    phi_covariance = a_phi * phi_covariance
 
     #Compute the 3 log-determinants
     phi_logdet = log_det(phi_covariance)
