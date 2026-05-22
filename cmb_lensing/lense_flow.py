@@ -109,7 +109,8 @@ def get_lensing_operator_gradients(phi, tqu_field, tqu_cotangent, direction, n):
         dt0 = dt0, #initial guess for step
         y0 = y0, #initial conditons
         args = args,
-        stepsize_controller = stepsize_controller
+        stepsize_controller = stepsize_controller,
+        max_steps = MAX_DIFFRAX_STEPS
     )
 
     #pull out the primal output and keep the field in MAP space

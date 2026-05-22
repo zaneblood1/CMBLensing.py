@@ -135,7 +135,8 @@ def calculate_unbinned_cl(field, box_size_deg):
 #of plus, minus, (*), (/), and pseudo-inverse... 
 @jax.jit
 def logpdf(field, phi, data, noise_covariance, 
-           phi_covariance, field_covariance, mask, beam, a_phi = 1):
+           phi_covariance, field_covariance, mask, beam, 
+           mixing_g, a_phi = 1):
 
     #rescale phi covariance by the appropriate band power
     phi_covariance = a_phi * phi_covariance
@@ -144,6 +145,13 @@ def logpdf(field, phi, data, noise_covariance,
     phi_logdet = log_det(phi_covariance)
     noise_logdet = log_det(noise_covariance)
     field_logdet = log_det(field_covariance)
+    #In the case that we have a non-trivial G matrix use its
+    #log(determinant) in our calculations as well
+    g_logdet = jax.lax.cond(
+      jnp.all(mixing_g == 0),
+      lambda: jnp.complex128(0.0 + 0.0j),
+      lambda: log_det(mixing_g)
+    )
 
     #Calculate the f^2 and phi^2 contributions
     field_product = dot(field, pinv(field_covariance) * field)
@@ -159,9 +167,10 @@ def logpdf(field, phi, data, noise_covariance,
     difference = data - mask * beam * lensed_field
     data_product = dot(difference, pinv(noise_covariance) * difference)
 
-    #Return negative one half times the sum of tall six terms
-    return -jnp.real(data_product + field_product + phi_product 
-                   + noise_logdet + phi_logdet + field_logdet)/2
+    #Return negative one half times the six Gaussian terms, then subtract
+    #the Jacobian correction logdet(G) from the mixing transformation
+    return -jnp.real(data_product + field_product + phi_product
+           + noise_logdet + phi_logdet + field_logdet)/2 - jnp.real(g_logdet)
 
 @jax.custom_vjp
 @jax.jit

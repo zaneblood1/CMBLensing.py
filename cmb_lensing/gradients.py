@@ -30,8 +30,11 @@ def gradf_logpdf(field, phi, data, field_covariance, noise_covariance, mask, bea
 @jax.jit
 def grad_phi_logpdf(unlensed_field, phi, data, noise_covariance, 
                     phi_covariance, field_covariance, mask, beam):
+    #Need to add in a trivial mixing G matrix now 
+    #that we are doing parameter inference
+    mixing_g = 0*phi_covariance
     grad_phi = jax.grad(logpdf, argnums = 1, allow_int = True)(unlensed_field, phi, data, noise_covariance, 
-                                                               phi_covariance, field_covariance, mask, beam)
+                                                    phi_covariance, field_covariance, mask, beam, mixing_g)
     #TODO figure out why parametrization, weights, and basis fields are being destroyed here...
     return grad_phi.replace(fourier_weights = phi.fourier_weights,
                             basis = Basis.FOURIER, 

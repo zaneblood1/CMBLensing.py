@@ -85,7 +85,7 @@ def logpdf_at_phi_new(alpha, grad_phi, mixed_field, phi_predict, data,
 
     #compute the value of logpdf at this test phi value
     logpdf_value = logpdf(field, phi, data, noise_covariance, 
-                          phi_covariance, field_covariance, mask, beam)
+                phi_covariance, field_covariance, mask, beam, mixing_g)
     
     #return negative one times the logpdf
     return -1*logpdf_value
@@ -102,7 +102,8 @@ def line_search(alpha, mixed_phi, hessian, mixed_grad_phi, mixed_field,
         test_phi = mixed_phi + test_alpha * hessian * mixed_grad_phi
         field, phi = unmix(mixed_field, test_phi, mixing_d, mixing_g)                                                                                                                       
         return -1 * logpdf(field, phi, data, noise_covariance,                                                                                                                              
-                            phi_covariance, field_covariance, mask, beam)                                                                                                                    
+                           phi_covariance, field_covariance, 
+                           mask, beam, mixing_g)                                                                                                                    
                                                                                                                                                                                             
     values = jax.lax.map(evaluate, alphas)                                                                                                                                                     
     return alphas[jnp.argmin(values)]

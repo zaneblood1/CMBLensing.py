@@ -116,14 +116,11 @@ def field_from_covar_single_key(nside, covar_matrix, seed):
 def cos_ramp_up(length):
     return (jnp.array([jnp.cos(x) for x in jnp.linspace(jnp.pi, 0, length)]) + 1) / 2
 
-
 def cos_ramp_down(length):
     return 1 - cos_ramp_up(length)
 
-
 def low_pass(l_cutoff, delta_l=50):
     return jnp.concatenate([jnp.ones(l_cutoff - delta_l + 1), cos_ramp_down(delta_l)])
-
 
 def get_mask(l_cutoff, nside, pix_width, ell_grid):
     screen_cls = low_pass(l_cutoff)
@@ -169,6 +166,13 @@ def get_d_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
 
     return d_tt, d_te, d_ee, d_bb
 
+# ── G Matrix ──────────────────────────────────────────────────────────────
+
+def get_g_matrix(cphi, nphi, aphi):
+    g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi))
+    g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(aphi * cphi))
+    g = reciprocal_matrix(g0) * g
+    return g
 
 # ── Quadratic Estimate ────────────────────────────────────────────────────
 
@@ -457,13 +461,14 @@ def build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real):
 
 
 def _build_dataset_t(nside, theta_pix, pix_width, cphi, qe, phi_real,
-                     cf, cn, d_tt, mask, beam,
+                     cf, cn, d_tt, g, mask, beam,
                      field_t, lensed_t, data_t):
     _, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     return DataSetT(
         noise_covariance=phi_cov.replace(scalar_matrix=cn["TT"]),
         field_covariance=phi_cov.replace(scalar_matrix=cf["TT"]),
         mixing_d=phi_cov.replace(scalar_matrix=d_tt),
+        mixing_g=phi_cov.replace(scalar_matrix=g),
         phi_covariance=phi_cov,
         mask=phi_cov.replace(scalar_matrix=mask),
         beam=phi_cov.replace(scalar_matrix=beam),
@@ -476,7 +481,7 @@ def _build_dataset_t(nside, theta_pix, pix_width, cphi, qe, phi_real,
 
 
 def _build_dataset_eb(nside, theta_pix, pix_width, cphi, qe, phi_real,
-                      cf, cn, d_ee, d_bb, mask, beam,
+                      cf, cn, d_ee, d_bb, g, mask, beam,
                       field_e, field_b, lensed_e, lensed_b, data_e, data_b):
     fw, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     noise_cov = DiagonalEB(
@@ -494,6 +499,7 @@ def _build_dataset_eb(nside, theta_pix, pix_width, cphi, qe, phi_real,
         noise_covariance=noise_cov,
         field_covariance=noise_cov.replace(matrix_EE=cf["EE"], matrix_BB=cf["BB"]),
         mixing_d=noise_cov.replace(matrix_EE=d_ee, matrix_BB=d_bb),
+        mixing_g=phi_cov.replace(scalar_matrix = g),
         phi_covariance=phi_cov,
         mask=noise_cov.replace(matrix_EE=mask, matrix_BB=mask),
         beam=noise_cov.replace(matrix_EE=beam, matrix_BB=beam),
@@ -506,7 +512,7 @@ def _build_dataset_eb(nside, theta_pix, pix_width, cphi, qe, phi_real,
 
 
 def _build_dataset_teb(nside, theta_pix, pix_width, cphi, qe, phi_real,
-                       cf, cn, d_tt, d_te, d_ee, d_bb, mask, beam,
+                       cf, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
                        field_t, field_e, field_b,
                        lensed_t, lensed_e, lensed_b,
                        data_t, data_e, data_b):
@@ -534,6 +540,7 @@ def _build_dataset_teb(nside, theta_pix, pix_width, cphi, qe, phi_real,
             matrix_TT=d_tt, matrix_TE=d_te, matrix_ET=d_te,
             matrix_EE=d_ee, matrix_BB=d_bb
         ),
+        mixing_g = phi_cov.replace(scalar_matrix = g),
         phi_covariance=phi_cov,
         mask=noise_cov.replace(
             matrix_TT=mask, matrix_TE=zero, matrix_ET=zero,
@@ -643,25 +650,28 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
                                       cn["EE"], cn["BB"], mask, mask,
                                       beam, beam, pix_width) / nphi_fac
 
+    #The G mixing matrix    
+    g = get_g_matrix(cphi, qe, a_phi)
+
     #convert phi back to fourier space
     phi = jfft.rfft2(phi)
     #Build dataset for the requested polarization
     if pol == "I":
         return _build_dataset_t(
             nside, theta_pix, pix_width, cphi, qe, phi,
-            cf, cn, d_tt, mask, beam,
+            cf, cn, d_tt, g, mask, beam,
             field_t, lensed_t, data_t
         )
     elif pol == "P":
         return _build_dataset_eb(
             nside, theta_pix, pix_width, cphi, qe, phi,
-            cf, cn, d_ee, d_bb, mask, beam,
+            cf, cn, d_ee, d_bb, g, mask, beam,
             field_e, field_b, lensed_e, lensed_b, data_e, data_b
         )
     else:
         return _build_dataset_teb(
             nside, theta_pix, pix_width, cphi, qe, phi,
-            cf, cn, d_tt, d_te, d_ee, d_bb, mask, beam,
+            cf, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
             field_t, field_e, field_b,
             lensed_t, lensed_e, lensed_b,
             data_t, data_e, data_b
