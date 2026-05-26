@@ -8,6 +8,7 @@ from cmb_lensing.fields import *
 from cmb_lensing.matrix_operators import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
+from cmb_lensing.gradients import *
 from functools import partial
 
 #wrapper function to return an array of percent differences 
@@ -135,23 +136,12 @@ def calculate_unbinned_cl(field, box_size_deg):
 #of plus, minus, (*), (/), and pseudo-inverse... 
 @jax.jit
 def logpdf(field, phi, data, noise_covariance, 
-           phi_covariance, field_covariance, mask, beam, 
-           mixing_g, a_phi = 1):
-
-    #rescale phi covariance by the appropriate band power
-    phi_covariance = a_phi * phi_covariance
+           phi_covariance, field_covariance, mask, beam):
 
     #Compute the 3 log-determinants
     phi_logdet = log_det(phi_covariance)
     noise_logdet = log_det(noise_covariance)
     field_logdet = log_det(field_covariance)
-    #In the case that we have a non-trivial G matrix use its
-    #log(determinant) in our calculations as well
-    g_logdet = jax.lax.cond(
-      jnp.all(mixing_g == 0),
-      lambda: jnp.complex128(0.0 + 0.0j),
-      lambda: log_det(mixing_g)
-    )
 
     #Calculate the f^2 and phi^2 contributions
     field_product = dot(field, pinv(field_covariance) * field)
@@ -170,7 +160,23 @@ def logpdf(field, phi, data, noise_covariance,
     #Return negative one half times the six Gaussian terms, then subtract
     #the Jacobian correction logdet(G) from the mixing transformation
     return -jnp.real(data_product + field_product + phi_product
-           + noise_logdet + phi_logdet + field_logdet)/2 - jnp.real(g_logdet)
+           + noise_logdet + phi_logdet + field_logdet)/2
+
+@jax.jit
+def mixed_logpdf(mixed_field, mixed_phi, data, noise_covariance, 
+                 phi_covariance, field_covariance, mask, beam, 
+                 mixing_g, mixing_d):
+
+    #move back into the unmixed parametrization
+    field, phi = unmix(mixed_field, mixed_phi, mixing_d, mixing_g)
+
+    #call the logpdf in the unmixed parametrization and subtract off
+    #the log determinants of the mixing matrices
+    logpdf_value = logpdf(field, phi, data, noise_covariance, 
+                          phi_covariance, field_covariance, mask, beam)
+    g_logdet = log_det(mixing_g)
+    d_logdet = log_det(mixing_d)
+    return logpdf_value - jnp.real(g_logdet) - jnp.real(d_logdet)
 
 @jax.custom_vjp
 @jax.jit

@@ -46,10 +46,9 @@ def test_logpdf_intensity_only():
     field_covariance = DiagonalScalar(scalar_matrix = field_covariance_matrix)
     mask = DiagonalScalar(scalar_matrix = mask_matrix)
     beam = DiagonalScalar(scalar_matrix = beam_matrix)
-    mixing_g = 0*phi_covariance
     logpdf_t_predict = logpdf(unlensed_field, phi, data,
                               noise_covariance, phi_covariance,
-                              field_covariance, mask, beam, mixing_g)
+                              field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_I.txt", "r") as file:
         logpdf_t_ground = float(file.read().strip())
     assert abs(logpdf_t_predict - logpdf_t_ground) < 1
@@ -98,10 +97,9 @@ def test_logpdf_polarization_only():
         matrix_EE = beam_ee_matrix,
         matrix_BB = beam_bb_matrix,
     )
-    mixing_g = 0*phi_covariance
     logpdf_eb_predict = logpdf(unlensed_eb_field, phi, data_eb_field,
                               noise_covariance, phi_covariance,
-                              field_covariance, mask, beam, mixing_g)
+                              field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_P.txt", "r") as file:
         logpdf_eb_ground = float(file.read().strip())
     assert abs(logpdf_eb_predict - logpdf_eb_ground) < 1
@@ -174,10 +172,9 @@ def test_logpdf_intensity_and_polarization():
         matrix_EE = beam_ee_matrix,
         matrix_BB = beam_bb_matrix,
     )
-    mixing_g = 0*phi_covariance
     logpdf_teb_predict = logpdf(unlensed_teb_field, phi, data_teb_field,
                                 noise_covariance, phi_covariance,
-                                field_covariance, mask, beam, mixing_g)
+                                field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_IP.txt", "r") as file:
         logpdf_teb_ground = float(file.read().strip())
     assert abs(logpdf_teb_predict - logpdf_teb_ground) < 1

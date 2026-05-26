@@ -26,7 +26,7 @@ def map_joint(data_set, num_steps = 30, constant_step = False):
     data = data_set.data
 
     #set starting guesses for f and phi to all zeros
-    field_predict = 0*data
+    field_predict = 0*data #NOTE this is a TEB vector
     phi_predict = zero_scalar_field_like(data)
 
     #compute the hessian which we will use to calculate the step in the phi direction 
@@ -85,7 +85,7 @@ def logpdf_at_phi_new(alpha, grad_phi, mixed_field, phi_predict, data,
 
     #compute the value of logpdf at this test phi value
     logpdf_value = logpdf(field, phi, data, noise_covariance, 
-                phi_covariance, field_covariance, mask, beam, mixing_g)
+                phi_covariance, field_covariance, mask, beam)
     
     #return negative one times the logpdf
     return -1*logpdf_value
@@ -103,7 +103,7 @@ def line_search(alpha, mixed_phi, hessian, mixed_grad_phi, mixed_field,
         field, phi = unmix(mixed_field, test_phi, mixing_d, mixing_g)                                                                                                                       
         return -1 * logpdf(field, phi, data, noise_covariance,                                                                                                                              
                            phi_covariance, field_covariance, 
-                           mask, beam, mixing_g)                                                                                                                    
+                           mask, beam)                                                                                                                    
                                                                                                                                                                                             
     values = jax.lax.map(evaluate, alphas)                                                                                                                                                     
     return alphas[jnp.argmin(values)]

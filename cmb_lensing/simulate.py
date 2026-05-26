@@ -105,8 +105,9 @@ def field_from_covar(nside, covar_matrix, rng_keys, key_counter):
 
 def field_from_covar_single_key(nside, covar_matrix, seed):
     shape = (nside, nside // 2 + 1)
-    real_dist = jax.random.normal(seed, shape=shape)
-    imag_dist = 1j * jax.random.normal(seed, shape=shape)
+    key_r, key_i = jax.random.split(seed)
+    real_dist = jax.random.normal(key_r, shape = shape)
+    imag_dist = 1j * jax.random.normal(key_i, shape = shape)
     field = jnp.sqrt(covar_matrix / 2) * (real_dist + imag_dist)
     field = jfft.irfft2(field, norm="ortho")
     return field
@@ -168,9 +169,9 @@ def get_d_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
 
 # ── G Matrix ──────────────────────────────────────────────────────────────
 
-def get_g_matrix(cphi, nphi, aphi):
+def get_g_matrix(cphi, nphi, a_phi = 1):
     g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi))
-    g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(aphi * cphi))
+    g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(a_phi * cphi))
     g = reciprocal_matrix(g0) * g
     return g
 
@@ -651,7 +652,7 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
                                       beam, beam, pix_width) / nphi_fac
 
     #The G mixing matrix    
-    g = get_g_matrix(cphi, qe, a_phi)
+    g = get_g_matrix(cphi, qe, a_phi = a_phi)
 
     #convert phi back to fourier space
     phi = jfft.rfft2(phi)
