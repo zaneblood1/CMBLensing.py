@@ -3,6 +3,7 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from cmb_lensing.constants import *
 from cmb_lensing.fields import *
+from cmb_lensing.mixing import *
 from cmb_lensing.gradients import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.matrix_operators import *

@@ -2,6 +2,7 @@ from cmb_lensing.simulate import *
 from cmb_lensing.wiener_filter import *
 from cmb_lensing.util import *
 from cmb_lensing.map_joint import *
+from cmb_lensing.mixing import *
 import os
 #jax.config.update("jax_disable_jit", True)
 #jax.config.update("jax_log_compiles", True)

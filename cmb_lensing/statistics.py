@@ -9,6 +9,7 @@ from cmb_lensing.matrix_operators import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
 from cmb_lensing.gradients import *
+from cmb_lensing.mixing import *
 from functools import partial
 
 #wrapper function to return an array of percent differences 
