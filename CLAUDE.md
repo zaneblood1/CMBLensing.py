@@ -35,8 +35,6 @@ No linter or formatter is configured. No CI pipeline exists.
 
 `simulate.load_sim()` is the main entry point. It uses CAMB to produce power spectra, builds covariance matrices and random fields in Fourier space, then lenses them via `lense_flow()`. The result is a `DataSet` (T, EB, or TEB) containing the fields, operators, and simulated data.
 
-`fast_simulate` is a JIT-compatible alternative that replaces CAMB with CosmoPowerJAX (a neural network emulator). It only supports temperature (intensity) fields and has a lower ell range (~2507).
-
 `map_joint()` recovers f and phi from data by alternating Wiener filter steps (estimate f) with gradient descent on phi, using `gradf_logpdf` and `grad_phi_logpdf`.
 
 ### Key Design Patterns
@@ -47,7 +45,7 @@ No linter or formatter is configured. No CI pipeline exists.
 
 **Basis and parametrization switching**: Fields carry a `basis` (MAP = real space, FOURIER) and are implicitly in a parametrization (T, QU, or EB). Conversion helpers `map()`, `fourier()`, `qu2eb()`, `eb2qu()` are used extensively — gradient code manually converts between representations before and after lensing.
 
-**Wildcard imports throughout**: Modules use `from cmb_lensing.util import *`, `from cmb_lensing.lense_flow import *`, etc. `fast_simulate.py` imports `*` from `simulate.py` and redefines some functions (e.g. `load_sim`) to shadow the CAMB-based versions with CosmoPowerJAX versions. The local definition wins at call time.
+**Wildcard imports throughout**: Modules use `from cmb_lensing.util import *`, `from cmb_lensing.lense_flow import *`, etc.
 
 ### Module Dependency Graph
 
@@ -56,9 +54,6 @@ simulate.py ─────► util.py (FFT, derivatives, coordinate grids)
   │                lense_flow.py ──► fields.py (FlatS0/S2/S02 dataclasses)
   │                dataset.py       constants.py
   │                statistics.py
-  │
-fast_simulate.py ─► simulate.py (imports *, shadows load_sim and spectrum helpers)
-                    CosmoPowerJAX
 
 map_joint.py ─────► gradients.py ──► lense_flow.py
                     wiener_filter.py

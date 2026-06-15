@@ -3,13 +3,19 @@ from cmb_lensing.wiener_filter import *
 from cmb_lensing.util import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.mixing import *
-import os
+from cmb_lensing.constants import *
+from functools import partial
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+
+#NOTE THIS IS A WORK IN PROGRESS! ONCE WE HAVE A JIT COMPATIBLE 
+
 #jax.config.update("jax_disable_jit", True)
-#jax.config.update("jax_log_compiles", True)
+jax.config.update("jax_log_compiles", True)
 
 #sample the field
 @jax.jit
-def gibbs_sample_f(field_start, data_field, args, rng_key):
+def gibbs_sample_f(field_start, data_field, phi, args, rng_key):
 
     key_f, key_n = jax.random.split(rng_key)
     #Run a new simulation for f ~ N(0, Cf(thetas))
@@ -25,7 +31,7 @@ def gibbs_sample_f(field_start, data_field, args, rng_key):
     new_noise = field_start.replace(scalar_matrix = jfft.rfft2(new_noise_matrix))
 
     #d = M * B * L(phi) * f + n
-    lensed_field = qu2eb(fourier(lense_flow(map(eb2qu(new_field)), map(args["phi"]), 
+    lensed_field = qu2eb(fourier(lense_flow(map(eb2qu(new_field)), map(phi), 
                               n = 10, direction = FORWARD_LENSE, adjoint = False)))
     new_data = args["mask"] * args["beam"] * lensed_field + new_noise
     
@@ -33,7 +39,7 @@ def gibbs_sample_f(field_start, data_field, args, rng_key):
     #between new and old simulations as the data term. We also use the current phi 
     #and covariance matrices from our sampling algorithms
     data_diff = data_field - new_data
-    delta_field = wiener_filter(field_start, args["phi"], data_diff, 
+    delta_field = wiener_filter(field_start, phi, data_diff, 
                                 args["field_covariance"], args["noise_covariance"], 
                                 args["mask"], args["beam"])
 
@@ -133,33 +139,75 @@ def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance,
     return delta_h, x, p
 
 #sample cosmological parameters "thetas"
-@jax.jit
-def gibbs_sample_theta(theta_key, theta_range, cosmo_params, mixed_field, 
-                       mixed_phi, data, noise_covariance, mask, beam, rng_key):
+def gibbs_sample_theta(theta_key, theta_range, cosmo_params, mixed_field,
+                       mixed_phi, data, noise_covariance, mask, beam, rng_key,
+                       nside = 128, theta_pix = 2.5, uk_arcmin_t = 3,
+                       nphi_fac = 2, a_phi = 1, lmax = 17_000):
 
-    #Get the logpdf at a certain theta value with all other inputs held constant
-    def logpdf_partial(theta_val):
+    lmax_prime = min(lmax, 5000)
 
-        #run a new load_sim with all other thetas held constant but varying over theta_key
-        cosmo_params[theta_key] = theta_val
-        trial_sim = load_sim(nside = 128, theta_pix = 2.5, pol = "I", 
-                             master_seed = 67, **cosmo_params)
-        #NOTE load_sim() is overkill here and performance poor since we only need the
-        #new covariance matrices no GRF realizations of phi, f, data, etc... Should be
-        #swapped out for something clearner...
-        
-        #now unmix the fields at the appropriate G & D matrices
-        mixing_g = trial_sim.mixing_g
-        mixing_d = trial_sim.mixing_d
+    #Build CAMB kwargs from current cosmo_params array
+    camb_kwargs = {}
+    for param_name, param_idx in PARAM_KEYS.items():
+        if param_idx < len(cosmo_params):
+            camb_kwargs[param_name] = float(cosmo_params[param_idx])
 
-        #then call logpdf in the mixed parametrization
-        return mixed_logpdf(mixed_field, mixed_phi, data, noise_covariance, trial_sim.phi_covariance, 
-                            trial_sim.field_covariance, mask, beam, mixing_g, mixing_d)
-    
-    #Evaluate the logpdf at all possible A_phi values with other inputs held constant
-    logpdf_values = jax.vmap(logpdf_partial)(theta_range)
-    a_phi = grid_and_sample(logpdf_values, theta_range, rng_key)
-    return a_phi
+    #TODO replace this line with a call to Yuuki's emulator...
+    #Run CAMB in parallel for all theta values (outside JIT)
+    unlensed_batch, tensor_batch, total_batch, lens_batch = parallel_camb_batch(
+        theta_key, theta_range, lmax_prime = lmax_prime, **camb_kwargs)
+
+    #Evaluate logpdf for all theta values (JIT + vmap over pre-computed CAMB results)
+    logpdf_values = _eval_theta_logpdf_grid(
+        unlensed_batch, tensor_batch, total_batch, lens_batch,
+        mixed_field, mixed_phi, data, noise_covariance, mask, beam,
+        nside, theta_pix, uk_arcmin_t, nphi_fac, a_phi, lmax)
+
+    #Inverse CDF sample from the logpdf grid
+    return grid_and_sample(logpdf_values, theta_range, rng_key)
+
+
+@partial(jax.jit, static_argnames = ["nside", "theta_pix", "lmax"])
+def _eval_theta_logpdf_grid(unlensed_batch, tensor_batch, total_batch, lens_batch,
+                             mixed_field, mixed_phi, data, noise_covariance, mask, beam,
+                             nside, theta_pix, uk_arcmin_t = 3,
+                             nphi_fac = 2, a_phi = 1, lmax = 17_000):
+
+    lmax_prime = min(lmax, 5000)
+    ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
+    ells = jnp.arange(2, lmax).astype(jnp.float64)
+
+    #Compute noise covariance matrices once (fixed across theta values)
+    n_tt, n_te, n_ee, n_bb = noise_cls(lmax_prime, uk_arcmin_t)
+    ell_prime = jnp.arange(2, lmax_prime)
+    cn_tt = covar_matrix_from_cls(nside, pix_width, ell_grid, ell_prime, n_tt, origin_value = 0)
+    cn_te = covar_matrix_from_cls(nside, pix_width, ell_grid, ell_prime, n_te, origin_value = 0)
+    cn_ee = covar_matrix_from_cls(nside, pix_width, ell_grid, ell_prime, n_ee, origin_value = 0)
+    cn_bb = covar_matrix_from_cls(nside, pix_width, ell_grid, ell_prime, n_bb, origin_value = 0)
+
+    #Extract raw mask/beam matrices for QE computation inside load_covmat
+    mask_raw = mask.scalar_matrix
+    beam_raw = beam.scalar_matrix
+
+    def single_eval(unlensed_scalar, tensor, total, lens_potential):
+        cf_tt, cphi, d_tt, g = load_covmat(
+            unlensed_scalar, tensor, total, lens_potential,
+            cn_tt, cn_te, cn_ee, cn_bb, mask_raw, beam_raw,
+            nside, pix_width, ell_grid, ells,
+            nphi_fac, a_phi, lmax)
+
+        #Wrap raw matrices as DiagonalScalar operators for mixed_logpdf
+        phi_cov = noise_covariance.replace(scalar_matrix = cphi)
+        field_cov = noise_covariance.replace(scalar_matrix = cf_tt)
+        mixing_g_op = noise_covariance.replace(scalar_matrix = g)
+        mixing_d_op = noise_covariance.replace(scalar_matrix = d_tt)
+
+        value = mixed_logpdf(mixed_field, mixed_phi, data,
+                             noise_covariance, phi_cov, field_cov,
+                             mask, beam, mixing_g_op, mixing_d_op)
+        return jnp.where(jnp.isnan(value), float("-inf"), value)
+
+    return jax.vmap(single_eval)(unlensed_batch, tensor_batch, total_batch, lens_batch)
 
 #sample single parameter "theta" via inverse CDF
 def grid_and_sample(logpdf_values, theta_values, rng_key):
@@ -182,24 +230,25 @@ def grid_and_sample(logpdf_values, theta_values, rng_key):
 #NOTE prior experience with the MAP_joint() algorithm makes me think it is not worthwhile
 #to JIT the main entry point here due to the for-loop compilation but it may be worth 
 #experimenting with
-def sample_joint(data_field, cosmo_params, cosmo_ranges, num_burn_in_fix_theta = 10, 
-                 noise_level = 3, iters_per_chain = 500, num_burn_in_always_accept = 10, 
+def sample_joint(data_field, cosmo_params, cosmo_ranges, num_burn_in_fix_theta = 100, 
+                 noise_level = 3, iters_per_chain = 500, num_burn_in_always_accept = 0, 
                  seed = 0):
 
     #we will store the learned parameter distributions in a dictionary
     cosmo_distributions = {}
-    cosmo_distributions["ombh2"] = [] 
-    cosmo_distributions["omch2"] = [] 
-    cosmo_distributions["tau"] = [] 
-    cosmo_distributions["ns"] = [] 
-    cosmo_distributions["As"] = [] 
-    cosmo_distributions["H0"] = [] 
+    cosmo_distributions["ombh2"] = []
+    # cosmo_distributions["omch2"] = [] 
+    # cosmo_distributions["tau"] = [] 
+    # cosmo_distributions["ns"] = [] 
+    # cosmo_distributions["As"] = [] 
+    # cosmo_distributions["H0"] = [] 
 
     #TODO we need to be a lot less sloppy with magic numbers here and what gets passed to who...
     #run a simulation at the initial parameter values for all theta cosmological parameters
     #to get the baseline initial covariance matrices and store these matrices in the args object
-    initial_sim = load_sim(nside = 128, theta_pix = 2.5, pol = "I", **cosmo_params,
-                            master_seed = 37, uk_arcmin_t = noise_level)
+    initial_sim = load_sim(nside = 128, theta_pix = 2.5, pol = "I", 
+                           ombh2 = cosmo_params[PARAM_KEYS["ombh2"]],
+                           master_seed = 37, uk_arcmin_t = noise_level)
     args = {}
     args["noise_covariance"] = initial_sim.noise_covariance
     args["phi_covariance"] = initial_sim.phi_covariance
@@ -220,12 +269,13 @@ def sample_joint(data_field, cosmo_params, cosmo_ranges, num_burn_in_fix_theta =
                        args["phi_covariance"].scalar_matrix, rng_key)
     phi = initial_sim.phi.replace(scalar_matrix = jfft.rfft2(phi_matrix))
     temp_field = zero_scalar_field_like(phi)
+    #TODO also try out MAP_joint for starting (f, phi) guess...
 
     for iter in range(iters_per_chain):
 
         #1. sample the temperature field
         rng_key, sub_key = jax.random.split(sub_key)
-        temp_field = gibbs_sample_f(temp_field, data_field, args, rng_key)
+        temp_field = gibbs_sample_f(temp_field, data_field, phi, args, rng_key)
 
         #2. mix the fields
         mixed_temp, mixed_phi = mix(temp_field, phi, args["mixing_d"], args["mixing_g"])
@@ -241,19 +291,26 @@ def sample_joint(data_field, cosmo_params, cosmo_ranges, num_burn_in_fix_theta =
         
         #4. sample your cosmo parameters
         if iter >= num_burn_in_fix_theta:
-            for theta, theta_range in cosmo_ranges.items():
+            for theta, theta_range in [("ombh2", cosmo_ranges["ombh2"])]: #cosmo_ranges.items():
                 rng_key, sub_key = jax.random.split(sub_key)
-                theta_val = gibbs_sample_theta(theta, theta_range, cosmo_params, mixed_temp, 
-                                               mixed_phi, data_field, args["noise_covariance"], 
-                                               args["mask"], args["beam"], rng_key)
-                cosmo_params[theta] = theta_val
+                theta_val = gibbs_sample_theta(theta, theta_range, cosmo_params, mixed_temp,
+                                               mixed_phi, data_field, args["noise_covariance"],
+                                               args["mask"], args["beam"], rng_key,
+                                               uk_arcmin_t = noise_level)
+                cosmo_params = cosmo_params.at[PARAM_KEYS[theta]].set(theta_val)
                 cosmo_distributions[theta].append(theta_val)
 
         #5. recompute Cf, Cphi, QE, G, and D matrices with the updated theta values
         rng_key, sub_key = jax.random.split(sub_key)
-        new_sim = load_sim(nside = 128, theta_pix = 2.5, pol = "I", **cosmo_params,
+        new_sim = load_sim(nside = 128, theta_pix = 2.5, pol = "I",
                            master_seed = jax.random.randint(rng_key, shape = (), 
-                           minval = 0, maxval = 2**31), uk_arcmin_t = noise_level)
+                           minval = 0, maxval = 2**31), uk_arcmin_t = noise_level,
+                           ombh2 = cosmo_params[PARAM_KEYS["ombh2"]])#,
+                            #  omch2 = cosmo_params[PARAM_KEYS["omch2"]],
+                            #  tau = cosmo_params[PARAM_KEYS["tau"]],
+                            #  ns = cosmo_params[PARAM_KEYS["ns"]],
+                            #  As = cosmo_params[PARAM_KEYS["As"]],
+                            #  H0 = cosmo_params[PARAM_KEYS["H0"]])
         args["phi_covariance"] = new_sim.phi_covariance
         args["field_covariance"] = new_sim.field_covariance
         args["quadratic_estimate"] = new_sim.quadratic_estimate
@@ -268,32 +325,39 @@ def sample_joint(data_field, cosmo_params, cosmo_ranges, num_burn_in_fix_theta =
 
 if __name__ == "__main__":
 
+    #initialize the cosmo parameters and their ranges
+    NUM_COSMO_PARAMS = 1
+    cosmo_params = jnp.zeros(NUM_COSMO_PARAMS)
+    #The initial starting point
+    cosmo_params = cosmo_params.at[PARAM_KEYS["ombh2"]].set(0.02) #fiducial is 0.02237 (> fid)
+    # cosmo_params = cosmo_params.at[PARAM_KEYS["ombh2"]].set(0.8) #fiducial is 0.12 (< fid)
+    # cosmo_params = cosmo_params.at[PARAM_KEYS["ombh2"]].set(0.025) #fiducial is 0.0544 (< fid)
+    # cosmo_params = cosmo_params.at[PARAM_KEYS["ombh2"]].set(0.98) #fiducial is 0.9649 (> fid)
+    # cosmo_params = cosmo_params.at[PARAM_KEYS["ombh2"]].set(3.5) #fiducial is ln(As * 1e10) = 3.044 (> fid)
+    # cosmo_params = cosmo_params.at[PARAM_KEYS["ombh2"]].set(67) #fiducial is 67.36 (= fid)
+
+    #NOTE perhaps we could do caching??? To compute every possible cross section based on 
+    #our theta ranges
+    #This can be a static dict since its values should not change
+    cosmo_ranges = {}
+    cosmo_ranges["ombh2"] = jnp.linspace(0.01, 0.05, 30) #initialization range (0.005, 0.1, 50)
+    # cosmo_ranges["omch2"] = jnp.linspace(0.0005, 2, 10_000) #initialization range (0.001, 0.99, 10_000)
+    # cosmo_ranges["tau"] = jnp.linspace(0.001, 2, 10_000) #initialization range (0.01, 0.8, 1000)
+    # cosmo_ranges["ns"] = jnp.linspace(0.1, 2.5, 100) #initialization range (0.8, 1.2, 50)
+    # cosmo_ranges["As"] = jnp.linspace(0.1, 8, 100) #initialization range (1.6, 3.9, 50)
+    # cosmo_ranges["H0"] = jnp.linspace(0.01, 2, 100) #initialization range (0.2, 1.0, 50)
+
     #Generate a "ground truth" simulated data set
     noise_level = 5
+    ombh2_ground = 0.04
     data_set = load_sim(nside = 128, theta_pix = 2.5,
                         uk_arcmin_t = noise_level, pol = "I", 
-                        master_seed = 67, a_phi = 0.75)
+                        master_seed = 67, ombh2 = ombh2_ground)
     data_field = data_set.data
-
-    #initialize the cosmo parameters and their ranges
-    cosmo_params = {} #TODO replace with realistic values
-    cosmo_params["ombh2"] = 0
-    cosmo_params["omch2"] = 0
-    cosmo_params["tau"] = 0
-    cosmo_params["ns"] = 0
-    cosmo_params["As"] = 0
-    cosmo_params["H0"] = 0
-    cosmo_ranges = {} #TODO replace with realistic ranges
-    cosmo_ranges["ombh2"] = jnp.linspace(0.1, 2, 50) 
-    cosmo_ranges["omch2"] = jnp.linspace(0.1, 2, 50) 
-    cosmo_ranges["tau"] = jnp.linspace(0.1, 2, 50) 
-    cosmo_ranges["ns"] = jnp.linspace(0.1, 2, 50) 
-    cosmo_ranges["As"] = jnp.linspace(0.1, 2, 50) 
-    cosmo_ranges["H0"] = jnp.linspace(0.1, 2, 50) 
 
     #Plug the ground truth data into sample_joint() to try and learn the theta distributions
     start_time = time.time()
-    a_phi_distribution = sample_joint(data_field, **cosmo_params, **cosmo_ranges, 
+    a_phi_distribution = sample_joint(data_field, cosmo_params, cosmo_ranges, 
                                       num_burn_in_fix_theta = 100, noise_level = noise_level, 
                                       iters_per_chain = 500, num_burn_in_always_accept = 0, 
                                       seed = 0)

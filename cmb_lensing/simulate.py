@@ -7,13 +7,18 @@ jax.config.update("jax_enable_x64", True)
 
 from functools import partial
 from itertools import combinations
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+import os
 import time
 
 from cmb_lensing.util import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
 from cmb_lensing.statistics import *
+from cmb_lensing._camb_parallel import camb_worker as _camb_worker
 
+_SPAWN_CTX = multiprocessing.get_context("spawn")
 _CAMB_COLS = {"TT": 0, "EE": 1, "BB": 2, "TE": 3}
 
 
@@ -167,11 +172,20 @@ def get_d_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
 
     return d_tt, d_te, d_ee, d_bb
 
+#A light-weight version of the full method for use in temp-only inference of parameters
+def get_d_tt_matrix(cfs_tt, cft_tt, cn_tt, r, r_fid):
+    pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
+    identity = jnp.ones(cn_tt.shape)
+    cf_r = cfs_tt + (r/r_fid)*cft_tt
+    d_tt = cf_r + pre_factor * identity + 2 * cn_tt
+    d_tt = jnp.sqrt(d_tt * reciprocal_matrix(cf_r))
+    return d_tt
+
 # ── G Matrix ──────────────────────────────────────────────────────────────
 
-def get_g_matrix(cphi, nphi, a_phi = 1):
-    g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi))
-    g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(a_phi * cphi))
+def get_g_matrix(cphi_fid, nphi, a_phi_fid, a_phi = 1):
+    g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_fid))
+    g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix((a_phi/a_phi_fid) * cphi_fid))
     g = reciprocal_matrix(g0) * g
     return g
 
@@ -386,14 +400,22 @@ def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
 def _camb_callback_fn(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
                       lmax_prime, k_pivot, Alens):
     """Eagerly runs CAMB and returns flat arrays for use inside JIT via pure_callback."""
-    power_spectra, lens_potential = _run_camb(
-        H0, float(ombh2), float(omch2), float(cosmomc_theta),
-        float(r), float(mnu), float(tau), float(As), float(nt), float(ns),
-        int(lmax_prime), float(k_pivot), float(Alens)
-    )
-    unlensed_scalar = jnp.asarray(power_spectra["unlensed_scalar"], dtype=jnp.float64)
-    tensor = jnp.asarray(power_spectra["tensor"], dtype=jnp.float64)
-    total = jnp.asarray(power_spectra["total"], dtype=jnp.float64)
+    lmax_prime = int(lmax_prime)
+    try:
+        power_spectra, lens_potential = _run_camb(
+            H0, float(ombh2), float(omch2), float(cosmomc_theta),
+            float(r), float(mnu), float(tau), float(As), float(nt), float(ns),
+            lmax_prime, float(k_pivot), float(Alens)
+        )
+        unlensed_scalar = jnp.asarray(power_spectra["unlensed_scalar"], dtype=jnp.float64)
+        tensor = jnp.asarray(power_spectra["tensor"], dtype=jnp.float64)
+        total = jnp.asarray(power_spectra["total"], dtype=jnp.float64)
+    except Exception:
+        #unphysical parameters — return NaN arrays so downstream logpdf becomes -inf
+        unlensed_scalar = jnp.full((lmax_prime, 4), jnp.nan)
+        tensor = jnp.full((lmax_prime, 4), jnp.nan)
+        total = jnp.full((lmax_prime, 4), jnp.nan)
+        lens_potential = jnp.full((lmax_prime,), jnp.nan)
     return unlensed_scalar, tensor, total, lens_potential
 
 
@@ -409,8 +431,66 @@ def _camb_via_callback(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
     return jax.pure_callback(
         _camb_callback_fn, result_shapes,
         H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-        lmax_prime, k_pivot, Alens
+        lmax_prime, k_pivot, Alens,
+        vmap_method = 'sequential'
     )
+
+
+def parallel_camb_batch(theta_key, theta_range, n_cpu, lmax_prime = 5000,
+                        max_workers = None, **camb_overrides):
+    """Run CAMB in parallel for all theta_range values, varying theta_key.
+    Uses spawn-based ProcessPoolExecutor since CAMB's Fortran backend is not
+    thread-safe and fork deadlocks with JAX's threads.
+
+    max_workers controls the number of concurrent CAMB processes. Each worker
+    gets floor(cpu_count / max_workers) OMP threads. Defaults to cpu_count
+    workers with OMP_NUM_THREADS=1, which provides the best wall-clock scaling
+    for large grids.
+
+    Pass additional kwargs to override CAMB defaults for non-varying parameters."""
+    base_params = dict(
+        H0 = None, ombh2 = 0.0224567, omch2 = 0.118489, cosmomc_theta = 0.0104098,
+        r = 0.2, mnu = 0.06, tau = 0.055, As = float(jnp.exp(3.043) * 1e-10),
+        nt = -0.2 / 8, ns = 0.968602, k_pivot = 0.002, Alens = 1
+    )
+    base_params.update(camb_overrides)
+
+    param_list = []
+    for theta_val in theta_range:
+        params = dict(base_params)
+        params[theta_key] = float(theta_val)
+        params["lmax_prime"] = lmax_prime
+        param_list.append(params)
+
+    #n_cpu = os.cpu_count() or 4
+    if max_workers is None:
+        max_workers = n_cpu
+
+    if max_workers <= 1:
+        #Sequential path: skip process pool, let CAMB use full OMP internally
+        results = [_camb_worker(p) for p in param_list]
+    else:
+        omp_threads = max(1, n_cpu // max_workers)
+        #Set OMP threads for spawned workers (they inherit parent env at spawn time)
+        saved_env = {}
+        for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+            saved_env[var] = os.environ.get(var)
+            os.environ[var] = str(omp_threads)
+        try:
+            with ProcessPoolExecutor(max_workers = max_workers,
+                                      mp_context = _SPAWN_CTX) as executor:
+                results = list(executor.map(_camb_worker, param_list))
+        finally:
+            for var, val in saved_env.items():
+                if val is not None:
+                    os.environ[var] = val
+                else:
+                    os.environ.pop(var, None)
+
+    return (jnp.stack([jnp.asarray(r[0]) for r in results]),
+            jnp.stack([jnp.asarray(r[1]) for r in results]),
+            jnp.stack([jnp.asarray(r[2]) for r in results]),
+            jnp.stack([jnp.asarray(r[3]) for r in results]))
 
 
 def _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime):
@@ -422,6 +502,44 @@ def _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_
         cls[f"total_{stokes}"] = dl2cl(total[:, _CAMB_COLS[stokes]], lmax, lmax_prime)
     cls["phi"] = dl2cl(lens_potential, lmax, lmax_prime, is_phi=True)
     return cls
+
+
+def load_covmat(unlensed_scalar, tensor, total, lens_potential,
+                cn_tt, cn_te, cn_ee, cn_bb, mask, beam,
+                nside, pix_width, ell_grid, ells,
+                nphi_fac = 2, a_phi = 1, lmax = 17_000):
+    """Compute covariance and mixing matrices from pre-computed CAMB output.
+    Lightweight alternative to load_sim that skips field generation, lensing,
+    and dataset construction. Returns (cf_tt, cphi, d_tt, g) as raw matrices.
+    Not JIT-compiled on its own; intended to be called inside JIT/vmap."""
+
+    lmax_prime = min(lmax, 5000)
+    cls = _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime)
+
+    cphi = a_phi * covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
+                                         cls["phi"], origin_value = 0)
+
+    cf = {}
+    for comp in ("TT", "TE", "EE", "BB"):
+        cf_scalar = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
+                                          cls[f"scalar_{comp}"], origin_value = 0)
+        cf_tensor = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
+                                          cls[f"tensor_{comp}"], origin_value = 0)
+        cf[comp] = cf_scalar + cf_tensor
+
+    cfl = {comp: covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
+                                       cls[f"total_{comp}"], origin_value = 0)
+           for comp in ("TT", "EE", "BB")}
+
+    d_tt, _, _, _ = get_d_matrix(cf["TT"], cf["TE"], cf["EE"], cf["BB"],
+                                  cn_tt, cn_te, cn_ee, cn_bb)
+
+    qe = scalar_quadratic_estimate(cn_tt, cf["TT"], cfl["TT"],
+                                   mask, beam, pix_width) / nphi_fac
+
+    g = get_g_matrix(cphi, qe, a_phi, a_phi = a_phi)
+
+    return cf["TT"], cphi, d_tt, g
 
 
 # ── Lensing ───────────────────────────────────────────────────────────────
@@ -461,16 +579,20 @@ def build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real):
     return fourier_weights, phi_cov, qe_op, phi
 
 
-def _build_dataset_t(nside, theta_pix, pix_width, cphi, qe, phi_real,
-                     cf, cn, d_tt, g, mask, beam,
-                     field_t, lensed_t, data_t):
+def _build_dataset_t(nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi_real,
+                     cf, cf_scalar, cf_tensor, cfl, cn, d_tt, g, mask, beam,
+                     field_t, lensed_t, data_t, r, a_phi):
     _, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     return DataSetT(
         noise_covariance=phi_cov.replace(scalar_matrix=cn["TT"]),
         field_covariance=phi_cov.replace(scalar_matrix=cf["TT"]),
+        lensed_field_covariance=phi_cov.replace(scalar_matrix=cfl["TT"]),
+        scalar_field_covariance=phi_cov.replace(scalar_matrix=cf_scalar["TT"]),
+        tensor_field_covariance=phi_cov.replace(scalar_matrix=cf_tensor["TT"]),
         mixing_d=phi_cov.replace(scalar_matrix=d_tt),
         mixing_g=phi_cov.replace(scalar_matrix=g),
         phi_covariance=phi_cov,
+        unscaled_phi_covariance = phi_cov.replace(scalar_matrix = unscaled_cphi),
         mask=phi_cov.replace(scalar_matrix=mask),
         beam=phi_cov.replace(scalar_matrix=beam),
         quadratic_estimate=qe_op,
@@ -478,12 +600,14 @@ def _build_dataset_t(nside, theta_pix, pix_width, cphi, qe, phi_real,
         unlensed_field=phi.replace(scalar_matrix=field_t),
         lensed_field=phi.replace(scalar_matrix=lensed_t),
         phi=phi,
+        fid_r = r,
+        fid_a_phi = a_phi
     )
 
 
-def _build_dataset_eb(nside, theta_pix, pix_width, cphi, qe, phi_real,
-                      cf, cn, d_ee, d_bb, g, mask, beam,
-                      field_e, field_b, lensed_e, lensed_b, data_e, data_b):
+def _build_dataset_eb(nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi_real,
+                      cf, cf_scalar, cf_tensor, cfl, cn, d_ee, d_bb, g, mask, beam,
+                      field_e, field_b, lensed_e, lensed_b, data_e, data_b, r, a_phi):
     fw, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     noise_cov = DiagonalEB(
         fourier_weights=fw, nside=nside,
@@ -498,10 +622,14 @@ def _build_dataset_eb(nside, theta_pix, pix_width, cphi, qe, phi_real,
     )
     return DataSetEB(
         noise_covariance=noise_cov,
+        lensed_field_covariance=noise_cov.replace(matrix_EE=cfl["EE"], matrix_BB=cfl["BB"]),
         field_covariance=noise_cov.replace(matrix_EE=cf["EE"], matrix_BB=cf["BB"]),
+        scalar_field_covariance=noise_cov.replace(matrix_EE=cf_scalar["EE"], matrix_BB=cf_scalar["BB"]),
+        tensor_field_covariance=noise_cov.replace(matrix_EE=cf_tensor["EE"], matrix_BB=cf_tensor["BB"]),
         mixing_d=noise_cov.replace(matrix_EE=d_ee, matrix_BB=d_bb),
         mixing_g=phi_cov.replace(scalar_matrix = g),
         phi_covariance=phi_cov,
+        unscaled_phi_covariance=phi_cov.replace(scalar_matrix = unscaled_cphi),
         mask=noise_cov.replace(matrix_EE=mask, matrix_BB=mask),
         beam=noise_cov.replace(matrix_EE=beam, matrix_BB=beam),
         quadratic_estimate=qe_op,
@@ -509,14 +637,16 @@ def _build_dataset_eb(nside, theta_pix, pix_width, cphi, qe, phi_real,
         unlensed_field=data.replace(polar_matrix_1=field_e, polar_matrix_2=field_b),
         lensed_field=data.replace(polar_matrix_1=lensed_e, polar_matrix_2=lensed_b),
         phi=phi,
+        fid_r = r,
+        fid_a_phi = a_phi
     )
 
 
-def _build_dataset_teb(nside, theta_pix, pix_width, cphi, qe, phi_real,
-                       cf, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
+def _build_dataset_teb(nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi_real,
+                       cf, cf_scalar, cf_tensor, cfl, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
                        field_t, field_e, field_b,
                        lensed_t, lensed_e, lensed_b,
-                       data_t, data_e, data_b):
+                       data_t, data_e, data_b, r, a_phi):
     fw, phi_cov, qe_op, phi = build_phi_template(nside, theta_pix, pix_width, cphi, qe, phi_real)
     zero = jnp.zeros(cn["TT"].shape)
     noise_cov = BlockTEB(
@@ -537,12 +667,25 @@ def _build_dataset_teb(nside, theta_pix, pix_width, cphi, qe, phi_real,
             matrix_TT=cf["TT"], matrix_TE=cf["TE"], matrix_ET=cf["TE"],
             matrix_EE=cf["EE"], matrix_BB=cf["BB"]
         ),
+        lensed_field_covariance=noise_cov.replace(
+            matrix_TT=cfl["TT"], matrix_TE=cfl["TE"], matrix_ET=cfl["TE"],
+            matrix_EE=cfl["EE"], matrix_BB=cfl["BB"]
+        ),
+        scalar_field_covariance=noise_cov.replace(
+            matrix_TT=cf_scalar["TT"], matrix_TE=cf_scalar["TE"], matrix_ET=cf_scalar["TE"],
+            matrix_EE=cf_scalar["EE"], matrix_BB=cf_scalar["BB"]
+        ),
+        tensor_field_covariance=noise_cov.replace(
+            matrix_TT=cf_tensor["TT"], matrix_TE=cf_tensor["TE"], matrix_ET=cf_tensor["TE"],
+            matrix_EE=cf_tensor["EE"], matrix_BB=cf_tensor["BB"]
+        ),
         mixing_d=noise_cov.replace(
             matrix_TT=d_tt, matrix_TE=d_te, matrix_ET=d_te,
             matrix_EE=d_ee, matrix_BB=d_bb
         ),
         mixing_g = phi_cov.replace(scalar_matrix = g),
         phi_covariance=phi_cov,
+        unscaled_phi_covariance=phi_cov.replace(scalar_matrix = unscaled_cphi),
         mask=noise_cov.replace(
             matrix_TT=mask, matrix_TE=zero, matrix_ET=zero,
             matrix_EE=mask, matrix_BB=mask
@@ -560,6 +703,8 @@ def _build_dataset_teb(nside, theta_pix, pix_width, cphi, qe, phi_real,
             scalar_matrix=lensed_t, polar_matrix_1=lensed_e, polar_matrix_2=lensed_b
         ),
         phi=phi,
+        fid_r = r,
+        fid_a_phi = a_phi
     )
 
 
@@ -585,18 +730,21 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
     #Lensing potential
-    cphi = a_phi * covar_matrix_from_cls(nside, pix_width, ell_grid, 
+    unscaled_cphi = covar_matrix_from_cls(nside, pix_width, ell_grid, 
                                          ells, cls["phi"], origin_value=0)
+    cphi = a_phi * unscaled_cphi
     phi, kc = field_from_covar(nside, cphi, keys, 0)
 
     #Unlensed field covariances (scalar + tensor)
     cf = {}
+    cf_scalar = {}
+    cf_tensor = {}
     for comp in ("TT", "TE", "EE", "BB"):
-        cf_scalar = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
+        cf_scalar[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
                                           cls[f"scalar_{comp}"], origin_value=0)
-        cf_tensor = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
+        cf_tensor[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
                                           cls[f"tensor_{comp}"], origin_value=0)
-        cf[comp] = cf_scalar + cf_tensor
+        cf[comp] = cf_scalar[comp] + cf_tensor[comp]
 
     #Lensed field covariances
     cfl = {comp: covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
@@ -652,30 +800,30 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
                                       beam, beam, pix_width) / nphi_fac
 
     #The G mixing matrix    
-    g = get_g_matrix(cphi, qe, a_phi = a_phi)
+    g = get_g_matrix(cphi, qe, a_phi, a_phi = a_phi)
 
     #convert phi back to fourier space
     phi = jfft.rfft2(phi)
     #Build dataset for the requested polarization
     if pol == "I":
         return _build_dataset_t(
-            nside, theta_pix, pix_width, cphi, qe, phi,
-            cf, cn, d_tt, g, mask, beam,
-            field_t, lensed_t, data_t
+            nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
+            cf, cf_scalar, cf_tensor, cfl, cn, d_tt, g, mask, beam,
+            field_t, lensed_t, data_t, r, a_phi
         )
     elif pol == "P":
         return _build_dataset_eb(
-            nside, theta_pix, pix_width, cphi, qe, phi,
-            cf, cn, d_ee, d_bb, g, mask, beam,
-            field_e, field_b, lensed_e, lensed_b, data_e, data_b
+            nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
+            cf, cf_scalar, cf_tensor, cfl, cn, d_ee, d_bb, g, mask, beam,
+            field_e, field_b, lensed_e, lensed_b, data_e, data_b, r, a_phi
         )
     else:
         return _build_dataset_teb(
-            nside, theta_pix, pix_width, cphi, qe, phi,
-            cf, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
+            nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
+            cf, cf_scalar, cf_tensor, cfl, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
             field_t, field_e, field_b,
             lensed_t, lensed_e, lensed_b,
-            data_t, data_e, data_b
+            data_t, data_e, data_b, r, a_phi
         )
 
 def batch_simulated_trials(num_trials=10, nside=256, theta_pix=2,

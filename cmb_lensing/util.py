@@ -172,7 +172,7 @@ def real_fourier_2_full_plane(real_fourier_field):
 #creates a smooth distribution of y-value outputs with x-value inputs
 #given the corresponding discrete input vectors x and y
 @partial(jax.jit, static_argnums=(2, 3))
-def loess(x, y, frac=0.3, degree=1):
+def loess(x, y, frac=0.1, degree=1):
     n = x.shape[0]
     h = max(math.ceil(frac * n), degree + 1)
 
