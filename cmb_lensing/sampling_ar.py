@@ -98,7 +98,7 @@ def hmc_step(x, always_accept, nside, mass_matrix,
     )
     return x, delta_h, accept
 
-#------------------ symplectic integration ------------------
+#------------------ symplectic integration ---------------------------------------
 #NOTE num_steps * step_size = path_length must be tuned... Too large and 
 #you can overshoot and end up in physically impossible / divergent solutions...
 #Too small and you may not have enough momentum to escape local minima
@@ -139,7 +139,7 @@ def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance,
     delta_h = hamiltonian(x, p) - hamiltonian(x0, p0)
     return delta_h, x, p
 
-@jax.jit
+@partial(jax.jit, static_argnames = ["use_priors", "over_relaxation_num_samps"])
 def gibbs_sample_theta(theta, theta_range, mixed_temp, mixed_phi, a_phi, r, a_phi_fid,
                        data_field, args, rng_key, theta_old, over_relaxation_num_samps = -1, 
                        use_priors = False):
@@ -160,14 +160,14 @@ def gibbs_sample_theta(theta, theta_range, mixed_temp, mixed_phi, a_phi, r, a_ph
     #     sampled_theta = gibbs_sample_a_phi(theta_range, a_phi_fid, r, mixed_temp, mixed_phi, 
     #                                        args["mixing_d"], args["quadratic_estimate"],
     #                                        data_field, args["noise_covariance"], 
-    #                                        args["unlensed_phi_covariance"], args["field_covariance"],
+    #                                        args["unscaled_phi_covariance"], args["field_covariance"],
     #                                        args["mask"], args["beam"], rng_key_2, theta_old, over_relaxation_num_samps, 
     #                                        use_priors)
 
     return gibbs_sample_a_phi(theta_range, a_phi_fid, r, mixed_temp, mixed_phi, 
                               args["mixing_d"], args["quadratic_estimate"],
                               data_field, args["noise_covariance"], 
-                              args["unlensed_phi_covariance"], args["field_covariance"],
+                              args["unscaled_phi_covariance"], args["field_covariance"],
                               args["mask"], args["beam"], rng_key, theta_old, over_relaxation_num_samps, 
                               use_priors)
 
@@ -265,7 +265,7 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
         return chosen_theta
 
     #inverse CDF sampling: interpolate theta as a function of CDF
-    random_number = jax.random.uniform(rng_key)
+    random_number = jax.random.uniform(sub_key)
     sampled_theta = jnp.interp(random_number, cdf_values, theta_values)
     return sampled_theta
 
@@ -288,18 +288,21 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
     args["unscaled_phi_covariance"] = data_set.unscaled_phi_covariance
     args["phi_covariance"] = param_init["a_phi"] * args["unscaled_phi_covariance"]
     args["lensed_field_covariance"] = data_set.lensed_field_covariance
-    args["scalar_field_covariance"] = data_set.scalar_field_covariance
-    args["tensor_field_covariance"] = data_set.tensor_field_covariance
-    args["field_covariance"] = args["scalar_field_covariance"] \
-                               + (param_init["r"] / args["r_fid"]) \
-                               * args["tensor_field_covariance"]
+    #args["scalar_field_covariance"] = data_set.scalar_field_covariance
+    #args["tensor_field_covariance"] = data_set.tensor_field_covariance
+    #args["field_covariance"] = args["scalar_field_covariance"] \
+    #                           + (param_init["r"] / args["r_fid"]) \
+    #                           * args["tensor_field_covariance"]
+    args["field_covariance"] = data_set.field_covariance
     args["mask"] = data_set.mask
     args["beam"] = data_set.beam
-    args["quadratic_estimate"] = scalar_quadratic_estimate(args["noise_covariance"], args["field_covariance"], 
-                                                           args["lensed_field_covariance"], args["mask"], 
-                                                           args["beam"], data_set.pix_width) / NPHI_FAC
+    qe_matrix = scalar_quadratic_estimate(args["noise_covariance"].scalar_matrix, 
+                                          args["field_covariance"].scalar_matrix, 
+                                          args["lensed_field_covariance"].scalar_matrix, 
+                                          args["mask"].scalar_matrix, 
+                                          args["beam"].scalar_matrix, data_set.pix_width) / NPHI_FAC
+    args["quadratic_estimate"] = data_set.quadratic_estimate.replace(scalar_matrix = qe_matrix)
     data_field = data_set.data
-
 
     #We must initialize the mixing D & G matrices
     #to the proper values according to our starting guess for the cosmological parameters
@@ -328,11 +331,16 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
 
     #run MAP_joint if necessary
     if phi_start == "MAP" or f_start == "MAP":
+        data_set = data_set.replace(
+            phi_covariance = data_set.phi_covariance.replace(
+                scalar_matrix = args["phi_covariance"].scalar_matrix
+            )
+        )
         temp_joint, phi_joint = map_joint(data_set)
     
     #choose the starting point for (f, phi) in (f, phi, theta) parameter space
     if phi_start == "MAP":
-        phi_start = phi_joint
+        phi = phi_joint
     elif phi_start == "RNG":
         rng_key, sub_key = jax.random.split(sub_key)
         phi_matrix = field_from_covar_single_key(data_set.data.nside, 
@@ -342,7 +350,7 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
         phi = 0*data_set.phi
 
     if f_start == "MAP":
-        f_start = temp_joint
+        temp_field = temp_joint
     elif f_start == "RNG":
         rng_key, sub_key = jax.random.split(sub_key)
         temp_matrix = field_from_covar_single_key(data_set.data.nside, 
@@ -385,6 +393,13 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
                                            args["quadratic_estimate"].scalar_matrix, a_phi_fid, 
                                            a_phi = param_vals["a_phi"][-1])
             args["mixing_g"] = args["mixing_g"].replace(scalar_matrix = mixing_g_matrix)
+
+            # -------------------------------------------------------- DEBUG --------------------------------------------------------
+            #Store the sampled a_phi value to a debug text file...
+            file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/chains_v4_aphi_0dot75/chain_{seed}_history.txt"
+            with open(file_path, "a") as file:
+                file.write(str(param_vals["a_phi"][-1]) + "\n")
+            # -------------------------------------------------------- DEBUG --------------------------------------------------------
 
         if should_sample["r"]:
             args["field_covariance"] = args["scalar_field_covariance"] \
@@ -438,7 +453,7 @@ if __name__ == "__main__":
 
     #time and run the sampling algorithm
     param_distributions = sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_ground,
-                                       iters_per_chain = 5000, num_burn_in_fix_theta = 100, 
+                                       iters_per_chain = 5000, num_burn_in_fix_theta = 0, 
                                        over_relaxation_num_samps = -1, use_priors = False,
                                        num_burn_in_always_accept = 0, seed = None,
                                        phi_start = "MAP", f_start = "MAP")

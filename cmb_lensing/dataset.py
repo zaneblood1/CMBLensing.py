@@ -14,8 +14,8 @@ from cmb_lensing.constants import *
 @struct.dataclass
 class DataSet:
     #various constants / metadata needed for some calculations throughout the code
-    fid_r: float = flax.struct.field(pytree_node = False)
-    fid_a_phi: float = flax.struct.field(pytree_node = False)
+    fid_r: float = flax.struct.field()
+    fid_a_phi: float = flax.struct.field()
     fourier_weights: jnp.ndarray = flax.struct.field(default_factory = lambda: FOURIER_WEIGHTS_DEFAULT.copy())
     nside: int = flax.struct.field(pytree_node = False, default = NSIDE_DEFAULT)
     theta_pix: float = flax.struct.field(pytree_node = False, default = THETA_PIX_DEFAULT)

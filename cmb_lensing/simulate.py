@@ -173,6 +173,7 @@ def get_d_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
     return d_tt, d_te, d_ee, d_bb
 
 #A light-weight version of the full method for use in temp-only inference of parameters
+@jax.jit
 def get_d_tt_matrix(cfs_tt, cft_tt, cn_tt, r, r_fid):
     pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
     identity = jnp.ones(cn_tt.shape)
@@ -183,6 +184,7 @@ def get_d_tt_matrix(cfs_tt, cft_tt, cn_tt, r, r_fid):
 
 # ── G Matrix ──────────────────────────────────────────────────────────────
 
+@jax.jit
 def get_g_matrix(cphi_fid, nphi, a_phi_fid, a_phi = 1):
     g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_fid))
     g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix((a_phi/a_phi_fid) * cphi_fid))
@@ -601,7 +603,11 @@ def _build_dataset_t(nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi_r
         lensed_field=phi.replace(scalar_matrix=lensed_t),
         phi=phi,
         fid_r = r,
-        fid_a_phi = a_phi
+        fid_a_phi = a_phi,
+        nside = nside,
+        theta_pix = theta_pix,
+        pix_width = pix_width, 
+        fourier_weights = get_fourier_weights((nside, nside))
     )
 
 
@@ -638,7 +644,11 @@ def _build_dataset_eb(nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi_
         lensed_field=data.replace(polar_matrix_1=lensed_e, polar_matrix_2=lensed_b),
         phi=phi,
         fid_r = r,
-        fid_a_phi = a_phi
+        fid_a_phi = a_phi,
+        nside = nside,
+        theta_pix = theta_pix,
+        pix_width = pix_width, 
+        fourier_weights = get_fourier_weights((nside, nside))
     )
 
 
@@ -704,7 +714,11 @@ def _build_dataset_teb(nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi
         ),
         phi=phi,
         fid_r = r,
-        fid_a_phi = a_phi
+        fid_a_phi = a_phi,
+        nside = nside,
+        theta_pix = theta_pix,
+        pix_width = pix_width, 
+        fourier_weights = get_fourier_weights((nside, nside))
     )
 
 
