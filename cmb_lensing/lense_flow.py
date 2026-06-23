@@ -3,12 +3,12 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from cmb_lensing.fields import *
 from cmb_lensing.constants import *
-from diffrax import diffeqsolve, ODETerm, Tsit5, PIDController
+from cmb_lensing.util import rk4_solve
 from functools import singledispatch
 
 @jax.custom_vjp
-@jax.jit                                                                                                                                                                             
-def lense_flow_wrapper(field, phi, n = 10, direction = 1, adjoint = False):                                     
+@jax.jit
+def lense_flow_wrapper(field, phi, n = 7, direction = 1, adjoint = False):
     return lense_flow(field, phi, n, direction, adjoint)
 
 @jax.jit
@@ -86,41 +86,24 @@ def get_lensing_operator_gradients(phi, tqu_field, tqu_cotangent, direction, n):
     shape = (shape_x, shape_x)
     delta_phi_init = jnp.zeros(shape)
 
-    y0 = (t_field.ravel(), q_field.ravel(), u_field.ravel(), 
-          delta_t_init.ravel(), delta_q_init.ravel(), delta_u_init.ravel(), 
+    y0 = (t_field.ravel(), q_field.ravel(), u_field.ravel(),
+          delta_t_init.ravel(), delta_q_init.ravel(), delta_u_init.ravel(),
           delta_phi_init.ravel())
-    
-    #store extra arguments in a single array
+
+    #store extra arguments in a single tuple
     args = (phi_x, phi_y, phi_xx, phi_xy, phi_yy, pix_width)
 
-    #define a single step
-    single_step_dynamics = ODETerm(lensing_gradients_integration_step)
-    #diffrax equivalent of RK45... need to use a non-stiff solver to avoid singluar matrix inversions
-    ode_solver_method = Tsit5()
-    #use adaptive step sizes for ideally higher precision
-    stepsize_controller = PIDController(rtol = PID_CONTROLLER_RTOL, atol = PID_CONTROLLER_ATOL) 
-
-    #call the ode solver
-    sol = diffeqsolve(
-        single_step_dynamics,
-        ode_solver_method,
-        t0 = t0, #initial time
-        t1 = t1, #final time
-        dt0 = dt0, #initial guess for step
-        y0 = y0, #initial conditons
-        args = args,
-        stepsize_controller = stepsize_controller,
-        max_steps = MAX_DIFFRAX_STEPS
-    )
+    #solve with RK4 to match Julia's CMBLensing.jl ODE solver
+    result = rk4_solve(lensing_gradients_integration_step, y0, t0, t1, n, args)
 
     #pull out the primal output and keep the field in MAP space
-    t_field = jnp.asarray(sol.ys[0][-1]).reshape(shape) 
-    q_field = jnp.asarray(sol.ys[1][-1]).reshape(shape) 
-    u_field = jnp.asarray(sol.ys[2][-1]).reshape(shape)
-    delta_t = jnp.asarray(sol.ys[3][-1]).reshape(shape) 
-    delta_q = jnp.asarray(sol.ys[4][-1]).reshape(shape) 
-    delta_u = jnp.asarray(sol.ys[5][-1]).reshape(shape) 
-    delta_phi = jnp.asarray(sol.ys[6][-1]).reshape(shape)
+    t_field = result[0].reshape(shape)
+    q_field = result[1].reshape(shape)
+    u_field = result[2].reshape(shape)
+    delta_t = result[3].reshape(shape)
+    delta_q = result[4].reshape(shape)
+    delta_u = result[5].reshape(shape)
+    delta_phi = result[6].reshape(shape)
 
     #NOTE the following "output_like_input" method is a hacky way of making sure
     #T --> T, QU --> QU, and TQU --> TQU even though all three fields were
@@ -282,14 +265,12 @@ def _(field):
 #Lense flow is just applied sequentially to each data matrix in the field
 #NOTE lense flow only works in the MAP basis and EB must be converted to QU
 #before the function is applied
-@jax.jit
-def lense_flow(field, phi, n = 10, direction = 1, adjoint = False):                                     
-    updates = {name: primal_lense_flow(getattr(field, name), phi.scalar_matrix, 
+def lense_flow(field, phi, n = 10, direction = 1, adjoint = False):
+    updates = {name: primal_lense_flow(getattr(field, name), phi.scalar_matrix,
                field.pix_width, n, direction, adjoint) for name in field._matrix_names()}
     return field.replace(**updates)
 
 #Given a lensing potential phi and a field to be lensed, compute and return the lensed field
-@jax.jit
 def primal_lense_flow(primal_field, phi, pix_width, n, direction, adjoint):
 
     #precompute phi partials
@@ -315,38 +296,14 @@ def primal_lense_flow(primal_field, phi, pix_width, n, direction, adjoint):
         operand = None
     )
 
-    #ravel up 2D array into 1D array since this is required for the diffrax ODE solver
+    #ravel up 2D array into 1D array for the ODE solver
     y0 = primal_field.ravel()
-    #store extra arguments in a single array
+    #store extra arguments in a single tuple
     args = (phi_x, phi_y, phi_xx, phi_xy, phi_yy, pix_width, adjoint)
 
-    #define a single step
-    single_step_dynamics = ODETerm(single_lense_flow_step)
-    ode_solver_method = Tsit5() #diffrax equivalent of RK45 need to use a non-stiff solver to avoid singluar matrix inversions
-    #use adaptive step sizes for ideally higher precision
-    stepsize_controller = PIDController(rtol = PID_CONTROLLER_RTOL, 
-                                        atol = PID_CONTROLLER_ATOL, 
-                                        dtmax = 1/n)
+    #solve with RK4 to match Julia's CMBLensing.jl ODE solver
+    y_final = rk4_solve(single_lense_flow_step, y0, t0, t1, n, args)
 
-    #NOTE there seems to be a Diffrax / JAX version conflict that will arise here for the latest 
-    #version of diffrax and the latest version of Diffrax... You must downgrad to at least JAX version
-    #0.9.2 to avoid the version conflict...
-    #call the ode solver
-    sol = diffeqsolve(
-        single_step_dynamics,
-        ode_solver_method,
-        t0 = t0, #initial time
-        t1 = t1, #final time
-        dt0 = dt0, #initial guess for step
-        y0 = y0, #initial conditons
-        args = args, #extra arguments
-        stepsize_controller = stepsize_controller,
-        #adjoint = RecursiveCheckpointAdjoint(),
-        max_steps = MAX_DIFFRAX_STEPS #default is 4096
-    )
-
-    #get the last entry in the solution array
-    y_final = jnp.asarray(sol.ys)[-1]
     #reshape the flattened form into the 2D format
     return y_final.reshape(primal_field.shape)
 

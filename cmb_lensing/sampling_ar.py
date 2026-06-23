@@ -10,9 +10,7 @@ from cmb_lensing.constants import *
 #sample the field
 @jax.jit
 def gibbs_sample_f(field_start, data_field, phi, args, rng_key):
-    #NOTE really the only thing we use the "original" data set here for
-    #besides meta data is the original "data" field that we are using as 
-    #our input to our data --> LCDM parameters black box...
+
     key_f, key_n = jax.random.split(rng_key)
 
     #Run a new simulation for f ~ N(0, Cf(thetas))
@@ -235,10 +233,10 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
 
     #shift for numerical stability then smooth
     logpdf_values = logpdf_values - jnp.max(logpdf_values)
-    logpdf_values = loess(theta_values, logpdf_values)
+    interp_logpdf_values = loess(theta_values, logpdf_values, span=0.25)
 
     #convert to PDF and build a piecewise-linear CDF via cumulative trapezoid
-    pdf = jnp.exp(logpdf_values)
+    pdf = jnp.exp(interp_logpdf_values)
     dx = jnp.diff(theta_values)
     areas = (pdf[:-1] + pdf[1:]) / 2 * dx
     cdf_values = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(areas)])
@@ -284,27 +282,18 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
     args = {}
     args["noise_covariance"] = data_set.noise_covariance
     args["r_fid"] = data_set.fid_r
-    args["a_phi_fid"] = data_set.fid_a_phi
+    args["a_phi_fid"] = a_phi_fid
     args["unscaled_phi_covariance"] = data_set.unscaled_phi_covariance
     args["phi_covariance"] = param_init["a_phi"] * args["unscaled_phi_covariance"]
-    args["lensed_field_covariance"] = data_set.lensed_field_covariance
-    #args["scalar_field_covariance"] = data_set.scalar_field_covariance
-    #args["tensor_field_covariance"] = data_set.tensor_field_covariance
-    #args["field_covariance"] = args["scalar_field_covariance"] \
-    #                           + (param_init["r"] / args["r_fid"]) \
-    #                           * args["tensor_field_covariance"]
     args["field_covariance"] = data_set.field_covariance
     args["mask"] = data_set.mask
     args["beam"] = data_set.beam
-    qe_matrix = scalar_quadratic_estimate(args["noise_covariance"].scalar_matrix, 
-                                          args["field_covariance"].scalar_matrix, 
-                                          args["lensed_field_covariance"].scalar_matrix, 
-                                          args["mask"].scalar_matrix, 
-                                          args["beam"].scalar_matrix, data_set.pix_width) / NPHI_FAC
-    args["quadratic_estimate"] = data_set.quadratic_estimate.replace(scalar_matrix = qe_matrix)
+    args["quadratic_estimate"] = data_set.quadratic_estimate
+    args["mixing_d"] = data_set.mixing_d
     data_field = data_set.data
+    zeroes = 0*data_field
 
-    #We must initialize the mixing D & G matrices
+    #We must initialize the mixing  G matrix
     #to the proper values according to our starting guess for the cosmological parameters
     if should_sample["a_phi"]:
         mixing_g_matrix = get_g_matrix(args["a_phi_fid"] * args["unscaled_phi_covariance"].scalar_matrix, 
@@ -313,15 +302,6 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
         args["mixing_g"] = data_set.mixing_g.replace(scalar_matrix = mixing_g_matrix)
     else:
         args["mixing_g"] = data_set.mixing_g
-
-    if should_sample["r"]:
-        mixing_d_matrix = get_d_tt_matrix(args["scalar_field_covariance"].scalar_matrix,
-                                          args["tensor_field_covariance"].scalar_matrix,
-                                          args["noise_covariance"].scalar_matrix,
-                                          param_init["r"], args["r_fid"])
-        args["mixing_d"] = data_set.noise_covariance.replace(scalar_matrix = mixing_d_matrix)
-    else:
-        args["mixing_d"] = data_set.mixing_d
 
     #Use a seed to get reproduceable results if so desired
     if seed is not None:
@@ -344,31 +324,32 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
     elif phi_start == "RNG":
         rng_key, sub_key = jax.random.split(sub_key)
         phi_matrix = field_from_covar_single_key(data_set.data.nside, 
-                           args["phi_covariance"].scalar_matrix, rng_key)
+                     args["phi_covariance"].scalar_matrix, rng_key)
         phi = data_set.phi.replace(scalar_matrix = jfft.rfft2(phi_matrix))
     else: 
-        phi = 0*data_set.phi
+        phi = zeroes
 
     if f_start == "MAP":
         temp_field = temp_joint
     elif f_start == "RNG":
         rng_key, sub_key = jax.random.split(sub_key)
         temp_matrix = field_from_covar_single_key(data_set.data.nside, 
-                           args["field_covariance"].scalar_matrix, rng_key)
-        temp_field = data_set.phi.replace(scalar_matrix = jfft.rfft2(temp_matrix))
+                      args["field_covariance"].scalar_matrix, rng_key)
+        temp_field = data_set.unlensed_field.replace(scalar_matrix = jfft.rfft2(temp_matrix))
     else: 
-        temp_field = 0*data_set.unlensed_field
+        temp_field = zeroes
+
 
     #run the chain for the maximum specified number if iterations
-    for iter in range(1, iters_per_chain):
+    for iter in range(iters_per_chain):
 
-        #1. sample the temperature field
+        #1. sample the temperature field (using fstart = nothing EACH time...)
         rng_key, sub_key = jax.random.split(sub_key)
-        temp_field = gibbs_sample_f(temp_field, data_field, phi, args, rng_key)
+        temp_field = gibbs_sample_f(zeroes, data_field, phi, args, rng_key, iter)
 
         #2. mix the fields
         mixed_temp, mixed_phi = mix(temp_field, phi, args["mixing_d"], args["mixing_g"])
-
+        
         #3. sample the lensing potential phi
         rng_key, sub_key = jax.random.split(sub_key)
         mixed_phi, _, _ = gibbs_sample_phi(mixed_phi, mixed_temp, data_field, rng_key,
@@ -394,23 +375,13 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
                                            a_phi = param_vals["a_phi"][-1])
             args["mixing_g"] = args["mixing_g"].replace(scalar_matrix = mixing_g_matrix)
 
-            # -------------------------------------------------------- DEBUG --------------------------------------------------------
-            #Store the sampled a_phi value to a debug text file...
-            file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/chains_v4_aphi_0dot75/chain_{seed}_history.txt"
-            with open(file_path, "a") as file:
-                file.write(str(param_vals["a_phi"][-1]) + "\n")
-            # -------------------------------------------------------- DEBUG --------------------------------------------------------
+            # # -------------------------------------------------------- DEBUG --------------------------------------------------------
+            # #Store the sampled a_phi value to a debug text file...
+            # file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_v5_aphi_0dot75/chain_{seed}_history.txt"
+            # with open(file_path, "a") as file:
+            #     file.write(str(param_vals["a_phi"][-1]) + "\n")
+            # # -------------------------------------------------------- DEBUG --------------------------------------------------------
 
-        if should_sample["r"]:
-            args["field_covariance"] = args["scalar_field_covariance"] \
-                                     + (param_vals["r"][-1] / args["r_fid"]) \
-                                     * args["tensor_field_covariance"]
-            mixing_d_matrix = get_d_tt_matrix(args["scalar_field_covariance"].scalar_matrix,
-                                              args["tensor_field_covariance"].scalar_matrix,
-                                              args["noise_covariance"].scalar_matrix,
-                                              param_vals["r"][-1], args["r_fid"])
-            args["mixing_d"] = args["mixing_d"].replace(scalar_matrix = mixing_d_matrix)
-            
         #6. unmix the fields using the updated version of the G & D matrices
         temp_field, phi = unmix(mixed_temp, mixed_phi, args["mixing_d"], args["mixing_g"])
 
@@ -456,7 +427,7 @@ if __name__ == "__main__":
                                        iters_per_chain = 5000, num_burn_in_fix_theta = 0, 
                                        over_relaxation_num_samps = -1, use_priors = False,
                                        num_burn_in_always_accept = 0, seed = None,
-                                       phi_start = "MAP", f_start = "MAP")
+                                       phi_start = "RNG", f_start = "ZEROES")
     
     end_time = time.time()
     total_time = end_time - start_time

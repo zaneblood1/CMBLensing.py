@@ -11,7 +11,6 @@ from cmb_lensing.gradients import *
 from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
-from cmb_lensing.fast_simulate import get_avg_cls as get_avg_cp_cls
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -25,41 +24,6 @@ PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 #threshold values for unit tests
 MAX_NORM_DIFF = 1
 MIN_AVG_CORRELATION = 0
-
-def test_simulated_cls_cosmo_power():
-
-    #compute cls for temperature only
-    batched_results = get_avg_cp_cls(theta_pix = THETA_PIX_DEFAULT, num_trials = 100, nside = NSIDE_DEFAULT,
-                                     uk_arcmin_t = 10, lmax = 17000, delta_l = 50)
-
-    #load ground truth ell and cls
-    ell_ground = jnp.load(GROUND_TRUTH + "ell_CP.npz")["arr_0"]
-    cl_pp_avg_ground = jnp.load(GROUND_TRUTH + "cl_pp_avg_CP.npz")["arr_0"]
-    cl_ll_avg_ground = jnp.load(GROUND_TRUTH + "cl_ll_avg_CP.npz")["arr_0"]
-
-    #plot the log(cls) v.s. ell against each other for cosmo power v.s. jax average over realizations
-    SUB_FOLDER = "simulated_cls/cosmo_power/"
-    plt.figure()
-    plt.plot(ell_ground, jnp.log(cl_pp_avg_ground), label = "Cosmo Power")
-    plt.plot(batched_results["phi"][0], jnp.log(batched_results["phi"][1]), label = "Average Over JAX")
-    plt.title("Cl_PP CosmoPower v.s. Average over JAX")
-    plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Cl_PP CosmoPower v.s. Average over JAX.png")
-    plt.close()
-
-    #NOTE cosmo power doesn't automatically output the Cl_tt spectra in the correct
-    #mu-K unit system so we have to rescale accordingly...
-    scale_factor = 2 * jnp.pi * MUK_FACTOR**2
-    plt.figure()
-    plt.plot(ell_ground, jnp.log(scale_factor * cl_ll_avg_ground), label = "Cosmo Power")
-    plt.plot(batched_results["lensed_t"][0], jnp.log(batched_results["lensed_t"][1]), label = "Average Over JAX")
-    plt.title("Cl_LL CosmoPower v.s. Average over JAX")
-    plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Cl_LL CosmoPower v.s. Average over JAX.png")
-    plt.close()
-
-    #there is no 'test' in this case we simply just inspect the plots by eye
-    assert 1 == 1
 
 def test_simulated_cls_intensity_only():
 

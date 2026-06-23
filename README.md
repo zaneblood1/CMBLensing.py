@@ -13,6 +13,12 @@ cmb_lensing/
 ├── LICENSE
 ├── README.md
 ├── pyproject.toml
+├── camb_emulator/
+│   ├── emu_derived.npz
+│   ├── emu_PP.npz
+│   ├── emu_uEE.npz
+│   ├── emu_uTE.npz
+│   └── emu_uTT.npz
 ├── cmb_lensing/
 │   ├── __init__.py
 │   ├── constants.py
@@ -22,43 +28,37 @@ cmb_lensing/
 │   ├── lense_flow.py
 │   ├── map_joint.py
 │   ├── matrix_operators.py
-│   ├── sampling.py
+│   ├── mixing.py
+│   ├── sample_lcdm.py
+│   ├── sampling_ar.py
 │   ├── simulate.py
 │   ├── statistics.py
 │   ├── util.py
 │   └── wiener_filter.py
 ├── docs/
 │   └── tutorial.ipynb
-├── tests/
-│   ├── conftest.py
-│   ├── index.html
-│   ├── styles.css
-│   ├── test_lensing.py
-│   ├── test_logpdf.py
-│   ├── test_gradients.py
-│   ├── test_wiener_filter.py
-│   ├── test_map_joint.py
-│   ├── test_simulated_cls.py
-│   ├── test_covariance_matrices.py
-│   ├── generate_julia_data/
-│   │   ├── __init__.py
-│   │   ├── _preamble.py
-│   │   ├── generate_all.py
-│   │   ├── generate_lensing.py
-│   │   ├── generate_logpdf.py
-│   │   ├── generate_gradients.py
-│   │   ├── generate_wiener_filter.py
-│   │   ├── generate_map_joint.py
-│   │   ├── generate_simulated_cls.py
-│   │   └── generate_covariance_matrices.py
-│   ├── ground_truth_data/
-│   └── test_generated_figures/
-└── performance_testing/
-    ├── julia_performance_test.jl
-    ├── julia_performance_test.sh
-    ├── python_performance_test.py
-    ├── python_performance_test.sh
-    ├── run_performance_test.sh
-    ├── performance_analysis.py
-    └── performance_results/
+└── tests/
+    ├── conftest.py
+    ├── index.html
+    ├── styles.css
+    ├── test_covariance_matrices.py
+    ├── test_gradients.py
+    ├── test_lensing.py
+    ├── test_logpdf.py
+    ├── test_map_joint.py
+    ├── test_simulated_cls.py
+    ├── test_wiener_filter.py
+    ├── generate_julia_data/
+    │   ├── __init__.py
+    │   ├── _preamble.py
+    │   ├── generate_all.py
+    │   ├── generate_covariance_matrices.py
+    │   ├── generate_gradients.py
+    │   ├── generate_lensing.py
+    │   ├── generate_logpdf.py
+    │   ├── generate_map_joint.py
+    │   ├── generate_simulated_cls.py
+    │   └── generate_wiener_filter.py
+    ├── ground_truth_data/
+    └── test_generated_figures/
 ```

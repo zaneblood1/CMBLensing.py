@@ -4,19 +4,14 @@ import jax.numpy as jnp
 import jax.numpy.fft as jfft
 import numpy as np
 jax.config.update("jax_enable_x64", True)
-
 from functools import partial
 from itertools import combinations
-from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
-import os
 import time
-
 from cmb_lensing.util import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
 from cmb_lensing.statistics import *
-from cmb_lensing._camb_parallel import camb_worker as _camb_worker
 
 _SPAWN_CTX = multiprocessing.get_context("spawn")
 _CAMB_COLS = {"TT": 0, "EE": 1, "BB": 2, "TE": 3}
@@ -188,6 +183,13 @@ def get_d_tt_matrix(cfs_tt, cft_tt, cn_tt, r, r_fid):
 def get_g_matrix(cphi_fid, nphi, a_phi_fid, a_phi = 1):
     g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_fid))
     g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix((a_phi/a_phi_fid) * cphi_fid))
+    g = reciprocal_matrix(g0) * g
+    return g
+
+@jax.jit
+def get_g_matrix_lcdm(cphi_fid, cphi_curr, nphi):
+    g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_fid))
+    g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_curr))
     g = reciprocal_matrix(g0) * g
     return g
 
@@ -437,111 +439,15 @@ def _camb_via_callback(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         vmap_method = 'sequential'
     )
 
-
-def parallel_camb_batch(theta_key, theta_range, n_cpu, lmax_prime = 5000,
-                        max_workers = None, **camb_overrides):
-    """Run CAMB in parallel for all theta_range values, varying theta_key.
-    Uses spawn-based ProcessPoolExecutor since CAMB's Fortran backend is not
-    thread-safe and fork deadlocks with JAX's threads.
-
-    max_workers controls the number of concurrent CAMB processes. Each worker
-    gets floor(cpu_count / max_workers) OMP threads. Defaults to cpu_count
-    workers with OMP_NUM_THREADS=1, which provides the best wall-clock scaling
-    for large grids.
-
-    Pass additional kwargs to override CAMB defaults for non-varying parameters."""
-    base_params = dict(
-        H0 = None, ombh2 = 0.0224567, omch2 = 0.118489, cosmomc_theta = 0.0104098,
-        r = 0.2, mnu = 0.06, tau = 0.055, As = float(jnp.exp(3.043) * 1e-10),
-        nt = -0.2 / 8, ns = 0.968602, k_pivot = 0.002, Alens = 1
-    )
-    base_params.update(camb_overrides)
-
-    param_list = []
-    for theta_val in theta_range:
-        params = dict(base_params)
-        params[theta_key] = float(theta_val)
-        params["lmax_prime"] = lmax_prime
-        param_list.append(params)
-
-    #n_cpu = os.cpu_count() or 4
-    if max_workers is None:
-        max_workers = n_cpu
-
-    if max_workers <= 1:
-        #Sequential path: skip process pool, let CAMB use full OMP internally
-        results = [_camb_worker(p) for p in param_list]
-    else:
-        omp_threads = max(1, n_cpu // max_workers)
-        #Set OMP threads for spawned workers (they inherit parent env at spawn time)
-        saved_env = {}
-        for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
-            saved_env[var] = os.environ.get(var)
-            os.environ[var] = str(omp_threads)
-        try:
-            with ProcessPoolExecutor(max_workers = max_workers,
-                                      mp_context = _SPAWN_CTX) as executor:
-                results = list(executor.map(_camb_worker, param_list))
-        finally:
-            for var, val in saved_env.items():
-                if val is not None:
-                    os.environ[var] = val
-                else:
-                    os.environ.pop(var, None)
-
-    return (jnp.stack([jnp.asarray(r[0]) for r in results]),
-            jnp.stack([jnp.asarray(r[1]) for r in results]),
-            jnp.stack([jnp.asarray(r[2]) for r in results]),
-            jnp.stack([jnp.asarray(r[3]) for r in results]))
-
-
 def _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime):
     cls = {}
     for stokes, col in _CAMB_COLS.items():
         cls[f"scalar_{stokes}"] = dl2cl(unlensed_scalar[:, col], lmax, lmax_prime)
         cls[f"tensor_{stokes}"] = dl2cl(tensor[:, col], lmax, lmax_prime)
-    for stokes in ("TT", "EE", "BB"):
+    for stokes in ("TT", "TE", "EE", "BB"):
         cls[f"total_{stokes}"] = dl2cl(total[:, _CAMB_COLS[stokes]], lmax, lmax_prime)
     cls["phi"] = dl2cl(lens_potential, lmax, lmax_prime, is_phi=True)
     return cls
-
-
-def load_covmat(unlensed_scalar, tensor, total, lens_potential,
-                cn_tt, cn_te, cn_ee, cn_bb, mask, beam,
-                nside, pix_width, ell_grid, ells,
-                nphi_fac = 2, a_phi = 1, lmax = 17_000):
-    """Compute covariance and mixing matrices from pre-computed CAMB output.
-    Lightweight alternative to load_sim that skips field generation, lensing,
-    and dataset construction. Returns (cf_tt, cphi, d_tt, g) as raw matrices.
-    Not JIT-compiled on its own; intended to be called inside JIT/vmap."""
-
-    lmax_prime = min(lmax, 5000)
-    cls = _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime)
-
-    cphi = a_phi * covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
-                                         cls["phi"], origin_value = 0)
-
-    cf = {}
-    for comp in ("TT", "TE", "EE", "BB"):
-        cf_scalar = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
-                                          cls[f"scalar_{comp}"], origin_value = 0)
-        cf_tensor = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
-                                          cls[f"tensor_{comp}"], origin_value = 0)
-        cf[comp] = cf_scalar + cf_tensor
-
-    cfl = {comp: covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
-                                       cls[f"total_{comp}"], origin_value = 0)
-           for comp in ("TT", "EE", "BB")}
-
-    d_tt, _, _, _ = get_d_matrix(cf["TT"], cf["TE"], cf["EE"], cf["BB"],
-                                  cn_tt, cn_te, cn_ee, cn_bb)
-
-    qe = scalar_quadratic_estimate(cn_tt, cf["TT"], cfl["TT"],
-                                   mask, beam, pix_width) / nphi_fac
-
-    g = get_g_matrix(cphi, qe, a_phi, a_phi = a_phi)
-
-    return cf["TT"], cphi, d_tt, g
 
 
 # ── Lensing ───────────────────────────────────────────────────────────────
@@ -763,7 +669,7 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     #Lensed field covariances
     cfl = {comp: covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
                                        cls[f"total_{comp}"], origin_value=0)
-           for comp in ("TT", "EE", "BB")}
+           for comp in ("TT", "TE", "EE", "BB")}
 
     #Unlensed random fields
     field_t, kc = field_from_covar(nside, cf["TT"], keys, kc)

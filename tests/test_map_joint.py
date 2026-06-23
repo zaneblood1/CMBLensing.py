@@ -65,7 +65,9 @@ def test_map_joint_intensity_only():
         phi_covariance = phi_covariance,
         mask = mask,
         beam = beam,
-        quadratic_estimate = quadratic_estimate
+        quadratic_estimate = quadratic_estimate,
+        fid_r = 0.2,
+        fid_a_phi = 1
     )
 
     #Call the python version of the map_joint algorithm
@@ -241,7 +243,9 @@ def test_map_joint_polarization_only():
         phi_covariance = phi_covariance,
         mask = mask,
         beam = beam,
-        quadratic_estimate = quadratic_estimate
+        quadratic_estimate = quadratic_estimate,
+        fid_r = 0.2,
+        fid_a_phi = 1
     )
 
     #Call the python version of the map_joint algorithm
@@ -488,7 +492,9 @@ def test_map_joint_intensity_and_polarization():
         phi_covariance = phi_covariance,
         mask = mask,
         beam = beam,
-        quadratic_estimate = quadratic_estimate
+        quadratic_estimate = quadratic_estimate,
+        fid_r = 0.2,
+        fid_a_phi = 1
     )
 
     #Call the python version of the map_joint algorithm

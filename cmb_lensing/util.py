@@ -4,7 +4,6 @@ jax.config.update("jax_enable_x64", True)
 import numpy as np
 import jax.numpy.fft as jfft
 from cmb_lensing.constants import *
-from functools import partial
 import math
 
 @jax.jit
@@ -162,32 +161,131 @@ def gen_ell_grid(nside, theta_pix):
     ls =  jnp.sqrt(lx**2 + ly**2)
     return ls, d
 
+#explicit 4th order constant step size RK4 ODE solver (out-of-place)
+#port of CMBLensing.jl OutOfPlaceRK4Solver, JIT compatible via jax.lax.fori_loop
+#F has signature F(t, y, args) -> dy/dt where y can be any JAX pytree
+def rk4_solve(F, y0, t0, t1, nsteps, args = ()):
+    h = (t1 - t0) / nsteps
+    h_half = h / 2.0
+
+    def rk4_step(i, y):
+        t = t0 + i * h
+        k1 = F(t, y, args)
+        k2 = F(t + h_half, jax.tree.map(lambda yi, ki: yi + h_half * ki, y, k1), args)
+        k3 = F(t + h_half, jax.tree.map(lambda yi, ki: yi + h_half * ki, y, k2), args)
+        k4 = F(t + h, jax.tree.map(lambda yi, ki: yi + h * ki, y, k3), args)
+        return jax.tree.map(
+            lambda yi, k1i, k2i, k3i, k4i: yi + h * (k1i + 2 * k2i + 2 * k3i + k4i) / 6,
+            y, k1, k2, k3, k4
+        )
+
+    return jax.lax.fori_loop(0, nsteps, rk4_step, y0)
+
 #just do something stupid like this because reflections
 #make my head hurt...
 def real_fourier_2_full_plane(real_fourier_field):
     full_fourier_field = jfft.fft2(jfft.irfft2(real_fourier_field))
     return full_fourier_field
 
-#JAX-JIT compatible version of a loess smoothing method which 
-#creates a smooth distribution of y-value outputs with x-value inputs
-#given the corresponding discrete input vectors x and y
-@partial(jax.jit, static_argnums=(2, 3))
-def loess(x, y, frac=0.1, degree=1):
-    n = x.shape[0]
-    h = max(math.ceil(frac * n), degree + 1)
+#Port of Julia Loess.jl v0.5.4 for 1D data. Builds a KD-tree, fits local
+#weighted polynomials at tree vertices via QR, then uses linear
+#interpolation between vertices for evaluation.
 
-    def fit_point(x0):
-        dists = jnp.abs(x - x0)
-        sorted_dists = jnp.sort(dists)
-        max_dist = sorted_dists[h - 1]
-        u = jnp.clip(dists / jnp.maximum(max_dist, 1e-10), 0, 1)
-        w = (1 - u**3)**3
+def _tricubic(u):
+    return (1 - u**3)**3
 
-        V = jnp.stack([x**p for p in range(degree + 1)], axis=-1)
-        W = jnp.diag(w)
-        VtW = V.T @ W
-        beta = jnp.linalg.solve(VtW @ V, VtW @ y)
-        x0_vec = jnp.array([x0**p for p in range(degree + 1)])
-        return x0_vec @ beta
+def _build_kdtree_verts_1d(sorted_x, leaf_size_cutoff):
+    """Build 1D KD-tree vertices matching Julia Loess.jl v0.5.4."""
+    verts = set()
+    verts.add(sorted_x[0])
+    verts.add(sorted_x[-1])
 
-    return jax.vmap(fit_point)(x)
+    def recurse(data):
+        n = len(data)
+        if n <= leaf_size_cutoff:
+            return
+        if n % 2 == 1:
+            mid = (n + 1) // 2 - 1
+            med = data[mid]
+            left = data[:mid + 1]
+            right = data[mid + 1:]
+        else:
+            mid1 = n // 2 - 1
+            mid2 = mid1 + 1
+            med = (data[mid1] + data[mid2]) / 2.0
+            left = data[:mid1 + 1]
+            right = data[mid2:]
+        verts.add(med)
+        recurse(left)
+        recurse(right)
+
+    recurse(sorted_x)
+    return np.sort(np.array(list(verts)))
+
+def _evalpoly_1d(x, bs, degree):
+    """Evaluate polynomial bs[0] + x*bs[1] + x^2*bs[2] + ..."""
+    y = bs[0]
+    xx = x
+    for l in range(1, degree + 1):
+        y += xx * bs[l]
+        xx *= x
+    return y
+
+def loess(x, y, span=0.75, degree=2):
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    n = len(x)
+    q = max(degree + 1, math.ceil(span * n))
+
+    sort_idx = np.argsort(x)
+    x_sorted = x[sort_idx]
+    leaf_size_cutoff = math.ceil(0.05 * span * n)
+    verts = _build_kdtree_verts_1d(x_sorted, leaf_size_cutoff)
+
+    ncols = 1 + degree
+    vert_bs = {}
+    for v in verts:
+        dists = np.abs(x - v)
+        nearest = np.argpartition(dists, q - 1)[:q]
+        dmax = dists[nearest].max()
+        if dmax == 0:
+            dmax = 1.0
+
+        us = np.empty((q, ncols))
+        vs = np.empty(q)
+        for i in range(q):
+            pi = nearest[i]
+            w = _tricubic(dists[pi] / dmax)
+            us[i, 0] = w
+            xi = x[pi]
+            wxl = w
+            for l in range(1, degree + 1):
+                wxl *= xi
+                us[i, l] = wxl
+            vs[i] = y[pi] * w
+
+        bs, _, _, _ = np.linalg.lstsq(us, vs, rcond=None)
+        vert_bs[v] = bs
+
+    result = np.empty(n, dtype=np.float64)
+    for i in range(n):
+        zi = x[i]
+        idx = np.searchsorted(verts, zi)
+
+        if idx < len(verts) and verts[idx] == zi:
+            result[i] = _evalpoly_1d(zi, vert_bs[verts[idx]], degree)
+        elif idx > 0 and verts[idx - 1] == zi:
+            result[i] = _evalpoly_1d(zi, vert_bs[verts[idx - 1]], degree)
+        else:
+            if idx == 0:
+                idx = 1
+            elif idx >= len(verts):
+                idx = len(verts) - 1
+            v1 = verts[idx - 1]
+            v2 = verts[idx]
+            y1 = _evalpoly_1d(zi, vert_bs[v1], degree)
+            y2 = _evalpoly_1d(zi, vert_bs[v2], degree)
+            u = (zi - v1) / (v2 - v1)
+            result[i] = (1.0 - u) * y1 + u * y2
+
+    return jnp.array(result)

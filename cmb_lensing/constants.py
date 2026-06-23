@@ -10,8 +10,8 @@ PID_CONTROLLER_RTOL = 1e-6 #Relative tolerance for Diffrax integrator
 PID_CONTROLLER_ATOL = 1e-6 #Absolute tolerance for Diffrax integrator
 MAX_DIFFRAX_STEPS = 100_000
 BEAM_TRANSFER_SCALAR = 8*jnp.log(2)
-PARAM_KEYS = {"ombh2": 0, "omch2": 1, "tau": 2, "ns": 3, "As": 4, "H0": 5}
 AR_KEYS = {"r": 0, "a_phi": 1}
+EMULATOR_MAX_ELL = 4000
 
 #The default field and operator constants are defined for a square 256 x 256 map
 #with 2 arcminute resolution...
