@@ -4,6 +4,9 @@ from cmb_lensing.util import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.mixing import *
 from cmb_lensing.constants import *
+from scipy.integrate import quad
+from scipy.optimize import brentq
+import os
 #jax.config.update("jax_disable_jit", True)
 #jax.config.update("jax_log_compiles", True)
 
@@ -164,7 +167,7 @@ def gibbs_sample_theta(theta, theta_range, mixed_temp, mixed_phi, a_phi, r, a_ph
 
     return gibbs_sample_a_phi(theta_range, a_phi_fid, r, mixed_temp, mixed_phi, 
                               args["mixing_d"], args["quadratic_estimate"],
-                              data_field, args["noise_covariance"], 
+                              data_field, args["noise_covariance"],
                               args["unscaled_phi_covariance"], args["field_covariance"],
                               args["mask"], args["beam"], rng_key, theta_old, over_relaxation_num_samps, 
                               use_priors)
@@ -227,13 +230,90 @@ def gibbs_sample_r(r_range, a_phi, mixed_field, mixed_phi, mixing_g,
     r = grid_and_sample(logpdf_values, r_range, rng_key, old_r, over_relaxation_num_samps)
     return r
 
-#sample single parameter "theta" via inverse CDF
+#sample single parameter "theta" via inverse CDF using adaptive quadrature
+#and root-finding, matching Julia's CMBLensing.jl grid_and_sample implementation.
+#scipy calls are wrapped in jax.pure_callback for JIT compatibility.
 def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
                     over_relaxation_num_samps = -1):
 
+    random_number = jax.random.uniform(sub_key)
+
+    def _grid_and_sample_impl(theta_values, logpdf_values, random_number):
+        xs = np.asarray(theta_values, dtype = np.float64)
+        logpdfs = np.asarray(logpdf_values, dtype = np.float64)
+
+        #shift for numerical stability then smooth
+        logpdfs = logpdfs - np.max(logpdfs)
+        xmin, xmax = float(xs[0]), float(xs[-1])
+        interp_logpdfs = np.array(loess(xs, logpdfs, span = 0.25), dtype = np.float64)
+
+        #callable interpolant over the smoothed log PDF
+        def interp_logpdf(x):
+            return float(np.interp(x, xs, interp_logpdfs))
+
+        def nan2zero(x):
+            return 0.0 if np.isnan(x) else x
+
+        #normalize the PDF via adaptive quadrature (matches Julia's quadgk)
+        def cdf(x):
+            result, _ = quad(lambda t: nan2zero(np.exp(interp_logpdf(t))),
+                             xmin, float(x), limit = 100, epsrel = 1e-4)
+            return result
+
+        logA = nan2zero(np.log(cdf(xmax)))
+        interp_logpdfs -= logA
+        logpdfs = interp_logpdfs
+
+        #re-create interpolant with the normalized values
+        def interp_logpdf_norm(x):
+            return float(np.interp(x, xs, interp_logpdfs))
+
+        def cdf_norm(x):
+            result, _ = quad(lambda t: nan2zero(np.exp(interp_logpdf_norm(t))),
+                             xmin, float(x), limit = 100, epsrel = 1e-4)
+            return result
+
+        #bracket the sample by finding where logpdf > peak - 1000
+        peak = np.max(logpdfs)
+        above = logpdfs > (peak - 1000)
+        xmin_prime = float(xs[np.argmax(above)])
+        xmax_prime = float(xs[len(xs) - 1 - np.argmax(above[::-1])])
+
+        #inverse transform sampling via Brent root-finding (matches Julia's find_zero)
+        r = float(random_number)
+        cdf_lo = cdf_norm(xmin_prime)
+        cdf_hi = cdf_norm(xmax_prime)
+
+        if (cdf_lo - r) * (cdf_hi - r) >= 0:
+            if logpdfs[0] > logpdfs[-1]:
+                sampled = xmin_prime
+            else:
+                sampled = xmax_prime
+        else:
+            sampled = brentq(lambda x: cdf_norm(x) - r,
+                             xmin_prime, xmax_prime,
+                             xtol = (xmax - xmin) * 1e-4)
+
+        return np.array(sampled, dtype = np.float64)
+
+    sampled_theta = jax.pure_callback(
+        _grid_and_sample_impl,
+        jax.ShapeDtypeStruct((), jnp.float64),
+        theta_values, logpdf_values, random_number
+    )
+    return sampled_theta
+
+#sample single parameter "theta" via inverse CDF using cumulative trapezoid
+def grid_and_sample_cumsum(logpdf_values, theta_values, sub_key, theta_old, iter,
+                           over_relaxation_num_samps = -1):
+
     #shift for numerical stability then smooth
     logpdf_values = logpdf_values - jnp.max(logpdf_values)
-    interp_logpdf_values = loess(theta_values, logpdf_values, span=0.25)
+    interp_logpdf_values = jax.pure_callback(
+        lambda x, y: loess(x, y, span = 0.25),
+        jax.ShapeDtypeStruct(logpdf_values.shape, logpdf_values.dtype),
+        theta_values, logpdf_values
+    )
 
     #convert to PDF and build a piecewise-linear CDF via cumulative trapezoid
     pdf = jnp.exp(interp_logpdf_values)
@@ -270,7 +350,7 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
 #NOTE prior experience with the MAP_joint() algorithm makes me think it is not worthwhile
 #to JIT the main entry point here due to the for-loop compilation but it may be worth experimenting with
 def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, iters_per_chain = 500, 
-                 num_burn_in_fix_theta = 100, num_burn_in_always_accept = 0, seed = None,
+                 num_burn_in_fix_theta = 100, num_burn_in_always_accept = 0, seed = None, map = None,
                  phi_start = "MAP", f_start = "MAP", over_relaxation_num_samps = -1,
                  use_priors = False):
 
@@ -304,10 +384,10 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
         args["mixing_g"] = data_set.mixing_g
 
     #Use a seed to get reproduceable results if so desired
-    if seed is not None:
-        sub_key = jax.random.PRNGKey(seed)
-    else:
-        sub_key = jax.random.PRNGKey(np.random.randint(0, 2**31))
+    # if seed is not None:
+    #     sub_key = jax.random.PRNGKey(seed)
+    # else:
+    sub_key = jax.random.PRNGKey(np.random.randint(0, 2**31))
 
     #run MAP_joint if necessary
     if phi_start == "MAP" or f_start == "MAP":
@@ -339,16 +419,20 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
     else: 
         temp_field = zeroes
 
-
     #run the chain for the maximum specified number if iterations
-    for iter in range(iters_per_chain):
+    for iter in range(1, iters_per_chain + 1):
 
         #1. sample the temperature field (using fstart = nothing EACH time...)
         rng_key, sub_key = jax.random.split(sub_key)
-        temp_field = gibbs_sample_f(zeroes, data_field, phi, args, rng_key, iter)
+        temp_field = gibbs_sample_f(zeroes, data_field, phi, args, rng_key)
 
         #2. mix the fields
         mixed_temp, mixed_phi = mix(temp_field, phi, args["mixing_d"], args["mixing_g"])
+
+        #julia_mixed_f = precision_load(f"/home/zane-blood/Desktop/julia_chain_debug/mixed_f_{iter}.npz")
+        #julia_mixed_phi = precision_load(f"/home/zane-blood/Desktop/julia_chain_debug/mixed_phi_{iter}.npz")
+        #print(f"F Fractional Difference = {jnp.linalg.norm(julia_mixed_f - mixed_temp.scalar_matrix)/jnp.linalg.norm(julia_mixed_f)}")
+        #print(f"Phi Fractional Difference = {jnp.linalg.norm(julia_mixed_phi - mixed_phi.scalar_matrix)/jnp.linalg.norm(julia_mixed_phi)}")
         
         #3. sample the lensing potential phi
         rng_key, sub_key = jax.random.split(sub_key)
@@ -376,10 +460,11 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
             args["mixing_g"] = args["mixing_g"].replace(scalar_matrix = mixing_g_matrix)
 
             # # -------------------------------------------------------- DEBUG --------------------------------------------------------
-            # #Store the sampled a_phi value to a debug text file...
-            # file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_v5_aphi_0dot75/chain_{seed}_history.txt"
-            # with open(file_path, "a") as file:
-            #     file.write(str(param_vals["a_phi"][-1]) + "\n")
+            #Store the sampled a_phi value to a debug text file...
+            file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_v6_aphi_0dot75/map_{map}_chain_{seed}_history.txt"
+            os.makedirs(os.path.dirname(file_path), exist_ok = True)
+            with open(file_path, "a") as file:
+                file.write(str(param_vals["a_phi"][-1]) + "\n")
             # # -------------------------------------------------------- DEBUG --------------------------------------------------------
 
         #6. unmix the fields using the updated version of the G & D matrices
@@ -426,7 +511,7 @@ if __name__ == "__main__":
     param_distributions = sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_ground,
                                        iters_per_chain = 5000, num_burn_in_fix_theta = 0, 
                                        over_relaxation_num_samps = -1, use_priors = False,
-                                       num_burn_in_always_accept = 0, seed = None,
+                                       num_burn_in_always_accept = 0, map = 0, seed = None,
                                        phi_start = "RNG", f_start = "ZEROES")
     
     end_time = time.time()
