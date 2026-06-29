@@ -30,7 +30,7 @@ def gibbs_sample_f(field_start, data_field, phi, args, rng_key):
 
     #d = M * B * L(phi) * f + n
     lensed_field = qu2eb(fourier(lense_flow(map(eb2qu(new_field)), map(phi), 
-                              n = 10, direction = FORWARD_LENSE, adjoint = False)))
+                         n = 10, direction = FORWARD_LENSE, adjoint = False)))
     new_data = args["mask"] * args["beam"] * lensed_field + new_noise
     
     #Call the wiener filter with the field_start initial guess and data difference
@@ -136,7 +136,6 @@ def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance,
 
     gradient = mixed_grad_phi_partial(x0)
     x, p, gradient = jax.lax.fori_loop(0, num_steps, loop_body, (x0, p0, gradient))
-
     delta_h = hamiltonian(x, p) - hamiltonian(x0, p0)
     return delta_h, x, p
 
@@ -238,9 +237,16 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
 
     random_number = jax.random.uniform(sub_key)
 
-    def _grid_and_sample_impl(theta_values, logpdf_values, random_number):
+    def _grid_and_sample_internal(theta_values, logpdf_values, random_number):
         xs = np.asarray(theta_values, dtype = np.float64)
         logpdfs = np.asarray(logpdf_values, dtype = np.float64)
+
+        #trim leading/trailing zero-probability regions (matches Julia's findnext/findprev isfinite)
+        finite = np.isfinite(logpdfs)
+        first_finite = int(np.argmax(finite))
+        last_finite = len(finite) - 1 - int(np.argmax(finite[::-1])) #::-1 syntax reverses a python array [a, b, c] --> [c, b, a]
+        xs = xs[first_finite:last_finite + 1]
+        logpdfs = logpdfs[first_finite:last_finite + 1]
 
         #shift for numerical stability then smooth
         logpdfs = logpdfs - np.max(logpdfs)
@@ -257,7 +263,7 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
         #normalize the PDF via adaptive quadrature (matches Julia's quadgk)
         def cdf(x):
             result, _ = quad(lambda t: nan2zero(np.exp(interp_logpdf(t))),
-                             xmin, float(x), limit = 100, epsrel = 1e-4)
+                             xmin, float(x), limit = 500, epsrel = 1e-4)
             return result
 
         logA = nan2zero(np.log(cdf(xmax)))
@@ -270,7 +276,7 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
 
         def cdf_norm(x):
             result, _ = quad(lambda t: nan2zero(np.exp(interp_logpdf_norm(t))),
-                             xmin, float(x), limit = 100, epsrel = 1e-4)
+                             xmin, float(x), limit = 500, epsrel = 1e-4)
             return result
 
         #bracket the sample by finding where logpdf > peak - 1000
@@ -297,7 +303,7 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
         return np.array(sampled, dtype = np.float64)
 
     sampled_theta = jax.pure_callback(
-        _grid_and_sample_impl,
+        _grid_and_sample_internal,
         jax.ShapeDtypeStruct((), jnp.float64),
         theta_values, logpdf_values, random_number
     )
@@ -460,15 +466,16 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
             args["mixing_g"] = args["mixing_g"].replace(scalar_matrix = mixing_g_matrix)
 
             # # -------------------------------------------------------- DEBUG --------------------------------------------------------
-            #Store the sampled a_phi value to a debug text file...
-            file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_v6_aphi_0dot75/map_{map}_chain_{seed}_history.txt"
-            os.makedirs(os.path.dirname(file_path), exist_ok = True)
-            with open(file_path, "a") as file:
-                file.write(str(param_vals["a_phi"][-1]) + "\n")
+            # #Store the sampled a_phi value to a debug text file...
+            # file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_v7_aphi_0dot75/map_{map}_chain_{seed}_history.txt"
+            # os.makedirs(os.path.dirname(file_path), exist_ok = True)
+            # with open(file_path, "a") as file:
+            #     file.write(str(param_vals["a_phi"][-1]) + "\n")
             # # -------------------------------------------------------- DEBUG --------------------------------------------------------
 
         #6. unmix the fields using the updated version of the G & D matrices
         temp_field, phi = unmix(mixed_temp, mixed_phi, args["mixing_d"], args["mixing_g"])
+        print(np.array(param_vals["a_phi"]))
 
     #Return your learned distributions at the end of the chain
     #for each parameter that was sampled    

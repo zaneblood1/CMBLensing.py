@@ -148,10 +148,11 @@ def logpdf(field, phi, data, noise_covariance,
     field_product = dot(field, pinv(field_covariance) * field)
     phi_product = phi_dot_wrapper(phi, phi_covariance)
 
-    #convert fields to MAP, TQU basis and parametrization to apply lenseflow
+    #convert fields to MAP, TQU basis and parametrization to apply lenseflow.
+    #phi is kept in FOURIER basis (not map'd) so the lensing gradient w.r.t. phi is
+    #taken in fourier space, preserving the anti-Hermitian content on the self-conjugate
+    #Nyquist row (matching CMBLensing.jl); the lensed value is unchanged
     field = map(eb2qu(field))
-    phi = map(phi)
-    #Once field is lensed fall back to fourier EB basis
     lensed_field = qu2eb(fourier(lense_flow_wrapper(field, phi)))
 
     #Finally find the inner product term (d - M * B * L * f)^2

@@ -3,12 +3,13 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from cmb_lensing.fields import *
 from cmb_lensing.constants import *
-from cmb_lensing.util import rk4_solve
+from cmb_lensing.util import rk4_solve, get_primal_derivatives, \
+get_primal_derivatives_from_fourier, get_primal_derivatives_to_fourier
 from functools import singledispatch
 
 @jax.custom_vjp
 @jax.jit
-def lense_flow_wrapper(field, phi, n = 7, direction = 1, adjoint = False):
+def lense_flow_wrapper(field, phi, n = 10, direction = 1, adjoint = False):
     return lense_flow(field, phi, n, direction, adjoint)
 
 @jax.jit
@@ -72,26 +73,34 @@ def get_lensing_operator_gradients(phi, tqu_field, tqu_cotangent, direction, n):
         operand = None
     )
 
-    #precompute phi partials
+    #precompute phi partials. phi may be a square real-space (MAP) matrix or a
+    #rectangular rfft2 (FOURIER) matrix. When FOURIER the gradient w.r.t. phi
+    #(delta_phi) is assembled/accumulated in fourier space so the i*k adjoint's
+    #anti-Hermitian content on the self-conjugate Nyquist row survives, matching
+    #CMBLensing.jl's negδvelocityᴴ (which accumulates δϕ via -∇'*Ð(...) in fourier space)
     pix_width = phi.pix_width
-    phi_x, phi_y, phi_xx, phi_xy, phi_yy = get_primal_derivatives((phi.scalar_matrix), pix_width)
-
-    #define an overridden method which unpacks transformed_field and cotangent into
-    #elementary matrices based on whether they are T, QU, or TQU. 
-    #This method should always return 3 matrices
-    t_field, q_field, u_field = spin_vector_matrix_data(tqu_field)
-    delta_t_init, delta_q_init, delta_u_init = spin_vector_matrix_data(tqu_cotangent)
-    #initialize delta_phi to be 0 as stated in Marius' paper
     shape_x = phi.scalar_matrix.shape[0]
     shape = (shape_x, shape_x)
-    delta_phi_init = jnp.zeros(shape)
+    phi_fourier = (phi.scalar_matrix.shape[0] != phi.scalar_matrix.shape[1])
+    if phi_fourier:
+        phi_x, phi_y, phi_xx, phi_xy, phi_yy = get_primal_derivatives_from_fourier(phi.scalar_matrix, pix_width)
+        delta_phi_shape = phi.scalar_matrix.shape
+        delta_phi_init = jnp.zeros(delta_phi_shape, dtype = jnp.complex128)
+    else:
+        phi_x, phi_y, phi_xx, phi_xy, phi_yy = get_primal_derivatives(phi.scalar_matrix, pix_width)
+        delta_phi_shape = shape
+        delta_phi_init = jnp.zeros(delta_phi_shape)
+
+    #unpack transformed_field and cotangent into T, QU, or TQU matrices (3 returned)
+    t_field, q_field, u_field = spin_vector_matrix_data(tqu_field)
+    delta_t_init, delta_q_init, delta_u_init = spin_vector_matrix_data(tqu_cotangent)
 
     y0 = (t_field.ravel(), q_field.ravel(), u_field.ravel(),
           delta_t_init.ravel(), delta_q_init.ravel(), delta_u_init.ravel(),
           delta_phi_init.ravel())
 
     #store extra arguments in a single tuple
-    args = (phi_x, phi_y, phi_xx, phi_xy, phi_yy, pix_width)
+    args = (phi_x, phi_y, phi_xx, phi_xy, phi_yy, pix_width, phi_fourier)
 
     #solve with RK4 to match Julia's CMBLensing.jl ODE solver
     result = rk4_solve(lensing_gradients_integration_step, y0, t0, t1, n, args)
@@ -103,7 +112,7 @@ def get_lensing_operator_gradients(phi, tqu_field, tqu_cotangent, direction, n):
     delta_t = result[3].reshape(shape)
     delta_q = result[4].reshape(shape)
     delta_u = result[5].reshape(shape)
-    delta_phi = result[6].reshape(shape)
+    delta_phi = result[6].reshape(delta_phi_shape)
 
     #NOTE the following "output_like_input" method is a hacky way of making sure
     #T --> T, QU --> QU, and TQU --> TQU even though all three fields were
@@ -142,13 +151,14 @@ def _(input_field, t_matrix, q_matrix, u_matrix):
                                polar_matrix_1 = u_matrix, 
                                polar_matrix_2 = q_matrix)
 
-@jax.jit
+#NOTE not @jax.jit'd: always called inside the jitted get_lensing_operator_gradients,
+#so the static phi_fourier flag (selecting array dtype/shape) stays a Python bool
 def lensing_gradients_integration_step(time, y, args):
     #unpack the args array
-    phi_x, phi_y, phi_xx, phi_xy, phi_yy, pix_width = args
+    phi_x, phi_y, phi_xx, phi_xy, phi_yy, pix_width, phi_fourier = args
 
-    #reshape 1D coupled raveled fields into 2D fields
-    t, q, u, delta_t, delta_q, delta_u, delta_phi = y
+    #reshape 1D coupled raveled fields into 2D fields.
+    t, q, u, delta_t, delta_q, delta_u, _ = y
     shape = phi_x.shape
 
     t = t.reshape(shape)
@@ -159,7 +169,6 @@ def lensing_gradients_integration_step(time, y, args):
     delta_t = delta_t.reshape(shape)
     delta_q = delta_q.reshape(shape)
     delta_u = delta_u.reshape(shape)
-    delta_phi = delta_phi.reshape(shape)
 
     #calculate the three rates of change for f, delta_phi and delta_f:
     #1. The df/dt term is just the normal lensing term applied to the full field "f"
@@ -173,20 +182,21 @@ def lensing_gradients_integration_step(time, y, args):
     d_delta_u_dt = get_adjoint_lensing_term(delta_u, phi_x, phi_y, phi_xx, phi_xy, phi_yy, time, pix_width)
 
     #3. The d_delta_phi_dt term is a little more involved... See the function definition for the inner workings
-    d_delta_phi_dt = get_delta_phi_tqu_roc(t, q, u, delta_t, delta_q, delta_u, 
-                                           phi_x, phi_y, phi_xx, phi_xy, phi_yy, 
-                                           time, pix_width)
+    d_delta_phi_dt = get_delta_phi_tqu_roc(t, q, u, delta_t, delta_q, delta_u,
+                                           phi_x, phi_y, phi_xx, phi_xy, phi_yy,
+                                           time, pix_width, phi_fourier)
     
     #return the three coupled ODE dynamics raveled up into 1D arrays
     return (dtemp_dt.ravel(), dq_dt.ravel(), du_dt.ravel(), d_delta_temp_dt.ravel(), 
            d_delta_q_dt.ravel(), d_delta_u_dt.ravel(), d_delta_phi_dt.ravel())
 
-@jax.jit
-def get_delta_phi_tqu_roc(t, q, u, delta_t, delta_q, delta_u, 
-                          phi_x, phi_y, phi_xx, phi_xy, phi_yy, 
-                          time, pix_width):
-    
-    #We need to begin by taking the point-wise product of 
+#NOTE not @jax.jit'd: called inside the jitted get_lensing_operator_gradients with a
+#static (Python bool) phi_fourier flag selecting the real-space vs fourier assembly
+def get_delta_phi_tqu_roc(t, q, u, delta_t, delta_q, delta_u,
+                          phi_x, phi_y, phi_xx, phi_xy, phi_yy,
+                          time, pix_width, phi_fourier = False):
+
+    #We need to begin by taking the point-wise product of
     #the delta_f field and the x and y components of the gradient of f
     dt_dx, dt_dy, _, _, _ = get_primal_derivatives(t, pix_width)
     dq_dx, dq_dy, _, _, _ = get_primal_derivatives(q, pix_width)
@@ -210,10 +220,6 @@ def get_delta_phi_tqu_roc(t, q, u, delta_t, delta_q, delta_u,
     #now we can compute the components we want
     m_inv_fdf_x = m_inv_xx*fdf_product_x + m_inv_xy*fdf_product_y
     m_inv_fdf_y = m_inv_xy*fdf_product_x + m_inv_yy*fdf_product_y
-    #next we take the divergence of this peculiar vector
-    delta_phi_div_term_x, _, _, _, _ = get_primal_derivatives(m_inv_fdf_x, pix_width)
-    _, delta_phi_div_term_y, _, _, _ = get_primal_derivatives(m_inv_fdf_y, pix_width)
-    delta_phi_div_term = delta_phi_div_term_x + delta_phi_div_term_y
     #we are almost there... Now we need to compute the tensor product between the m_inv_fdf vector and the standard p vector
     #then apply a "laplacian" style operator to these components
     p_x, p_y = get_p_vector_components(phi_x, phi_y, phi_xx, phi_xy, phi_yy, time)
@@ -221,10 +227,25 @@ def get_delta_phi_tqu_roc(t, q, u, delta_t, delta_q, delta_u,
     w_xy = p_x * m_inv_fdf_y
     w_yx = p_y * m_inv_fdf_x
     w_yy = p_y * m_inv_fdf_y
-    _, _, laplacian_xx, _, _  = get_primal_derivatives(time * w_xx, pix_width)
-    _, _, _, laplacian_xy, _ = get_primal_derivatives(time * w_xy, pix_width)
-    _, _, _, laplacian_yx, _ = get_primal_derivatives(time * w_yx, pix_width)
-    _, _, _, _, laplacian_yy = get_primal_derivatives(time * w_yy, pix_width)
+    #the divergence + laplacian below are the FINAL derivatives building d_delta_phi_dt.
+    #When phi_fourier specified we keep their output in rfft2 space (no final irfft2) so the i*k
+    #content on the self-conjugate Nyquist row survives (matching CMBLensing.jl)
+    if phi_fourier:
+        delta_phi_div_term = (get_primal_derivatives_to_fourier(m_inv_fdf_x, pix_width)[0]
+                              + get_primal_derivatives_to_fourier(m_inv_fdf_y, pix_width)[1])
+        laplacian_xx = get_primal_derivatives_to_fourier(time * w_xx, pix_width)[2]
+        laplacian_xy = get_primal_derivatives_to_fourier(time * w_xy, pix_width)[3]
+        laplacian_yx = get_primal_derivatives_to_fourier(time * w_yx, pix_width)[3]
+        laplacian_yy = get_primal_derivatives_to_fourier(time * w_yy, pix_width)[4]
+    else:
+        #next we take the divergence of this peculiar vector
+        delta_phi_div_term_x, _, _, _, _ = get_primal_derivatives(m_inv_fdf_x, pix_width)
+        _, delta_phi_div_term_y, _, _, _ = get_primal_derivatives(m_inv_fdf_y, pix_width)
+        delta_phi_div_term = delta_phi_div_term_x + delta_phi_div_term_y
+        _, _, laplacian_xx, _, _  = get_primal_derivatives(time * w_xx, pix_width)
+        _, _, _, laplacian_xy, _ = get_primal_derivatives(time * w_xy, pix_width)
+        _, _, _, laplacian_yx, _ = get_primal_derivatives(time * w_yx, pix_width)
+        _, _, _, _, laplacian_yy = get_primal_derivatives(time * w_yy, pix_width)
     laplacian_sum = laplacian_xx + laplacian_xy + laplacian_yx + laplacian_yy
     #the final form of the time rate of change of delta_phi is the laplacian sum minus the divergence term
     d_delta_phi_dt = laplacian_sum + delta_phi_div_term
@@ -273,8 +294,12 @@ def lense_flow(field, phi, n = 10, direction = 1, adjoint = False):
 #Given a lensing potential phi and a field to be lensed, compute and return the lensed field
 def primal_lense_flow(primal_field, phi, pix_width, n, direction, adjoint):
 
-    #precompute phi partials
-    phi_x, phi_y, phi_xx, phi_xy, phi_yy = get_primal_derivatives(phi, pix_width)
+    #precompute phi partials. phi may be a square real-space (MAP) matrix or a
+    #rectangular rfft2 (FOURIER) matrix; same forward value either way
+    if phi.shape[0] != phi.shape[1]:
+        phi_x, phi_y, phi_xx, phi_xy, phi_yy = get_primal_derivatives_from_fourier(phi, pix_width)
+    else:
+        phi_x, phi_y, phi_xx, phi_xy, phi_yy = get_primal_derivatives(phi, pix_width)
 
     #default is forward lensing operations
     def forward(_):

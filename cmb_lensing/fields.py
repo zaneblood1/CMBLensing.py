@@ -143,12 +143,14 @@ def dot(field_1, field_2):
 
 #The following block of code is necessary to undo the mathematical operations of taking
 #an inner product on a field to get the correct physical gradient.
-#NOTE this should only be called while the field is in MAP space but there are
-#currently no guard-rails implemented
 @jax.jit
 def undo_inner_product(field):
-    updates = {name: jfft.irfft2(jnp.conj(jfft.rfft2(getattr(field, name)) / field.fourier_weights) * field.nside**2) 
-               for name in field._matrix_names()}
+    def _undo(m):
+        #quit early if we are already in fourier space
+        if m.shape[0] != m.shape[1]:
+            return m
+        return jfft.irfft2(jnp.conj(jfft.rfft2(m) / field.fourier_weights) * field.nside**2)
+    updates = {name: _undo(getattr(field, name)) for name in field._matrix_names()}
     return field.replace(**updates)
 
 #Transform a field's matrices to fourier space

@@ -67,18 +67,19 @@ def mixed_grad_phi_logpdf(mixed_field, mixed_phi, data, noise_covariance,
 @jax.jit
 def mixing_jacobian_phi_component(mixed_field, phi, grad_f, mixing_d):
 
-    #define a subfunction of just phi to apply the jax.vjp operator on
-    #NOTE this must be an R^(N x N) --> R^(N x N) function in order for jax.vjp to behave properly!
-    #I.e. the inverse fourier transform of the cotangent of a fourier to fourier function is not the same as the 
-    #real space cotangent of the corresponding real space to real space function
+    #we need to use a Fourier --to--> Map method here since we require phi to be in Fourier
+    #space to preserve the physically meaningful imaginary components of the DC and Nyquist columns
     def unmix_partial(phi):
         field = map(eb2qu(mixed_field))
-        field = lense_flow(field, phi, direction = INVERSE_LENSE)
+        #since we are using AD here we need to use the custom wrapper that tells the 
+        #AD graph how to function properly
+        field = lense_flow_wrapper(field, phi, n = 10, direction = INVERSE_LENSE)
         field = qu2eb(fourier(field))
         field = pinv(mixing_d) * field
         return map(field)
     
-    #call the vjp with phi in real space and subsequently apply to grad_f in real space
-    _, pullback = jax.vjp(unmix_partial, map(phi))
+    #call the vjp with phi in Fourier space and apply to grad_f in real space. The
+    #cotangent is already a fourier field so no fourier() conversion is needed
+    _, pullback = jax.vjp(unmix_partial, phi)
     (differential,) = pullback(map(grad_f))
-    return fourier(differential)
+    return differential

@@ -100,12 +100,16 @@ def get_fourier_weights(field_shape):
 def primal_dot(field_1, field_2, fourier_weights, num_pixels):
     return jnp.real(jnp.sum(jnp.conj(field_1) * field_2 * fourier_weights * (1/num_pixels)))
 
+def get_k_meshgrid(N, pix_width):
+    kx = 2 * jnp.pi * jfft.fftfreq(N, pix_width)
+    ky = 2 * jnp.pi * jfft.rfftfreq(N, pix_width)
+    ky = ky.at[-1].set(-1*ky[-1])
+    return jnp.meshgrid(kx, ky, indexing="ij")
+
 #get all 1st and 2nd order derivatives of a field in real space
 def get_primal_derivatives(field, pix_width):
     N, _ = field.shape
-    kx = 2 * jnp.pi * jfft.fftfreq(N, pix_width)
-    ky = 2 * jnp.pi * jfft.rfftfreq(N, pix_width)
-    KX, KY = jnp.meshgrid(kx, ky, indexing="ij")
+    KX, KY = get_k_meshgrid(N, pix_width)
     F = jfft.rfft2(field)
     Fx  = jfft.irfft2(1j * KX * F)
     Fy  = jfft.irfft2(1j * KY * F)
@@ -114,6 +118,23 @@ def get_primal_derivatives(field, pix_width):
     Fxy = jfft.irfft2(-(KX * KY) * F)
     #return the real valued derivatives
     return Fx, Fy, Fxx, Fxy, Fyy
+
+#derivatives computed directly from an rfft2 (FOURIER) phi array -- same value as
+#get_primal_derivatives(irfft2(phi_fourier)) but keeps the i*k adjoint's anti-Hermitian
+#content on the self-conjugate Nyquist row in the gradient (matching CMBLensing.jl)
+def get_primal_derivatives_from_fourier(phi_fourier, pix_width):
+    N, _ = phi_fourier.shape
+    KX, KY = get_k_meshgrid(N, pix_width)
+    F = phi_fourier
+    return (jfft.irfft2(1j * KX * F), jfft.irfft2(1j * KY * F), jfft.irfft2(-(KX**2) * F),
+            jfft.irfft2(-(KX * KY) * F), jfft.irfft2(-(KY**2) * F))
+
+#apply the derivative operators but keep the result in rfft2 space (no final irfft2)
+def get_primal_derivatives_to_fourier(field, pix_width):
+    N, _ = field.shape
+    KX, KY = get_k_meshgrid(N, pix_width)
+    F = jfft.rfft2(field)
+    return (1j * KX * F), (1j * KY * F), (-(KX**2) * F), (-(KX * KY) * F), (-(KY**2) * F)
 
 #Convert EB to QU stokes polarization
 def primal_eb2qu(e_field, b_field, nside, theta_pix):
