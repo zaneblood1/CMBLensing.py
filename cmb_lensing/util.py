@@ -140,8 +140,6 @@ def get_primal_derivatives_to_fourier(field, pix_width):
 def primal_eb2qu(e_field, b_field, nside, theta_pix):
     #generate mesh grid of fourier modes of size (N, N // 2 + 1)
     lx, ly, _ = gen_mesh_grid(nside, theta_pix)
-    #NOTE the transformation below mimics the error that Marius' code makes
-    #so we can more accurately compare apples to apples :)
     lx = lx.at[:nside//2+1, -1].set(-1*lx[:nside//2+1, -1])
     #compute the arctangent at each point in the meshgrid
     l_angle = jnp.arctan2(lx, ly)
@@ -154,8 +152,6 @@ def primal_eb2qu(e_field, b_field, nside, theta_pix):
 def primal_qu2eb(q_field, u_field, nside, theta_pix):
     #generate mesh grid of fourier modes of size (N, N // 2 + 1)
     lx, ly, _ = gen_mesh_grid(nside, theta_pix)
-    #NOTE the transformation below mimics the error that Marius' code makes
-    #so we can more accurately compare apples to apples :)
     lx = lx.at[:nside//2+1, -1].set(-1*lx[:nside//2+1, -1])
     #compute the arctangent at each point in the meshgrid
     l_angle = jnp.arctan2(lx, ly)

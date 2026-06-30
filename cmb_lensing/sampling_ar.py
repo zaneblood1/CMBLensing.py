@@ -466,16 +466,16 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, a_phi_fid, i
             args["mixing_g"] = args["mixing_g"].replace(scalar_matrix = mixing_g_matrix)
 
             # # -------------------------------------------------------- DEBUG --------------------------------------------------------
-            # #Store the sampled a_phi value to a debug text file...
-            # file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_v7_aphi_0dot75/map_{map}_chain_{seed}_history.txt"
-            # os.makedirs(os.path.dirname(file_path), exist_ok = True)
-            # with open(file_path, "a") as file:
-            #     file.write(str(param_vals["a_phi"][-1]) + "\n")
+            #Store the sampled a_phi value to a debug text file...
+            file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_v8_aphi_0dot75/map_{map}_chain_{seed}_history.txt"
+            os.makedirs(os.path.dirname(file_path), exist_ok = True)
+            with open(file_path, "a") as file:
+                file.write(str(param_vals["a_phi"][-1]) + "\n")
             # # -------------------------------------------------------- DEBUG --------------------------------------------------------
 
         #6. unmix the fields using the updated version of the G & D matrices
         temp_field, phi = unmix(mixed_temp, mixed_phi, args["mixing_d"], args["mixing_g"])
-        print(np.array(param_vals["a_phi"]))
+        #print(np.array(param_vals["a_phi"]))
 
     #Return your learned distributions at the end of the chain
     #for each parameter that was sampled    
