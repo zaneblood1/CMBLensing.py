@@ -537,7 +537,8 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
                  phi_start = "MAP", f_start = "MAP", over_relaxation_num_samps = -1, lmax = 17_000):
     
     #Prepare the JIT-friendly emulator (build models once, extract weights)
-    emulator = cambemul.loademul(os.getcwd() + "/camb_emulator")
+    #emulator = cambemul.loademul("/resnick/groups/wugroup/zblood/cmb_lensing/camb_emulator")
+    emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
     (predict_tt, predict_pp, emu_params, emu_meta, model_tt, model_pp,
      tt_x_mean, tt_x_std, tt_t_mean, tt_t_std, tt_pca_basis_T, tt_pca_mean,
      pp_x_mean, pp_x_std, pp_t_mean, pp_t_std, pp_pca_basis_T, pp_pca_mean) = prepare_emulator_jax(emulator)
@@ -562,10 +563,10 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
     data_field = data_set.data
 
     #Use a seed to get reproduceable results if so desired
-    if seed is not None:
-        sub_key = jax.random.PRNGKey(seed)
-    else:
-        sub_key = jax.random.PRNGKey(np.random.randint(0, 2**31))
+    # if seed is not None:
+    #     sub_key = jax.random.PRNGKey(seed)
+    # else:
+    sub_key = jax.random.PRNGKey(np.random.randint(0, 2**31))
 
     #choose the starting point for (f, phi) in (f, phi, theta) cosmological parameter space
     temp_field, phi = get_starting_f_and_phi(f_start, phi_start, data_set, args, sub_key)
@@ -628,17 +629,17 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
             args = update_args_after_sample(current_params, predict_tt, predict_pp,
                                             emu_params, args)
         
-        #TODO fix the fact that this is re-compiling with each loop.... :(
+        #TODO fix the fact that this is re-compiling with each loop.... :( OR... Possibly just do not compile it / JIT it...
         end_time = time.time()
         print(f"sample 5 thetas time = {end_time - start_time}")
             
             # -------------------------------------------------------- DEBUG --------------------------------------------------------
-            # #Store the sampled a_phi value to a debug text file...
-            # ombh2_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_lcdm/ombh2/ombh2_map_{map}_chain_{seed}_history.txt"
-            # omch2_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_lcdm/omch2/omch2_map_{map}_chain_{seed}_history.txt"
-            # theta_MC_100_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_lcdm/theta_MC_100/theta_MC_100_map_{map}_chain_{seed}_history.txt"
-            # logA_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_lcdm/logA/logA_map_{map}_chain_{seed}_history.txt"
-            # ns_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/chains_lcdm/ns/ns_map_{map}_chain_{seed}_history.txt"
+            #Store the sampled a_phi value to a debug text file...
+            # ombh2_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/lcdm_chains/chains_v1/ombh2/ombh2_map_{map}_chain_{seed}_history.txt"
+            # omch2_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/lcdm_chains/chains_v1/omch2/omch2_map_{map}_chain_{seed}_history.txt"
+            # theta_MC_100_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/lcdm_chains/chains_v1/theta_MC_100/theta_MC_100_map_{map}_chain_{seed}_history.txt"
+            # logA_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/lcdm_chains/chains_v1/logA/logA_map_{map}_chain_{seed}_history.txt"
+            # ns_file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/lcdm_chains/chains_v1/ns/ns_map_{map}_chain_{seed}_history.txt"
             # with open(ombh2_file_path, "a") as file:
             #     file.write(str(param_vals["ombh2"][-1]) + "\n")
             # with open(omch2_file_path, "a") as file:
@@ -703,12 +704,13 @@ if __name__ == "__main__":
     #allowed search / sample range for parameters... The min and max values are +/- 5 std
     #from the training mean for the CAMB emulator
     SEARCH_PRECISION = 200
+    BUFFER_FACTOR = 1 #Use a buffer to avoid getting trapped at the search boundaries
     param_ranges = {}
-    param_ranges["ombh2"] = jnp.linspace(0.020413, 0.024389, SEARCH_PRECISION)
-    param_ranges["omch2"] = jnp.linspace(0.079704, 0.155541, SEARCH_PRECISION)
-    param_ranges["theta_MC_100"] = jnp.linspace(0.900723, 1.156063, SEARCH_PRECISION)
-    param_ranges["logA"] = jnp.linspace(2.661635, 3.782861, SEARCH_PRECISION)
-    param_ranges["ns"] = jnp.linspace(0.867143, 1.042186, SEARCH_PRECISION)
+    param_ranges["ombh2"] = jnp.linspace(0.020413, 0.024389, SEARCH_PRECISION) * BUFFER_FACTOR
+    param_ranges["omch2"] = jnp.linspace(0.079704, 0.155541, SEARCH_PRECISION) * BUFFER_FACTOR
+    param_ranges["theta_MC_100"] = jnp.linspace(0.900723, 1.156063, SEARCH_PRECISION) * BUFFER_FACTOR
+    param_ranges["logA"] = jnp.linspace(2.661635, 3.782861, SEARCH_PRECISION) * BUFFER_FACTOR
+    param_ranges["ns"] = jnp.linspace(0.867143, 1.042186, SEARCH_PRECISION) * BUFFER_FACTOR
 
     #Whether or not to sample each parameter
     #NOTE just sampling ombh2 for the time being while we get up and running
@@ -721,7 +723,7 @@ if __name__ == "__main__":
 
     #run the sampling algorithm
     param_distributions = sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
-                                       iters_per_chain = 5000, num_burn_in_fix_theta = 100, 
+                                       iters_per_chain = 5000, num_burn_in_fix_theta = 0, 
                                        over_relaxation_num_samps = -1, seed = 67,
                                        num_burn_in_always_accept = 0, phi_start = "MAP", 
                                        f_start = "MAP")

@@ -12,6 +12,7 @@ from cmb_lensing.util import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
 from cmb_lensing.statistics import *
+import cambemul
 
 _SPAWN_CTX = multiprocessing.get_context("spawn")
 _CAMB_COLS = {"TT": 0, "EE": 1, "BB": 2, "TE": 3}
@@ -627,17 +628,41 @@ def _build_dataset_teb(nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi
         fourier_weights = get_fourier_weights((nside, nside))
     )
 
+@partial(jax.jit, static_argnames = ["lmax", "lmax_prime"])
+def interpolate_cls(cls, lmax, lmax_prime):
+
+    ell = jnp.arange(2, lmax + 1).astype(jnp.float64)
+    ell_prime = jnp.arange(2, lmax_prime + 1).astype(jnp.float64)
+
+    def exponential_interpolate(cls):
+        return jnp.exp(jnp.interp(
+            jnp.log(ell), jnp.log(ell_prime), jnp.log(cls),
+            left="extrapolate", right="extrapolate"
+        ))
+
+    def linear_interpolate(cls):
+        return jnp.interp(ell, ell_prime, cls, left=0.0, right=0.0)
+
+    cls = jax.lax.cond(
+        jnp.all(cls > 0),
+        exponential_interpolate,
+        linear_interpolate,
+        cls
+    )
+
+    return cls
+
 
 # ── Main Simulation Entry Point ──────────────────────────────────────────
 
-@partial(jax.jit, static_argnames=["nside", "theta_pix", "pol", "lmax"])
+#@partial(jax.jit, static_argnames=["nside", "theta_pix", "pol", "lmax"])
 def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
              ombh2=0.0224567, omch2=0.118489, cosmomc_theta=0.0104098,
-             r=0.2, mnu=0.06, tau=0.055, As=jnp.exp(3.043) * 1e-10,
-             nt=-0.2/8, ns=0.968602, lmax=17_000,
+             r=0.0, mnu=0.06, tau=0.055, As=jnp.exp(3.043) * 1e-10,
+             nt=0, ns=0.968602, lmax=17_000,
              k_pivot=0.002, Alens=1, nphi_fac=2, a_phi = 1):
 
-    lmax_prime = min(lmax, 5000)
+    lmax_prime = min(lmax, EMULATOR_MAX_ELL)
 
     unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
         H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
@@ -649,9 +674,21 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     keys = jax.random.split(jax.random.PRNGKey(master_seed), 100)
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
+    #-------------------------------------------- DEBUG --------------------------------------------
+    emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
+    output = emulator.predict({"theta_MC_100": cosmomc_theta * 100, 
+                                "logA": jnp.log(As * 1e10), 
+                                "ns": ns,
+                                "ombh2": ombh2, 
+                                "omch2": omch2})
+    cls["phi"] = interpolate_cls(output["pp"], lmax, lmax_prime)
+    cls[f"scalar_TT"] = interpolate_cls(output["tt_unlensed"], lmax, lmax_prime)
+    #-------------------------------------------- DEBUG --------------------------------------------
+
     #Lensing potential
     unscaled_cphi = covar_matrix_from_cls(nside, pix_width, ell_grid, 
-                                         ells, cls["phi"], origin_value=0)
+                                          jnp.arange(2, lmax + 1).astype(jnp.float64), 
+                                          cls["phi"], origin_value=0)
     cphi = a_phi * unscaled_cphi
     phi, kc = field_from_covar(nside, cphi, keys, 0)
 
@@ -659,12 +696,13 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     cf = {}
     cf_scalar = {}
     cf_tensor = {}
-    for comp in ("TT", "TE", "EE", "BB"):
-        cf_scalar[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
-                                          cls[f"scalar_{comp}"], origin_value=0)
+    for comp in ("TT",): # "TE", "EE", "BB"):
+        cf_scalar[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, 
+                                                jnp.arange(2, lmax + 1).astype(jnp.float64),
+                                                cls[f"scalar_{comp}"], origin_value=0)
         cf_tensor[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
                                           cls[f"tensor_{comp}"], origin_value=0)
-        cf[comp] = cf_scalar[comp] + cf_tensor[comp]
+        cf[comp] = cf_scalar[comp] #+ cf_tensor[comp]
 
     #Lensed field covariances
     cfl = {comp: covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
@@ -673,13 +711,16 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
 
     #Unlensed random fields
     field_t, kc = field_from_covar(nside, cf["TT"], keys, kc)
-    field_e, kc = field_from_covar(nside, cf["EE"], keys, kc)
-    field_b, kc = field_from_covar(nside, cf["BB"], keys, kc)
+    #field_e, kc = field_from_covar(nside, cf["EE"], keys, kc)
+    #field_b, kc = field_from_covar(nside, cf["BB"], keys, kc)
 
     #Lensing
-    lensed_t, lensed_e, lensed_b = _lens_fields(
-        field_t, field_e, field_b, phi, pix_width, nside, theta_pix
-    )
+    # lensed_t, lensed_e, lensed_b = _lens_fields(
+    #     field_t, field_e, field_b, phi, pix_width, nside, theta_pix
+    # )
+    lensed_t = jfft.rfft2(primal_lense_flow(
+        field_t, phi, pix_width, n=10, direction=FORWARD_LENSE, adjoint=False
+    ))
 
     #Instrument response
     mask = get_mask(3000, nside, pix_width, ell_grid)
@@ -693,22 +734,25 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
         cn[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, ell_prime, ncl, origin_value=0)
 
     wn_t, kc = field_from_covar(nside, cn["TT"], keys, kc)
-    wn_e, kc = field_from_covar(nside, cn["EE"], keys, kc)
-    wn_b, kc = field_from_covar(nside, cn["BB"], keys, kc)
+    # wn_e, kc = field_from_covar(nside, cn["EE"], keys, kc)
+    # wn_b, kc = field_from_covar(nside, cn["BB"], keys, kc)
 
     #Data = Mask * Beam * Lensed + Noise
     data_t = mask * beam * lensed_t + jfft.rfft2(wn_t)
-    data_e = mask * beam * lensed_e + jfft.rfft2(wn_e)
-    data_b = mask * beam * lensed_b + jfft.rfft2(wn_b)
+    # data_e = mask * beam * lensed_e + jfft.rfft2(wn_e)
+    # data_b = mask * beam * lensed_b + jfft.rfft2(wn_b)
 
     #Convert unlensed fields to Fourier space
-    field_t, field_e, field_b = jfft.rfft2(field_t), jfft.rfft2(field_e), jfft.rfft2(field_b)
+    #field_t, field_e, field_b = jfft.rfft2(field_t), jfft.rfft2(field_e), jfft.rfft2(field_b)
+    field_t = jfft.rfft2(field_t)
 
     #D matrix
-    d_tt, d_te, d_ee, d_bb = get_d_matrix(
-        cf["TT"], cf["TE"], cf["EE"], cf["BB"],
-        cn["TT"], cn["TE"], cn["EE"], cn["BB"]
-    )
+    # d_tt, d_te, d_ee, d_bb = get_d_matrix(
+    #     cf["TT"], cf["TE"], cf["EE"], cf["BB"],
+    #     cn["TT"], cn["TE"], cn["EE"], cn["BB"]
+    # )
+
+    d_tt = get_d_tt_matrix(cf["TT"], 0*cf["TT"], cn["TT"], 1, 1)
 
     #Quadratic estimate
     if pol == "I":
@@ -731,20 +775,20 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
             cf, cf_scalar, cf_tensor, cfl, cn, d_tt, g, mask, beam,
             field_t, lensed_t, data_t, r, a_phi
         )
-    elif pol == "P":
-        return _build_dataset_eb(
-            nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
-            cf, cf_scalar, cf_tensor, cfl, cn, d_ee, d_bb, g, mask, beam,
-            field_e, field_b, lensed_e, lensed_b, data_e, data_b, r, a_phi
-        )
-    else:
-        return _build_dataset_teb(
-            nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
-            cf, cf_scalar, cf_tensor, cfl, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
-            field_t, field_e, field_b,
-            lensed_t, lensed_e, lensed_b,
-            data_t, data_e, data_b, r, a_phi
-        )
+    # elif pol == "P":
+    #     return _build_dataset_eb(
+    #         nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
+    #         cf, cf_scalar, cf_tensor, cfl, cn, d_ee, d_bb, g, mask, beam,
+    #         field_e, field_b, lensed_e, lensed_b, data_e, data_b, r, a_phi
+    #     )
+    # else:
+    #     return _build_dataset_teb(
+    #         nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
+    #         cf, cf_scalar, cf_tensor, cfl, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
+    #         field_t, field_e, field_b,
+    #         lensed_t, lensed_e, lensed_b,
+    #         data_t, data_e, data_b, r, a_phi
+    #     )
 
 def batch_simulated_trials(num_trials=10, nside=256, theta_pix=2,
                            uk_arcmin_t=10, lmax=17_000, pol="I"):
