@@ -80,16 +80,18 @@ def covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls, origin_value=No
             left="extrapolate", right="extrapolate"
         )).reshape(shape)
 
-    def linear_interpolate(ell_grid, ells, cls):
-        fv = fill_value if fill_value is not None else 0.0
-        return jnp.interp(ell_grid.flatten(), ells, cls, left=fv, right=fv).reshape(shape)
+    # def linear_interpolate(ell_grid, ells, cls):
+    #     fv = fill_value if fill_value is not None else 0.0
+    #     return jnp.interp(ell_grid.flatten(), ells, cls, left=fv, right=fv).reshape(shape)
 
-    result = jax.lax.cond(
-        jnp.logical_and(jnp.all(cls > 0), jnp.logical_not(use_linear_interpolation)),
-        exponential_interpolate,
-        linear_interpolate,
-        ell_grid, ells, cls
-    )
+    # result = jax.lax.cond(
+    #     jnp.logical_and(jnp.all(cls > 0), jnp.logical_not(use_linear_interpolation)),
+    #     exponential_interpolate,
+    #     linear_interpolate,
+    #     ell_grid, ells, cls
+    # )
+
+    result = exponential_interpolate(ell_grid, ells, cls)
 
     if origin_value is not None:
         result = result.at[0, 0].set(origin_value)
@@ -105,12 +107,17 @@ def field_from_covar(nside, covar_matrix, rng_keys, key_counter):
     return field, key_counter
 
 def field_from_covar_single_key(nside, covar_matrix, seed):
-    shape = (nside, nside // 2 + 1)
-    key_r, key_i = jax.random.split(seed)
-    real_dist = jax.random.normal(key_r, shape = shape)
-    imag_dist = 1j * jax.random.normal(key_i, shape = shape)
-    field = jnp.sqrt(covar_matrix / 2) * (real_dist + imag_dist)
-    field = jfft.irfft2(field, norm="ortho")
+    #draw a real Gaussian field with power spectrum covar_matrix. building it as the rfft2 of
+    #REAL white noise gives the correct Hermitian symmetry for free -- including the two
+    #self-conjugate columns kx=0 and kx=Nyquist. the previous version drew every half-plane
+    #mode as an independent complex Gaussian; irfft2 then symmetrized those two columns and
+    #halved their variance (bulk modes = C, kx=0 / kx=Nyquist columns = C/2), which biased
+    #every sampled field, noise realization, and HMC momentum. white-noise rfft2 has
+    #E|F_k|^2 = nside^2 uniformly over all modes, so the effective per-mode variance downstream
+    #(callers rfft2 the returned map) is nside^2 * covar_matrix everywhere -- same bulk
+    #normalization as before, with the self-conjugate columns now at full power.
+    white = jax.random.normal(seed, shape = (nside, nside))
+    field = jfft.irfft2(jfft.rfft2(white) * jnp.sqrt(covar_matrix))
     return field
 
 # ── Instrument Response ───────────────────────────────────────────────────
@@ -169,13 +176,28 @@ def get_d_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
     return d_tt, d_te, d_ee, d_bb
 
 #A light-weight version of the full method for use in temp-only inference of parameters
+# @jax.jit
+# def get_d_tt_matrix(cfs_tt, cft_tt, cn_tt, r, r_fid):
+#     pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
+#     identity = jnp.ones(cn_tt.shape)
+#     cf_r = cfs_tt + (r/r_fid)*cft_tt
+#     d_tt = cf_r + pre_factor * identity + 2 * cn_tt
+#     d_tt = jnp.sqrt(d_tt * reciprocal_matrix(cf_r))
+#     return d_tt
+
 @jax.jit
-def get_d_tt_matrix(cfs_tt, cft_tt, cn_tt, r, r_fid):
+def get_d_tt_matrix(cf_curr, cf_fid, cn_tt):
+
     pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
     identity = jnp.ones(cn_tt.shape)
-    cf_r = cfs_tt + (r/r_fid)*cft_tt
-    d_tt = cf_r + pre_factor * identity + 2 * cn_tt
-    d_tt = jnp.sqrt(d_tt * reciprocal_matrix(cf_r))
+
+    d_tt = cf_curr + pre_factor * identity + 2 * cn_tt
+    d_tt = jnp.sqrt(d_tt * reciprocal_matrix(cf_curr))
+
+    #d_tt_0 = cf_fid + pre_factor * identity + 2 * cn_tt
+    #d_tt_0 = jnp.sqrt(d_tt_0 * reciprocal_matrix(cf_fid))
+
+    #d_tt = reciprocal_matrix(d_tt_0) * d_tt
     return d_tt
 
 # ── G Matrix ──────────────────────────────────────────────────────────────
@@ -188,11 +210,23 @@ def get_g_matrix(cphi_fid, nphi, a_phi_fid, a_phi = 1):
     return g
 
 @jax.jit
-def get_g_matrix_lcdm(cphi_fid, cphi_curr, nphi):
+def get_g_matrix_lcdm(cphi_fid, cphi_curr, nphi, cn_tt):
+
     g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_fid))
     g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_curr))
     g = reciprocal_matrix(g0) * g
+
+    #NOTE experimenting with a G-analogue of the D-mixing matrix
+    # pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
+    # identity = jnp.ones(cn_tt.shape)
+    # g = cphi_curr + pre_factor * identity + 2 * cn_tt
+    # g = jnp.sqrt(g * reciprocal_matrix(cphi_curr))
     return g
+
+# @jax.jit
+# def get_g_matrix_lcdm(cphi_fid, cphi_curr, nphi):
+#     g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_curr))
+#     return g
 
 # ── Quadratic Estimate ────────────────────────────────────────────────────
 
@@ -389,10 +423,10 @@ def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         r=r, mnu=mnu, As=As, nt=nt, ns=ns, lmax=lmax_prime,
         tau=tau, pivot_scalar=k_pivot, pivot_tensor=k_pivot, Alens=Alens
     )
-    pars.max_l_tensor = 2 * lmax_prime
-    pars.max_eta_k_tensor = 4 * lmax_prime
+    pars.max_l_tensor = 600 #NOTE switching to Yuuki's values from 2 * lmax_prime
+    pars.max_eta_k_tensor = 1200 #NOTE switching to Yuuki's values from 4 * lmax_prime
     pars.WantScalars = True
-    pars.WantTensors = True
+    pars.WantTensors = True #DEBUG should this be set to False?
     pars.DoLensing = True
     pars.set_nonlinear_lensing(True)
 
@@ -658,9 +692,10 @@ def interpolate_cls(cls, lmax, lmax_prime):
 #@partial(jax.jit, static_argnames=["nside", "theta_pix", "pol", "lmax"])
 def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
              ombh2=0.0224567, omch2=0.118489, cosmomc_theta=0.0104098,
-             r=0.0, mnu=0.06, tau=0.055, As=jnp.exp(3.043) * 1e-10,
+             r=0.0, mnu=0.06, tau=0.05, As=jnp.exp(3.043) * 1e-10,
              nt=0, ns=0.968602, lmax=17_000,
-             k_pivot=0.002, Alens=1, nphi_fac=2, a_phi = 1):
+             k_pivot = 0.05, Alens=1, nphi_fac=2, a_phi = 1): 
+   #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
 
     lmax_prime = min(lmax, EMULATOR_MAX_ELL)
 
@@ -675,10 +710,12 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
     #-------------------------------------------- DEBUG --------------------------------------------
-    emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
+    #emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
+    emulator = cambemul.loademul("/resnick/groups/wugroup/zblood/cmb_lensing/camb_emulator")
     output = emulator.predict({"theta_MC_100": cosmomc_theta * 100, 
                                 "logA": jnp.log(As * 1e10), 
                                 "ns": ns,
+                                "tau": tau,
                                 "ombh2": ombh2, 
                                 "omch2": omch2})
     cls["phi"] = interpolate_cls(output["pp"], lmax, lmax_prime)
@@ -722,8 +759,9 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
         field_t, phi, pix_width, n=10, direction=FORWARD_LENSE, adjoint=False
     ))
 
+    #DEBUG: are the mask or beam influencing the poorness of the algorithm?
     #Instrument response
-    mask = get_mask(3000, nside, pix_width, ell_grid)
+    mask = jnp.ones_like(get_mask(3000, nside, pix_width, ell_grid))
     beam = get_beam(nside, pix_width, ell_grid, lmax_prime)
 
     #Noise covariance and white noise
@@ -752,7 +790,8 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     #     cn["TT"], cn["TE"], cn["EE"], cn["BB"]
     # )
 
-    d_tt = get_d_tt_matrix(cf["TT"], 0*cf["TT"], cn["TT"], 1, 1)
+    #d_tt = get_d_tt_matrix(cf["TT"], 0*cf["TT"], cn["TT"], 1, 1)
+    d_tt = get_d_tt_matrix(cf["TT"], cf["TT"], cn["TT"])
 
     #Quadratic estimate
     if pol == "I":

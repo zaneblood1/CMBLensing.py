@@ -9,6 +9,7 @@ from scipy.optimize import brentq
 import cambemul
 from cambemul.emulator import build_model
 import os
+import random
 #jax.config.update("jax_disable_jit", True)
 #jax.config.update("jax_log_compiles", True)
 
@@ -194,22 +195,26 @@ def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance,
     delta_h = hamiltonian(x, p) - hamiltonian(x0, p0)
     return delta_h, x, p
 
-#@partial(jax.jit, static_argnames = ["model_tt", "model_pp", "lmax", "lmax_prime",
-#                                     "nside", "pix_width", "theta_pix",
-#                                     "over_relaxation_num_samps"])
-def gibbs_sample_theta(theta_key_idx, theta_old, theta_range,
-                       mixed_temp_matrix, mixed_phi_matrix, data_matrix,
-                       current_params, emu_params, model_tt,
-                       model_pp, rng_key, lmax, lmax_prime, nside, pix_width, theta_pix,
-                       ell_grid, ells,
-                       cphi_fid, qe_scalar, cn_scalar, mask_matrix, beam_matrix,
-                       fourier_weights,
-                       tt_x_mean, tt_x_std, tt_t_mean, tt_t_std, tt_pca_basis_T, tt_pca_mean,
-                       pp_x_mean, pp_x_std, pp_t_mean, pp_t_std, pp_pca_basis_T, pp_pca_mean,
-                       over_relaxation_num_samps = -1):
-    """Sample a single cosmological parameter via grid evaluation + inverse CDF."""
+#compile-once numeric core: emulator forward over the theta grid + vmapped mixed_logpdf.
+#kept separate from grid_and_sample so the scipy/host inverse-CDF sampling stays outside jit.
+#static args are shape/metadata (nside) and the Flax model structs (hashable, unbatched).
+@partial(jax.jit, static_argnames = ["model_tt", "model_pp", "nside", "pix_width", "theta_pix"])
+def compute_logpdf_grid(theta_key_idx, theta_range,
+                        mixed_temp_matrix, mixed_phi_matrix, data_matrix,
+                        current_params, emu_params, model_tt, model_pp,
+                        nside, pix_width, theta_pix,
+                        ell_grid, cphi_fid, qe_scalar, cn_scalar,
+                        mask_matrix, beam_matrix, fourier_weights,
+                        tt_x_mean, tt_x_std, tt_t_mean, tt_t_std, tt_pca_basis_T, tt_pca_mean,
+                        pp_x_mean, pp_x_std, pp_t_mean, pp_t_std, pp_pca_basis_T, pp_pca_mean):
+    """Return logpdf_values (shape (N,)) for the swept parameter's grid.
 
-    #reconstruct Flax structs from raw arrays inside JIT for stable pytree tracing
+    Fuses the emulator (predict_tt/predict_pp) and the per-grid-point covariance
+    build + mixed_logpdf into a single XLA executable, compiled once and cached
+    across all chain iterations. This replaces the previous eager path where the
+    NN forward and vmapped logpdf were re-dispatched op-by-op every call.
+    """
+    #reconstruct Flax structs from raw arrays for stable pytree tracing
     def _field(m):
         return FlatS0(scalar_matrix = m, fourier_weights = fourier_weights,
                       nside = nside, theta_pix = theta_pix, pix_width = pix_width,
@@ -231,30 +236,32 @@ def gibbs_sample_theta(theta_key_idx, theta_old, theta_range,
     params_batch = jnp.tile(current_params, (N, 1))
     params_batch = params_batch.at[:, theta_key_idx].set(theta_range)
 
-    def predict_tt(emu_params, x):
+    def predict_tt(x):
         xn = ((x - tt_x_mean) / tt_x_std).astype(jnp.float32)
         out = model_tt.apply(emu_params["tt"], xn)
         coeffs = out * tt_t_std + tt_t_mean
         return jnp.power(10.0, coeffs @ tt_pca_basis_T + tt_pca_mean)
 
-    def predict_pp(emu_params, x):
+    def predict_pp(x):
         xn = ((x - pp_x_mean) / pp_x_std).astype(jnp.float32)
         out = model_pp.apply(emu_params["pp"], xn)
         coeffs = out * pp_t_std + pp_t_mean
         return jnp.power(10.0, coeffs @ pp_pca_basis_T + pp_pca_mean)
 
-    cl_tt_batch = predict_tt(emu_params, params_batch)
-    cl_pp_batch = predict_pp(emu_params, params_batch)
+    cl_tt_batch = predict_tt(params_batch)
+    cl_pp_batch = predict_pp(params_batch)
+
+    emul_ells = jnp.arange(2, EMULATOR_MAX_ELL + 1)
 
     def single_logpdf(i):
-        cl_tt = interpolate_cls(cl_tt_batch[i], lmax, lmax_prime)
-        cl_pp = interpolate_cls(cl_pp_batch[i], lmax, lmax_prime)
+        cl_tt = cl_tt_batch[i]
+        cl_pp = cl_pp_batch[i]
 
         cf = covar_matrix_from_cls(nside, pix_width,
-                                   ell_grid, ells,
+                                   ell_grid, emul_ells,
                                    cl_tt, origin_value = 0)
         cphi = covar_matrix_from_cls(nside, pix_width,
-                                     ell_grid, ells,
+                                     ell_grid, emul_ells,
                                      cl_pp, origin_value = 0)
 
         g = get_g_matrix_lcdm(cphi_fid, cphi, qe_scalar)
@@ -264,9 +271,41 @@ def gibbs_sample_theta(theta_key_idx, theta_old, theta_range,
                             noise_covariance, _op(cphi), _op(cf),
                             mask, beam, _op(g), _op(d))
 
-    logpdf_values = jax.vmap(single_logpdf)(jnp.arange(N))
+    return jax.vmap(single_logpdf)(jnp.arange(N))
+
+#@partial(jax.jit, static_argnames = ["model_tt", "model_pp", "lmax", "lmax_prime",
+#                                     "nside", "pix_width", "theta_pix",
+#                                     "over_relaxation_num_samps"])
+def gibbs_sample_theta(theta_key_idx, theta_old, theta_range,
+                       mixed_temp_matrix, mixed_phi_matrix, data_matrix,
+                       current_params, emu_params, model_tt,
+                       model_pp, rng_key, lmax, lmax_prime, nside, pix_width, theta_pix,
+                       ell_grid, ells,
+                       cphi_fid, qe_scalar, cn_scalar, mask_matrix, beam_matrix,
+                       fourier_weights,
+                       tt_x_mean, tt_x_std, tt_t_mean, tt_t_std, tt_pca_basis_T, tt_pca_mean,
+                       pp_x_mean, pp_x_std, pp_t_mean, pp_t_std, pp_pca_basis_T, pp_pca_mean,
+                       over_relaxation_num_samps = -1):
+    """Sample a single cosmological parameter via grid evaluation + inverse CDF."""
+
+    start_time = time.time()
+    logpdf_values = compute_logpdf_grid(theta_key_idx, theta_range,
+                        mixed_temp_matrix, mixed_phi_matrix, data_matrix,
+                        current_params, emu_params, model_tt, model_pp,
+                        nside, pix_width, theta_pix,
+                        ell_grid, cphi_fid, qe_scalar, cn_scalar,
+                        mask_matrix, beam_matrix, fourier_weights,
+                        tt_x_mean, tt_x_std, tt_t_mean, tt_t_std, tt_pca_basis_T, tt_pca_mean,
+                        pp_x_mean, pp_x_std, pp_t_mean, pp_t_std, pp_pca_basis_T, pp_pca_mean)
+    #logpdf_values.block_until_ready()
+    end_time = time.time()
+    print(f"Logpdf calculation time = {end_time - start_time}")
+
+    start_time = time.time()
     theta_new = grid_and_sample(logpdf_values, theta_range, rng_key,
                                 theta_old, over_relaxation_num_samps)
+    end_time = time.time()
+    print(f"Grid and sample time = {end_time - start_time}")
     return theta_new
 
 #sample single parameter "theta" via inverse CDF
@@ -274,9 +313,14 @@ def gibbs_sample_theta(theta_key_idx, theta_old, theta_range,
 def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
                     over_relaxation_num_samps = -1):
 
+    #start_time = time.time()
     random_number = jax.random.uniform(sub_key)
+    #end_time = time.time()
+    #print(f"RNG time = {end_time - start_time}")
 
     def _grid_and_sample_internal(theta_values, logpdf_values, random_number):
+        
+        #start_time = time.time()
         xs = np.asarray(theta_values, dtype = np.float64)
         logpdfs = np.asarray(logpdf_values, dtype = np.float64)
 
@@ -291,8 +335,16 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
         #shift for numerical stability then smooth
         logpdfs = logpdfs - np.max(logpdfs)
         xmin, xmax = float(xs[0]), float(xs[-1])
-        interp_logpdfs = np.array(loess(xs, logpdfs, span = 0.25), dtype = np.float64)
 
+        #end_time = time.time()
+        #print(f"Trim time = {end_time - start_time}")
+
+        #start_time = time.time()
+        interp_logpdfs = np.array(loess(xs, logpdfs, span = 0.25), dtype = np.float64)
+        #end_time = time.time()
+        #print(f"Loess time = {end_time - start_time}")
+
+        #start_time = time.time()
         #callable interpolant over the smoothed log PDF
         def interp_logpdf(x):
             return float(np.interp(x, xs, interp_logpdfs))
@@ -305,11 +357,20 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
             result, _ = quad(lambda t: nan2zero(np.exp(interp_logpdf(t))),
                              xmin, float(x), limit = 500, epsrel = 1e-4)
             return result
+        
+        #end_time = time.time()
+        #print(f"Function definition time = {end_time - start_time}")
+
+        #start_time = time.time()
 
         logA = nan2zero(np.log(cdf(xmax)))
         interp_logpdfs -= logA
         logpdfs = interp_logpdfs
 
+        #end_time = time.time()
+        #print(f"logA time = {end_time - start_time}")
+
+        #start_time = time.time()
         #re-create interpolant with the normalized values
         def interp_logpdf_norm(x):
             return float(np.interp(x, xs, interp_logpdfs))
@@ -325,11 +386,21 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
         xmin_prime = float(xs[np.argmax(above)])
         xmax_prime = float(xs[len(xs) - 1 - np.argmax(above[::-1])])
 
+        #end_time = time.time()
+        #print(f"Function definition 2 time = {end_time - start_time}")
+
         #inverse transform sampling via Brent root-finding (matches Julia's find_zero)
+
+        #start_time = time.time()
+
         r = float(random_number)
         cdf_lo = cdf_norm(xmin_prime)
         cdf_hi = cdf_norm(xmax_prime)
 
+        #end_time = time.time()
+        #print(f"lo-hi time = {end_time - start_time}")
+
+        #start_time = time.time()
         if (cdf_lo - r) * (cdf_hi - r) >= 0:
             if logpdfs[0] > logpdfs[-1]:
                 sampled = xmin_prime
@@ -339,8 +410,10 @@ def grid_and_sample(logpdf_values, theta_values, sub_key, theta_old,
             sampled = brentq(lambda x: cdf_norm(x) - r,
                              xmin_prime, xmax_prime,
                              xtol = (xmax - xmin) * 1e-4)
-
+        #end_time = time.time()
+        #print(f"root-finder time = {end_time - start_time}")
         return np.array(sampled, dtype = np.float64)
+    
 
     # sampled_theta = jax.pure_callback(
     #     _grid_and_sample_internal,
@@ -373,35 +446,54 @@ def interpolate_cls(cls, lmax, lmax_prime):
 
     return cls
 
-#JIT-able version of get_new_cosmo_matrices using the pure-JAX emulator
-def get_new_cosmo_matrices(current_params, predict_tt, predict_pp, emu_params, args):
-    """Compute (g, d, cf, cphi) from a parameter vector using the pure-JAX emulator."""
+#jitted core of the per-iteration covariance/mixing recompute. Splits static shape/emulator
+#args (predict_*/nside/pix_width/lmax) from dynamic arrays so the internal control-flow
+#(covar_matrix_from_cls / interpolate_cls conds) compiles once and is cached across Gibbs
+#iterations, instead of re-tracing eagerly every call (the "<lambda> for pjit" log flood).
+#predict_tt/predict_pp are static (hashable closures, created once in prepare_emulator_jax).
+@partial(jax.jit, static_argnames = ["predict_tt", "predict_pp", "nside", "pix_width", "lmax", "lmax_prime"])
+def _recompute_cosmo_matrices(current_params, emu_params, ell_grid, ells,
+                              cphi_fid, qe_scalar, cn_scalar,
+                              predict_tt, predict_pp, nside, pix_width, lmax, lmax_prime):
     x = current_params[None, :]
     cl_tt = predict_tt(emu_params, x)[0]
     cl_pp = predict_pp(emu_params, x)[0]
 
-    cl_tt = interpolate_cls(cl_tt, args["lmax"], args["lmax_prime"])
-    cl_pp = interpolate_cls(cl_pp, args["lmax"], args["lmax_prime"])
+    emul_ells = jnp.arange(2, EMULATOR_MAX_ELL + 1)
 
-    cf = covar_matrix_from_cls(args["nside"], args["pix_width"],
-                               args["ell_grid"], args["ells"],
+    cf = covar_matrix_from_cls(nside, pix_width,
+                               ell_grid, emul_ells,
                                cl_tt, origin_value = 0)
-    cphi = covar_matrix_from_cls(args["nside"], args["pix_width"],
-                                 args["ell_grid"], args["ells"],
+    cphi = covar_matrix_from_cls(nside, pix_width,
+                                 ell_grid, emul_ells,
                                  cl_pp, origin_value = 0)
 
-    g = get_g_matrix_lcdm(args["cphi_fid"], cphi, args["quadratic_estimate"].scalar_matrix)
-    d = get_d_tt_matrix(cf, jnp.zeros_like(cf), args["noise_covariance"].scalar_matrix, 1, 1)
+    g = get_g_matrix_lcdm(cphi_fid, cphi, qe_scalar)
+    d = get_d_tt_matrix(cf, jnp.zeros_like(cf), cn_scalar, 1, 1)
     return g, d, cf, cphi
+
+#JIT-able version of get_new_cosmo_matrices using the pure-JAX emulator.
+#Thin eager wrapper: unpacks args (mixed static/dynamic) and delegates to the jitted core.
+def get_new_cosmo_matrices(current_params, predict_tt, predict_pp, emu_params, args):
+    """Compute (g, d, cf, cphi) from a parameter vector using the pure-JAX emulator."""
+    return _recompute_cosmo_matrices(current_params, emu_params,
+                                     args["ell_grid"], args["ells"],
+                                     args["cphi_fid"],
+                                     args["quadratic_estimate"].scalar_matrix,
+                                     args["noise_covariance"].scalar_matrix,
+                                     predict_tt, predict_pp,
+                                     args["nside"], args["pix_width"],
+                                     args["lmax"], args["lmax_prime"])
 
 #Lighter-weight version of the above method to just compute the field covariance and not D, G, Cphi...
 def get_new_cf_matrix(current_params, predict_tt, emu_params, args):
     """Compute (g, d, cf, cphi) from a parameter vector using the pure-JAX emulator."""
     x = current_params[None, :]
     cl_tt = predict_tt(emu_params, x)[0]
-    cl_tt = interpolate_cls(cl_tt, args["lmax"], args["lmax_prime"])
+    #cl_tt = interpolate_cls(cl_tt, args["lmax"], args["lmax_prime"])
+    emu_ells = jnp.arange(2, EMULATOR_MAX_ELL + 1)
     cf = covar_matrix_from_cls(args["nside"], args["pix_width"],
-                               args["ell_grid"], args["ells"],
+                               args["ell_grid"], emu_ells,
                                cl_tt, origin_value = 0)
     return cf
 
@@ -448,7 +540,7 @@ def add_metadata_to_args(args, data_set, lmax):
     args["lmax_prime"] = min(lmax, EMULATOR_MAX_ELL)
     args["nside"] = data_set.nside
     args["pix_width"] = data_set.pix_width
-    ell_grid, _ = gen_ell_grid(data_set.nside, data_set.theta_pix)
+    ell_grid, _ = gen_ell_grid(data_set.nside, data_set.theta_pix) #Decreasing theta_pix increases max_ell needed to interpolate, and increasing theta_pix decreases max_ell needed to interpolate
     args["ell_grid"] = ell_grid
     args["ells"] = jnp.arange(2, lmax + 1).astype(jnp.float64)
     return args
@@ -537,8 +629,8 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
                  phi_start = "MAP", f_start = "MAP", over_relaxation_num_samps = -1, lmax = 17_000):
     
     #Prepare the JIT-friendly emulator (build models once, extract weights)
-    #emulator = cambemul.loademul("/resnick/groups/wugroup/zblood/cmb_lensing/camb_emulator")
-    emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
+    emulator = cambemul.loademul("/resnick/groups/wugroup/zblood/cmb_lensing/camb_emulator")
+    #emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
     (predict_tt, predict_pp, emu_params, emu_meta, model_tt, model_pp,
      tt_x_mean, tt_x_std, tt_t_mean, tt_t_std, tt_pca_basis_T, tt_pca_mean,
      pp_x_mean, pp_x_std, pp_t_mean, pp_t_std, pp_pca_basis_T, pp_pca_mean) = prepare_emulator_jax(emulator)
@@ -563,10 +655,10 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
     data_field = data_set.data
 
     #Use a seed to get reproduceable results if so desired
-    # if seed is not None:
-    #     sub_key = jax.random.PRNGKey(seed)
-    # else:
-    sub_key = jax.random.PRNGKey(np.random.randint(0, 2**31))
+    if seed is not None:
+        sub_key = jax.random.PRNGKey(seed)
+    else:
+        sub_key = jax.random.PRNGKey(np.random.randint(0, 2**31))
 
     #choose the starting point for (f, phi) in (f, phi, theta) cosmological parameter space
     temp_field, phi = get_starting_f_and_phi(f_start, phi_start, data_set, args, sub_key)
@@ -596,10 +688,19 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
         end_time = time.time()
         print(f"sample phi time = {end_time - start_time}")
 
-        start_time = time.time()
+        
         #4. sample your cosmo parameters
         if iter >= num_burn_in_fix_theta:
-            for theta, theta_range in param_ranges.items():
+            #start_time = time.time()
+            #randomly shuffle the order in which we sample the cosmo parameters each loop
+            #(host-side shuffle, avoids the ~7s device dispatch/sync of jax.random.permutation)
+            shuffled_items = list(param_ranges.items())
+            random.shuffle(shuffled_items)
+            #end_time = time.time()
+            #print(f"shuffle time = {end_time - start_time}")
+
+            start_time = time.time()
+            for theta, theta_range in shuffled_items:
                 if should_sample[theta]:
                     rng_key, sub_key = jax.random.split(sub_key)
                     theta_key_idx = PARAM_INDEX[theta]
@@ -624,14 +725,18 @@ def sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
                     param_vals[theta].append(theta_val)
                     current_params = current_params.at[theta_key_idx].set(theta_val)
 
+            #TODO fix the fact that this is re-compiling with each loop.... :( OR... Possibly just do not compile it / JIT it...
+            end_time = time.time()
+            print(f"sample 1 theta time = {end_time - start_time}")
+
+            #start_time = time.time()
             #5. recompute mixing and covariance matrices using the newly sampled parameter values
             #NOTE this is only necessary if we are past the burn-in phase
             args = update_args_after_sample(current_params, predict_tt, predict_pp,
                                             emu_params, args)
+            #end_time = time.time()
+            #print(f"update args time = {end_time - start_time}")
         
-        #TODO fix the fact that this is re-compiling with each loop.... :( OR... Possibly just do not compile it / JIT it...
-        end_time = time.time()
-        print(f"sample 5 thetas time = {end_time - start_time}")
             
             # -------------------------------------------------------- DEBUG --------------------------------------------------------
             #Store the sampled a_phi value to a debug text file...
@@ -696,10 +801,10 @@ if __name__ == "__main__":
     #values for better convergence...
     param_init = {}
     param_init["ombh2"] = 0.024389 #+5 sigma from Yuuki's mean for training
-    param_init["omch2"] = 0.079704 #-5 sigma from mean
-    param_init["theta_MC_100"] = 0.900723 #-5 sigma from mean #NOTE +5 here and -5 for logA seems to break CAMB
-    param_init["logA"] = 3.782861 #+5 sigma from mean
-    param_init["ns"] = 1.042186 #+5 sigma from mean
+    param_init["omch2"] = 0.109381 #0.079704 #-5 sigma from mean
+    param_init["theta_MC_100"] = 1.031732 #0.900723 #-5 sigma from mean #NOTE +5 here and -5 for logA seems to break CAMB
+    param_init["logA"] = 3.218387  #3.782861 #+5 sigma from mean
+    param_init["ns"] = 0.959814 #1.042186 #+5 sigma from mean
 
     #allowed search / sample range for parameters... The min and max values are +/- 5 std
     #from the training mean for the CAMB emulator
@@ -716,16 +821,25 @@ if __name__ == "__main__":
     #NOTE just sampling ombh2 for the time being while we get up and running
     should_sample = {}
     should_sample["ombh2"] = True
-    should_sample["omch2"] = True
-    should_sample["theta_MC_100"] = True
-    should_sample["logA"] = True
-    should_sample["ns"] = True
+    should_sample["omch2"] = False
+    should_sample["theta_MC_100"] = False
+    should_sample["logA"] = False
+    should_sample["ns"] = False
 
     #run the sampling algorithm
+    start_time = time.time()
     param_distributions = sample_joint(data_set, param_init, param_ranges, should_sample, noise_level,
-                                       iters_per_chain = 5000, num_burn_in_fix_theta = 0, 
+                                       iters_per_chain = 10, num_burn_in_fix_theta = 0, 
                                        over_relaxation_num_samps = -1, seed = 67,
                                        num_burn_in_always_accept = 0, phi_start = "MAP", 
                                        f_start = "MAP")
-    print(f"Done!")
+    end_time = time.time()
+    file_path = f"/resnick/groups/wugroup/zblood/cmb_lensing/cmb_lensing/gpu_data/"
+    os.makedirs(file_path, exist_ok = True)
+    np.savez(file_path + f"learned_ombh2_distribution.npz", np.array(param_distributions["ombh2"]))
+
+    #record the time as well
+    total_time = end_time - start_time
+    np.savetxt(file_path + f"sample_lcdm_time.txt", np.array([total_time]))
+    
 

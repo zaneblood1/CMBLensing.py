@@ -7,8 +7,8 @@ from cmb_lensing.constants import *
 from cmb_lensing.gradients import *
 from functools import partial
 
-@jax.jit
-def wiener_filter(field, phi, data, field_covariance, noise_covariance, mask, beam):
+@partial(jax.jit, static_argnames = ["maxiter", "tol"])
+def wiener_filter(field, phi, data, field_covariance, noise_covariance, mask, beam, maxiter = 500, tol = 1e-1):
 
     #Compute the b vector which is the gradient w.r.t. f of the logpdf 
     #function evaluated at f = 0, d = d, phi = phi, etc...
@@ -19,7 +19,7 @@ def wiener_filter(field, phi, data, field_covariance, noise_covariance, mask, be
 
     #take the conjugate gradient of A @ f = b and solve for f assuming
     f_wiener_filtered = conjugate_gradient(field, data, phi, mask, beam, noise_covariance, field_covariance, 
-                                           b_vector, preconditioner, maxiter = 500, tol = 1e-1)
+                                           b_vector, preconditioner, maxiter = maxiter, tol = tol)
 
     #return the value of f found via conjugate gradient. This is the
     #wiener filtered version of f...

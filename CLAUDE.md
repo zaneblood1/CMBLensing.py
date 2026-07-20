@@ -39,6 +39,8 @@ No linter or formatter is configured. No CI pipeline exists.
 
 `sample_joint()` (in `sampling_ar.py`) goes one step further than MAP: instead of a single point estimate, it draws samples from the full joint posterior P(f, phi, theta | d) via Gibbs sampling, where theta are cosmological parameters. This is the code path that matters going forward as the project shifts toward cosmological parameter inference.
 
+> **DEFAULT FILE FOR CONVERSATIONS:** unless stated otherwise, when the user refers to "the sampler", "sample_joint", "gibbs_sample_theta", theta/parameter sampling, etc. in conversation, they mean **`sample_lcdm_legacy.py`** — the live, actively-edited LCDM cosmological-parameter sampler (samples `theta_MC_100`, `logA`, `ns`, `ombh2`, `omch2` via a CAMB emulator). Do NOT assume `sampling_ar.py` or the unused `sample_lcdm.py`. Edit `sample_lcdm_legacy.py`.
+
 ### Cosmological Parameter Sampling (`sampling_ar.py`)
 
 This module is a direct port of `CMBLensing.jl/src/sampling.jl` — when in doubt about intended behavior, read the Julia source, which is the ground-truth reference. ("AR" = the two parameters originally sampled: **A**_phi and tensor-to-scalar ratio **r**.)
