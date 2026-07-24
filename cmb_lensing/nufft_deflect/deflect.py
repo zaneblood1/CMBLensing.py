@@ -185,18 +185,36 @@ class FlatDeflection:
         on the self-conjugate DC/Nyquist columns survives -- required when phi is
         carried in the FOURIER basis (see CMBLensing.py CLAUDE.md).
         """
+        wx, wy = self._leg(f, cotangent)
+        return self._grad_phi_assemble(wx, wy, fourier_out)
+
+    def grad_phi_pol(self, q, u, ctq, ctu, fourier_out = False):
+        """Spin-2 phi gradient: the sum of the Q and U QE legs,
+            dJ/dphi = -div( ctQ*(grad Q)(x+grad phi) + ctU*(grad U)(x+grad phi) ).
+        This is the flat-sky analogue of LenseFlow's `get_delta_phi_tqu_roc`
+        (`fdf_product = qdq + udu`) and delensalot's spin-summed `get_qlms`. The
+        divergence/Nyquist handling is identical to `grad_phi`; only the (wx, wy)
+        assembly gains the extra leg. `fourier_out` as in `grad_phi`."""
+        wqx, wqy = self._leg(q, ctq)
+        wux, wuy = self._leg(u, ctu)
+        return self._grad_phi_assemble(wqx + wux, wqy + wuy, fourier_out)
+
+    def _leg(self, f, cotangent):
+        """One QE leg: cotangent * (grad f) evaluated at the deflected positions -> (wx, wy)."""
         f = np.asarray(f, dtype = np.float64)
         cotangent = np.asarray(cotangent, dtype = np.float64)
         fx, fy = self._grad(f)
-        #(grad f) evaluated at the deflected positions
         gfx = self._remap_at(fx, self._coord)
         gfy = self._remap_at(fy, self._coord)
-        wx = cotangent * gfx
-        wy = cotangent * gfy
+        return cotangent * gfx, cotangent * gfy
+
+    def _grad_phi_assemble(self, wx, wy, fourier_out):
+        """Assemble the phi gradient -div(wx, wy). If `fourier_out`, return it in rfft2
+        space (shape (N, N//2+1), complex) without a closing irfft2, so the i*k content on
+        the self-conjugate DC/Nyquist columns survives -- required when phi is carried in the
+        FOURIER basis (see CMBLensing.py CLAUDE.md). Uses the negated-Nyquist ky convention."""
         if not fourier_out:
             return -self._div(wx, wy)
-        #rfft2-space divergence, matching CMBLensing's get_k_meshgrid convention
-        #(axis 0 = full fftfreq, axis 1 = rfftfreq with negated Nyquist)
         kx = 2 * np.pi * np.fft.fftfreq(self.N, d = self.pix_width)[:, None]
         ky = 2 * np.pi * np.fft.rfftfreq(self.N, d = self.pix_width)
         ky = ky.copy(); ky[-1] = -ky[-1]
