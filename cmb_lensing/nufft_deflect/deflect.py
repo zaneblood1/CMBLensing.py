@@ -130,6 +130,12 @@ class FlatDeflection:
         grid = self._adjoint_synthesis(g, self._coord)
         return (np.fft.fft2(grid).real) / self.N ** 2
 
+    def lense_adjoint_pol(self, gq, gu):
+        """Transpose of `lense_pol` in the real polarization inner product
+        <(Q,U),(Gq,Gu)> = sum(Q*Gq + U*Gu). Since `lense_pol` lenses Q, U as independent
+        scalars, its adjoint is the per-component `lense_adjoint` (each exact to ~1e-16)."""
+        return self.lense_adjoint(gq), self.lense_adjoint(gu)
+
     def lense_inverse(self, g, n_iter = 10, tol = 1e-12, return_info = False):
         """Approximate inverse  L^-1 g (x) = g(x + d_inv(x)).
 
