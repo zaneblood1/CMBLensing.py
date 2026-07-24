@@ -108,6 +108,18 @@ class FlatDeflection:
         """Forward lensing  L f (x) = f(x + grad phi(x))."""
         return self._remap_at(f, self._coord)
 
+    def lense_pol(self, q, u):
+        """Forward spin-2 lensing of a polarization field (Q, U).
+
+        Flat-sky with a gradient deflection d = grad phi: the antisymmetric part of
+        the deflection Jacobian vanishes, so there is NO polarization rotation and Q, U
+        are each remapped as independent scalars at x + grad phi -- exactly what
+        LenseFlow does (it lenses polar_matrix_1/2 as independent scalars). This equals
+        the complex remap P = Q + iU -> P(x + grad phi); a Tier-2 / curved-sky refinement
+        would multiply P by exp(2i*gamma) here (gamma from the deflection).
+        """
+        return self.lense(q), self.lense(u)
+
     def lense_adjoint(self, g):
         """Transpose  L' g  (exact adjoint of `lense` in the real pixel inner product).
 
