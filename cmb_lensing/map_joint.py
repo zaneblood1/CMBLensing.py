@@ -27,8 +27,14 @@ from scipy.optimize import minimize_scalar, minimize
 #                      step (alpha ~ 5e-4): it takes a fixed lbfgs_step (=1) along +H_k grad_phi,
 #                      where H_k is the L-BFGS inverse Hessian seeded by hessian = pinv(Cphi^-1 +
 #                      QE^-1) and refined by up to lbfgs_memory curvature pairs. Ignores use_mixing.
+#wiener_tol: tolerance of the per-step Wiener (profile-f) solve. For phi_optimizer="lbfgs" a
+#tight solve matters: by the envelope theorem grad_phi_logpdf equals the true profile-likelihood
+#gradient only at the exact Wiener f, so a loose solve (1e-1) feeds L-BFGS a biased gradient that
+#wobbles/crawls, while 1e-3 converges in ~5 steps (relnorm 0.013 vs 0.46 at 20 steps). Default
+#1e-1 keeps the existing line-search paths unchanged.
 def map_joint(data_set, num_steps = 30, constant_step = False, use_mixing = True,
-              phi_optimizer = "linesearch", lbfgs_memory = 20, lbfgs_step = 1.0):
+              phi_optimizer = "linesearch", lbfgs_memory = 20, lbfgs_step = 1.0,
+              wiener_tol = 1e-1):
 
     #unpack the necessary data from the data set object
     noise_covariance = data_set.noise_covariance
@@ -60,8 +66,8 @@ def map_joint(data_set, num_steps = 30, constant_step = False, use_mixing = True
 
     for _ in range(num_steps):
 
-        #compute the wiener filter of the predicted field
-        field_predict = wiener_filter(field_predict, phi_predict, data, field_covariance, noise_covariance, mask, beam)
+        #compute the wiener filter of the predicted field (profiles f at the current phi)
+        field_predict = wiener_filter(field_predict, phi_predict, data, field_covariance, noise_covariance, mask, beam, tol = wiener_tol)
 
         if phi_optimizer == "lbfgs":
             #delensalot-style line-search-free L-BFGS step in the mix-free parametrization.
