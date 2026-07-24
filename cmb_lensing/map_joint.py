@@ -9,6 +9,7 @@ from cmb_lensing.lense_flow import *
 from cmb_lensing.matrix_operators import *
 from cmb_lensing.statistics import *
 from cmb_lensing.wiener_filter import *
+from cmb_lensing.lbfgs import lbfgs_direction
 from scipy.optimize import minimize_scalar, minimize
 #NOTE minimize_scalar with Brent is faster for polarization (EB and TEB)
 #whereas minimize with BFGS is faster for T-only (and constant step is fastest of all
@@ -19,7 +20,15 @@ from scipy.optimize import minimize_scalar, minimize
 #use_mixing = True  -> the mixed-parametrization optimization (needs inverse lensing)
 #use_mixing = False -> a mix-free joint MAP in (f, phi) coordinates (forward + adjoint only);
 #                      useful with lensing backends whose inverse is approximate (e.g. NUFFT)
-def map_joint(data_set, num_steps = 30, constant_step = False, use_mixing = True):
+#phi_optimizer = "linesearch" -> the scipy scalar line search on the phi step (default; the
+#                      mixed / mix-free branches above)
+#phi_optimizer = "lbfgs" -> delensalot-style line-search-free L-BFGS quasi-Newton step in the
+#                      mix-free (f, phi) parametrization. Fixes the mix-free line search's tiny
+#                      step (alpha ~ 5e-4): it takes a fixed lbfgs_step (=1) along +H_k grad_phi,
+#                      where H_k is the L-BFGS inverse Hessian seeded by hessian = pinv(Cphi^-1 +
+#                      QE^-1) and refined by up to lbfgs_memory curvature pairs. Ignores use_mixing.
+def map_joint(data_set, num_steps = 30, constant_step = False, use_mixing = True,
+              phi_optimizer = "linesearch", lbfgs_memory = 20, lbfgs_step = 1.0):
 
     #unpack the necessary data from the data set object
     noise_covariance = data_set.noise_covariance
@@ -39,11 +48,45 @@ def map_joint(data_set, num_steps = 30, constant_step = False, use_mixing = True
 
     #compute the hessian which we will use to calculate the step in the phi direction
     hessian = pinv(phi_gradient_hessian(phi_covariance, quadratic_estimate))
+    #H0 for the L-BFGS recursion is the same fixed curvature preconditioner
+    apply_H0 = lambda field: hessian * field
     alpha = jnp.array(1.0)
+
+    #L-BFGS curvature history (phi_optimizer == "lbfgs"); plain python lists carried across the
+    #eager outer loop. s_i = phi_{i+1} - phi_i, y_i = -(grad_{i+1} - grad_i)
+    s_list, y_list = [], []
+    prev_grad_phi = None
+    prev_increment = None
+
     for _ in range(num_steps):
 
         #compute the wiener filter of the predicted field
         field_predict = wiener_filter(field_predict, phi_predict, data, field_covariance, noise_covariance, mask, beam)
+
+        if phi_optimizer == "lbfgs":
+            #delensalot-style line-search-free L-BFGS step in the mix-free parametrization.
+            #The wiener_filter above already re-solves (profiles) f at the current phi.
+            grad_phi = grad_phi_logpdf(field_predict, phi_predict, data, noise_covariance,
+                                       phi_covariance, field_covariance, mask, beam)
+            #now that we have the new gradient, store the curvature pair for the step just taken
+            if prev_increment is not None:
+                #minimized objective is -logpdf, so y = g_k - g_{k-1} = -(grad_k - grad_{k-1})
+                y_prev = -1 * (grad_phi - prev_grad_phi)
+                #curvature guard: only keep the pair if <s, y> > 0 (keeps H_k positive definite)
+                if dot(prev_increment, y_prev) > 0:
+                    s_list.append(prev_increment)
+                    y_list.append(y_prev)
+                    if lbfgs_memory is not None and len(s_list) > lbfgs_memory:
+                        s_list.pop(0)
+                        y_list.pop(0)
+            #ascent direction on logpdf; with empty history == hessian * grad_phi (unit Fisher step)
+            direction = lbfgs_direction(grad_phi, s_list, y_list, apply_H0, dot)
+            increment = lbfgs_step * direction
+            phi_predict = phi_predict + increment
+            #store the ACTUAL step (not the raw direction) so s_{k} = phi_{k+1} - phi_k is exact
+            prev_grad_phi = grad_phi
+            prev_increment = increment
+            continue
 
         if use_mixing:
             #must mix f and phi before taking the gradient
