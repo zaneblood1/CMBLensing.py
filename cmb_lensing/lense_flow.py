@@ -408,8 +408,42 @@ def get_m_matrix_components_at_time(time, phi_xx, phi_xy, phi_yy):
 def get_inverse_matrix_components(m_xx, m_xy, m_yy, eps = 1e-12):
     det = m_xx * m_yy - m_xy * m_xy
     #avoid divide by zero errors by supplying a small epsilon
-    inv_det = 1.0 / (det + eps) 
+    inv_det = 1.0 / (det + eps)
     m_inv_xx =  m_yy * inv_det
     m_inv_xy = -m_xy * inv_det
     m_inv_yy =  m_xx * inv_det
     return m_inv_xx, m_inv_xy, m_inv_yy
+
+# ----------------------------------------------------------------------
+# Optional NUFFT (lenspyx-style) lensing backend
+# ----------------------------------------------------------------------
+#When USE_NUFFT_LENSING is set, lense_flow / lense_flow_wrapper route to the flat-sky
+#ducc0 NUFFT deflection (cmb_lensing.nufft_deflect.nufft_lense) instead of the RK4 LenseFlow ODE.
+#The flag is read at JAX trace time, so set it (env var USE_NUFFT_LENSING=1, or
+#set_nufft_lensing(True)) BEFORE any jitted lensing is compiled; call jax.clear_caches()
+#if switching mid-process. Every downstream `from cmb_lensing.lense_flow import *` picks up
+#these dispatchers, so no call site changes.
+import os as _os
+USE_NUFFT_LENSING = _os.environ.get("USE_NUFFT_LENSING", "0") == "1"
+
+_lense_flow_ode = lense_flow
+_lense_flow_wrapper_ode = lense_flow_wrapper
+
+
+def set_nufft_lensing(flag):
+    global USE_NUFFT_LENSING
+    USE_NUFFT_LENSING = bool(flag)
+
+
+def lense_flow(field, phi, n = 10, direction = 1, adjoint = False):
+    if USE_NUFFT_LENSING:
+        from cmb_lensing.nufft_deflect.nufft_lense import nufft_lense_flow
+        return nufft_lense_flow(field, phi, n, direction, adjoint)
+    return _lense_flow_ode(field, phi, n, direction, adjoint)
+
+
+def lense_flow_wrapper(field, phi, n = 10, direction = 1, adjoint = False):
+    if USE_NUFFT_LENSING:
+        from cmb_lensing.nufft_deflect.nufft_lense import nufft_lense_flow_wrapper
+        return nufft_lense_flow_wrapper(field, phi, n, direction, adjoint)
+    return _lense_flow_wrapper_ode(field, phi, n, direction, adjoint)
