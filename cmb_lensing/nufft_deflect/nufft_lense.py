@@ -8,8 +8,13 @@ supplies the analytic backward (adjoint lensing for the field cotangent; the
 QE-style `grad_phi` for the phi cotangent), so `jax.grad`/`jax.vjp` through the
 lensing work exactly as they do for LenseFlow.
 
-Scope: temperature only (`FlatS0`, `scalar_matrix`). phi may be square real-space
-(MAP) or a rectangular rfft2 (FOURIER) array, exactly as `primal_lense_flow` allows.
+Scope: temperature (`FlatS0`, `scalar_matrix`) and polarization (`FlatS2` QU pair,
+`FlatS02` T+QU) via `singledispatch`-style shape dispatch in the wrappers. Spin-2 lensing
+is two independent scalar remaps of Q and U (no polarization rotation; matches LenseFlow
+on the flat sky) with the phi gradient summed over the Q and U legs (`grad_phi_pol`). For
+`FlatS02` the T scalar core and the QU pol core share the same phi array, so autodiff sums
+the T + Q + U phi-gradient legs automatically. phi may be square real-space (MAP) or a
+rectangular rfft2 (FOURIER) array, exactly as `primal_lense_flow` allows.
 
 The forward-mode backward is complete and validated; the inverse-mode phi gradient
 (needed only by the mixed-parametrization `mixing_jacobian_phi_component`) is
@@ -70,6 +75,37 @@ def _np_backward(field_arr, phi_arr, ct, pix_width, direction, adjoint):
     return ct_field, ct_phi
 
 
+def _np_apply_pol(q_arr, u_arr, phi_arr, pix_width, direction, adjoint):
+    q = np.asarray(q_arr, dtype = np.float64)
+    u = np.asarray(u_arr, dtype = np.float64)
+    d = FlatDeflection(_phi_map_from(phi_arr), pix_width)
+    if direction == INVERSE_LENSE and not adjoint:
+        return d.lense_inverse(q), d.lense_inverse(u)
+    forward = (direction == FORWARD_LENSE) ^ bool(adjoint)
+    return d.lense_pol(q, u) if forward else d.lense_adjoint_pol(q, u)
+
+
+def _np_backward_pol(q_arr, u_arr, phi_arr, ctq, ctu, pix_width, direction, adjoint):
+    q = np.asarray(q_arr, dtype = np.float64)
+    u = np.asarray(u_arr, dtype = np.float64)
+    ctq = np.asarray(ctq, dtype = np.float64)
+    ctu = np.asarray(ctu, dtype = np.float64)
+    phi_fourier = phi_arr.shape[0] != phi_arr.shape[1]
+    d = FlatDeflection(_phi_map_from(phi_arr), pix_width)
+
+    if direction == FORWARD_LENSE and not adjoint:
+        #out = L (q,u) -> ct_fields = L'(ctq,ctu),  ct_phi = summed Q+U QE legs
+        cfq, cfu = d.lense_adjoint_pol(ctq, ctu)
+        cp = d.grad_phi_pol(q, u, ctq, ctu, fourier_out = phi_fourier)
+    elif direction == INVERSE_LENSE and not adjoint:
+        #inverse phi-gradient dropped (see _np_backward); inverse primal unaffected
+        cfq = np.zeros_like(q); cfu = np.zeros_like(u); cp = np.zeros_like(phi_arr)
+    else:
+        cfq, cfu = d.lense_pol(ctq, ctu)
+        cp = np.zeros_like(phi_arr)
+    return cfq, cfu, cp
+
+
 # ----------------------------------------------------------------------
 # JAX custom_vjp core operating on raw arrays
 # ----------------------------------------------------------------------
@@ -104,18 +140,66 @@ _nufft_core.defvjp(_nufft_core_fwd, _nufft_core_bwd)
 
 
 # ----------------------------------------------------------------------
-# Field-level wrappers (drop-in for lense_flow / lense_flow_wrapper), T-only
+# spin-2 (QU) custom_vjp core: two field arrays through one pure_callback
 # ----------------------------------------------------------------------
-#phi.scalar_matrix is passed straight to the custom_vjp core (MAP square or FOURIER rfft2).
+@partial(jax.custom_vjp, nondiff_argnums = (3, 4, 5, 6))
+def _nufft_core_pol(q_arr, u_arr, phi_arr, pix_width, n, direction, adjoint):
+    N = q_arr.shape[0]
+    out_shape = (jax.ShapeDtypeStruct((N, N), q_arr.dtype), jax.ShapeDtypeStruct((N, N), u_arr.dtype))
+    def cb(qa, ua, pa):
+        qo, uo = _np_apply_pol(qa, ua, pa, pix_width, direction, adjoint)
+        return qo.astype(q_arr.dtype), uo.astype(u_arr.dtype)
+    return jax.pure_callback(cb, out_shape, q_arr, u_arr, phi_arr)
+
+
+def _nufft_core_pol_fwd(q_arr, u_arr, phi_arr, pix_width, n, direction, adjoint):
+    out = _nufft_core_pol(q_arr, u_arr, phi_arr, pix_width, n, direction, adjoint)
+    return out, (q_arr, u_arr, phi_arr)
+
+
+def _nufft_core_pol_bwd(pix_width, n, direction, adjoint, res, ct):
+    q_arr, u_arr, phi_arr = res
+    ctq, ctu = ct
+    shapes = (jax.ShapeDtypeStruct(q_arr.shape, q_arr.dtype),
+              jax.ShapeDtypeStruct(u_arr.shape, u_arr.dtype),
+              jax.ShapeDtypeStruct(phi_arr.shape, phi_arr.dtype))
+    def cb(qa, ua, pa, cq, cu):
+        cfq, cfu, cp = _np_backward_pol(qa, ua, pa, cq, cu, pix_width, direction, adjoint)
+        return cfq.astype(q_arr.dtype), cfu.astype(u_arr.dtype), cp.astype(phi_arr.dtype)
+    cfq, cfu, cp = jax.pure_callback(cb, shapes, q_arr, u_arr, phi_arr, ctq, ctu)
+    return (cfq, cfu, cp)
+
+
+_nufft_core_pol.defvjp(_nufft_core_pol_fwd, _nufft_core_pol_bwd)
+
+
+# ----------------------------------------------------------------------
+# Field-level wrappers (drop-in for lense_flow / lense_flow_wrapper)
+# ----------------------------------------------------------------------
+#phi.scalar_matrix is passed straight to the custom_vjp core(s) (MAP square or FOURIER rfft2).
 #For FOURIER phi the backward returns the gradient in the same fourier-native convention as
 #LenseFlow (i*k*rfft2 of the QE products, no 1/N^2), so the phi gradient is scaled
 #consistently with logpdf's dot()/fourier_weights and the map_joint Hessian.
+#Dispatch on the field's matrices: scalar_matrix -> T scalar core; polar_matrix_1/2 -> QU pol
+#core. For FlatS02 both run on the SAME phi array, so autodiff sums the T + Q + U phi-grad legs.
+def _nufft_dispatch(field, phi, n, direction, adjoint):
+    names = field._matrix_names()
+    phi_arr = phi.scalar_matrix
+    pw = field.pix_width
+    updates = {}
+    if "scalar_matrix" in names:
+        updates["scalar_matrix"] = _nufft_core(field.scalar_matrix, phi_arr, pw, n, direction, adjoint)
+    if "polar_matrix_1" in names:
+        qo, uo = _nufft_core_pol(field.polar_matrix_1, field.polar_matrix_2, phi_arr, pw, n, direction, adjoint)
+        updates["polar_matrix_1"] = qo
+        updates["polar_matrix_2"] = uo
+    return field.replace(**updates)
+
+
 def nufft_lense_flow(field, phi, n = 10, direction = 1, adjoint = False):
-    out = _nufft_core(field.scalar_matrix, phi.scalar_matrix, field.pix_width, n, direction, adjoint)
-    return field.replace(scalar_matrix = out)
+    return _nufft_dispatch(field, phi, n, direction, adjoint)
 
 
-#same as nufft_lense_flow but named to mirror lense_flow_wrapper; the custom_vjp lives on _nufft_core
+#same as nufft_lense_flow but named to mirror lense_flow_wrapper; the custom_vjp lives on the cores
 def nufft_lense_flow_wrapper(field, phi, n = 10, direction = 1, adjoint = False):
-    out = _nufft_core(field.scalar_matrix, phi.scalar_matrix, field.pix_width, n, direction, adjoint)
-    return field.replace(scalar_matrix = out)
+    return _nufft_dispatch(field, phi, n, direction, adjoint)
