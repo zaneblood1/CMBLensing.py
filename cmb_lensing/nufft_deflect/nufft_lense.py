@@ -20,6 +20,7 @@ The forward-mode backward is complete and validated; the inverse-mode phi gradie
 (needed only by the mixed-parametrization `mixing_jacobian_phi_component`) is
 implemented separately -- see `_np_backward`.
 """
+import os
 from functools import partial
 import numpy as np
 import jax
@@ -39,9 +40,33 @@ def _phi_map_from(phi_arr):
     return np.asarray(phi_arr, dtype = np.float64)
 
 
+#FlatDeflection.__init__ recomputes grad(phi) by FFT and rebuilds the (N^2, 2) coordinate array,
+#which at 256^2 is ~10 ms -- about a quarter of the per-call host time. phi is *constant* across
+#every CG iteration of a Wiener solve (and across the phi-gradient that follows it), so the same
+#deflection is rebuilt dozens of times per outer step. Cache it, keyed on the phi array itself.
+#A few slots rather than one because the mixed path evaluates logpdf at more than one phi within a
+#step (trial phi in the line search vs the fixed template), which would thrash a 1-slot cache.
+_DEFL_CACHE = []
+_DEFL_CACHE_MAX = int(os.environ.get("NUFFT_DEFL_CACHE", "4"))   #0 disables (A/B testing)
+
+
+def _get_deflection(phi_arr, pix_width):
+    phi_arr = np.asarray(phi_arr)
+    for entry in _DEFL_CACHE:
+        p_cached, pw_cached, defl = entry
+        if (pw_cached == pix_width and p_cached.shape == phi_arr.shape
+                and p_cached.dtype == phi_arr.dtype and np.array_equal(p_cached, phi_arr)):
+            return defl
+    defl = FlatDeflection(_phi_map_from(phi_arr), pix_width)
+    _DEFL_CACHE.append((phi_arr.copy(), pix_width, defl))
+    if len(_DEFL_CACHE) > _DEFL_CACHE_MAX:
+        _DEFL_CACHE.pop(0)
+    return defl
+
+
 def _np_apply(field_arr, phi_arr, pix_width, direction, adjoint):
     field_arr = np.asarray(field_arr, dtype = np.float64)
-    d = FlatDeflection(_phi_map_from(phi_arr), pix_width)
+    d = _get_deflection(phi_arr, pix_width)
     if direction == INVERSE_LENSE and not adjoint:
         return d.lense_inverse(field_arr)
     forward = (direction == FORWARD_LENSE) ^ bool(adjoint)
@@ -52,7 +77,7 @@ def _np_backward(field_arr, phi_arr, ct, pix_width, direction, adjoint):
     field_arr = np.asarray(field_arr, dtype = np.float64)
     ct = np.asarray(ct, dtype = np.float64)
     phi_fourier = phi_arr.shape[0] != phi_arr.shape[1]
-    d = FlatDeflection(_phi_map_from(phi_arr), pix_width)
+    d = _get_deflection(phi_arr, pix_width)
 
     if direction == FORWARD_LENSE and not adjoint:
         #out = L f  ->  ct_field = L' ct,  ct_phi = grad_phi(f, ct)
@@ -78,7 +103,7 @@ def _np_backward(field_arr, phi_arr, ct, pix_width, direction, adjoint):
 def _np_apply_pol(q_arr, u_arr, phi_arr, pix_width, direction, adjoint):
     q = np.asarray(q_arr, dtype = np.float64)
     u = np.asarray(u_arr, dtype = np.float64)
-    d = FlatDeflection(_phi_map_from(phi_arr), pix_width)
+    d = _get_deflection(phi_arr, pix_width)
     if direction == INVERSE_LENSE and not adjoint:
         return d.lense_inverse(q), d.lense_inverse(u)
     forward = (direction == FORWARD_LENSE) ^ bool(adjoint)
@@ -91,7 +116,7 @@ def _np_backward_pol(q_arr, u_arr, phi_arr, ctq, ctu, pix_width, direction, adjo
     ctq = np.asarray(ctq, dtype = np.float64)
     ctu = np.asarray(ctu, dtype = np.float64)
     phi_fourier = phi_arr.shape[0] != phi_arr.shape[1]
-    d = FlatDeflection(_phi_map_from(phi_arr), pix_width)
+    d = _get_deflection(phi_arr, pix_width)
 
     if direction == FORWARD_LENSE and not adjoint:
         #out = L (q,u) -> ct_fields = L'(ctq,ctu),  ct_phi = summed Q+U QE legs
