@@ -67,7 +67,8 @@ class DataSetEB(DataSet):
     data: FlatS2 = flax.struct.field(default_factory = lambda: FlatS2())
     unlensed_field: FlatS2 = flax.struct.field(default_factory = lambda: FlatS2())
     lensed_field: FlatS2 = flax.struct.field(default_factory = lambda: FlatS2())
-    phi: FlatS2 = flax.struct.field(default_factory = lambda: FlatS2())
+    #the lensing potential is a scalar field in every polarization mode
+    phi: FlatS0 = flax.struct.field(default_factory = lambda: FlatS0())
 
 #Full temperature and polarization parametrization data set
 @struct.dataclass

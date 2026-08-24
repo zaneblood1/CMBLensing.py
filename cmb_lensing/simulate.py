@@ -55,7 +55,7 @@ def beam_cls(beam_fwhm, ell):
 def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
     ell_prime = jnp.arange(2, lmax_prime)
     bls = beam_cls(beam_fwhm, ell_prime)
-    nls = 1 + (l_knee / ell_prime)**alpha_knee
+    nls = 1 #+ (l_knee / ell_prime)**alpha_knee
     cn_tt = jnp.nan_to_num(
         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * nls / bls,
         nan=0.0, posinf=0.0, neginf=0.0
@@ -64,6 +64,23 @@ def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
     cn_ee = 2 * cn_tt
     cn_bb = 2 * cn_tt
     return cn_tt, cn_te, cn_ee, cn_bb
+
+#---------------------------------------------- DEBUG --------------------------------------------------
+#NOTE how do things change when we just use pure white noise which is not a function of multipole ell?
+# def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
+#     ell_prime = jnp.arange(2, lmax_prime)
+#     #bls = beam_cls(beam_fwhm, ell_prime)
+#     #nls = #1 + (l_knee / ell_prime)**alpha_knee
+#     ones = jnp.ones_like(ell_prime)
+#     cn_tt = jnp.nan_to_num(
+#         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * ones, #nls / bls,
+#         nan=0.0, posinf=0.0, neginf=0.0
+#     )
+#     cn_te = jnp.zeros(cn_tt.shape)
+#     cn_ee = 2 * cn_tt
+#     cn_bb = 2 * cn_tt
+#     return cn_tt, cn_te, cn_ee, cn_bb
+#---------------------------------------------- DEBUG --------------------------------------------------
 
 
 # ── Covariance and Field Generation ──────────────────────────────────────
@@ -98,6 +115,41 @@ def covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls, origin_value=No
     if rescale:
         result = result / pix_width**2
     return result
+
+
+#covar_matrix_from_cls interpolates in log(Cl), so an identically-zero spectrum (unlensed
+#scalar BB at r = 0, the TE noise Cls) would come out NaN, not zero. This wrapper maps
+#all-zero spectra to an exactly zero covariance instead. The value-level check forces
+#eager evaluation, so this must only be called OUTSIDE jit (load_sim is eager)
+#@partial(jax.jit, static_argnames = ["cls"])
+def _covar_or_zeros(nside, pix_width, ell_grid, ells, cls, origin_value=None):
+    if bool(jnp.all(cls == 0)):
+        return jnp.zeros((nside, nside // 2 + 1))
+    return covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls,
+                                 origin_value=origin_value)
+
+
+#TE crosses zero, so it cannot go through the log-interpolating covariance builder. It is
+#carried instead as the correlation ratio rho = Cl_TE / sqrt(Cl_TT * Cl_EE): bounded in
+#(-1, 1), smooth, and interpolated LINEARLY onto the 2D ell grid (flat beyond the last
+#ell - the log-log extrapolation used for TT/EE has no analogue for a sign-changing
+#quantity, and those scales are noise-dominated anyway). Scaling by sqrt(cf_tt * cf_ee)
+#reconstructs the TE covariance from the SAME TT/EE the model uses everywhere else, so
+#|rho| <= 1 makes the 2x2 T/E block positive semi-definite BY CONSTRUCTION - an
+#independently interpolated TE could overshoot sqrt(TT * EE) and silently break
+#invert_block_matrix / block_matrix_logdet
+@jax.jit
+def te_covar_from_rho(rho, ells, ell_grid, cf_tt, cf_ee):
+    rho_grid = jnp.interp(ell_grid.flatten(), ells, rho).reshape(cf_tt.shape)
+    cf_te = rho_grid * jnp.sqrt(cf_tt * cf_ee)
+    return cf_te.at[0, 0].set(0.0)
+
+
+def te_rho_from_cls(cl_te, cl_tt, cl_ee):
+    """Correlation ratio rho(ell) from raw Cls, zero where TT or EE has no power."""
+    denominator = jnp.sqrt(cl_tt * cl_ee)
+    return jnp.where(denominator > 0, cl_te / jnp.where(denominator > 0, denominator, 1.0),
+                     0.0)
 
 
 def field_from_covar(nside, covar_matrix, rng_keys, key_counter):
@@ -136,7 +188,6 @@ def get_mask(l_cutoff, nside, pix_width, ell_grid):
     ell = jnp.arange(2, len(screen_cls)).astype(jnp.float64)
     return covar_matrix_from_cls(nside, pix_width, ell_grid, ell,
                                  screen_cls[2:], origin_value=1, rescale=False)
-
 
 def get_beam(nside, pix_width, ell_grid, lmax_prime, beam_fwhm=0):
     ell_prime = jnp.arange(2, lmax_prime).astype(jnp.float64)
@@ -188,17 +239,89 @@ def get_d_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
 @jax.jit
 def get_d_tt_matrix(cf_curr, cf_fid, cn_tt):
 
+    # def d_matrix_noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=5, l_knee=100, alpha_knee=3):
+    #     ell_prime = jnp.arange(2, lmax_prime)
+    #     bls = beam_cls(beam_fwhm, ell_prime)
+    #     nls = 1 + (l_knee / ell_prime)**alpha_knee
+    #     cn_tt = jnp.nan_to_num(
+    #         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * nls / bls,
+    #         nan=0.0, posinf=0.0, neginf=0.0
+    #     )
+    #     return cn_tt
+    
+    # lmax_prime = 4000
+    # theta_pix = 2
+    # ncl = d_matrix_noise_cls(lmax_prime, 5, beam_fwhm=2, l_knee=100, alpha_knee=3)
+    # ell_prime = jnp.arange(2, lmax_prime)
+    # ell_grid, pix_width = gen_ell_grid(cn_tt.shape[0], theta_pix)
+    #cn_tt_prime = _covar_or_zeros(256, pix_width, ell_grid, ell_prime, ncl, origin_value=0)
+    # cn_tt_prime = covar_matrix_from_cls(512, pix_width, ell_grid, ell_prime, ncl,
+    #                              origin_value=0)
+    pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
+    identity = jnp.ones(cn_tt.shape)
+    d_tt = cf_curr + pre_factor * identity + 2 * cn_tt #cn_tt_prime #
+    d_tt = jnp.sqrt(d_tt * reciprocal_matrix(cf_curr))
+    # seed = jax.random.PRNGKey(123)
+    # white = jax.random.normal(seed, shape = (cn_tt.shape[0], cn_tt.shape[0]))
+    # d_tt = 10 * jfft.rfft2(white)
+    return d_tt
+
+#D mixing matrix for T + P sampling with a full (nonzero-TE) 2x2 T/E block, following
+#get_d_matrix's validated algorithm: D^2 = (Cf + sigma_len^2 I + 2 Cn) * Cf^-1 on the
+#coupled T/E block (Schur inverse + block square root, with the same d_et choice for
+#both off-diagonals that empirically matches Julia). The unlensed scalar B field has
+#zero power at r = 0, so its block is set to the IDENTITY where cf_bb = 0: the B prior
+#is a delta at zero and the field carries no B power to whiten, any invertible choice is
+#valid there, and the identity keeps mix/unmix invertible while contributing nothing to
+#logdet(D). (The naive formula would give d_bb = 0 via the pinv-style reciprocal, which
+#zeroes the mixed B sector.) Nonzero cf_bb entries (e.g. a future tensor-power run)
+#whiten normally. With cf_te = 0 this reduces exactly to the previous diagonal-block
+#version (block_matrix_sqrt of a diagonal block is the elementwise sqrt)
+@jax.jit
+def get_d_teb_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
     pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
     identity = jnp.ones(cn_tt.shape)
 
-    d_tt = cf_curr + pre_factor * identity + 2 * cn_tt
-    d_tt = jnp.sqrt(d_tt * reciprocal_matrix(cf_curr))
+    cf_inv_tt, cf_inv_te, cf_inv_et, cf_inv_ee = invert_block_matrix(cf_tt, cf_te,
+                                                                     cf_te, cf_ee)
+    cf_inv_tt, cf_inv_te, cf_inv_et, cf_inv_ee = [
+        jnp.nan_to_num(x, nan=0, posinf=0, neginf=0)
+        for x in (cf_inv_tt, cf_inv_te, cf_inv_et, cf_inv_ee)
+    ]
 
-    #d_tt_0 = cf_fid + pre_factor * identity + 2 * cn_tt
-    #d_tt_0 = jnp.sqrt(d_tt_0 * reciprocal_matrix(cf_fid))
+    sum_tt = cf_tt + pre_factor * identity + 2 * cn_tt
+    sum_te = cf_te + 2 * cn_te
+    sum_ee = cf_ee + pre_factor * identity + 2 * cn_ee
 
-    #d_tt = reciprocal_matrix(d_tt_0) * d_tt
-    return d_tt
+    ones = jnp.ones(cn_tt.shape)
+    d_tt, d_te, d_et, d_ee, _ = teb_matrix_mult(
+        sum_tt, sum_te, sum_te, sum_ee, ones,
+        cf_inv_tt, cf_inv_te, cf_inv_et, cf_inv_ee, ones
+    )
+    d_tt, d_te, _, d_ee = block_matrix_sqrt(d_tt, d_et, d_et, d_ee)
+
+    d_bb = jnp.where(cf_bb != 0,
+                     jnp.sqrt((cf_bb + pre_factor * identity + 2 * cn_bb)
+                              * reciprocal_matrix(cf_bb)),
+                     1.0)
+    return d_tt, d_te, d_ee, d_bb
+
+#D mixing matrix for POLARIZATION-ONLY (pol = "P", FlatS2 / DiagonalEB) sampling. The
+#E and B blocks are diagonal (no T, hence no TE coupling), so this is get_d_teb_matrix
+#restricted to its E/B sector - identical to that function's d_ee / d_bb when cf_te = 0
+#(block_matrix_sqrt of a diagonal block is the elementwise sqrt), including the IDENTITY
+#B block where cf_bb = 0 (unlensed B has zero power at r = 0; see get_d_teb_matrix)
+@jax.jit
+def get_d_eb_matrix(cf_ee, cf_bb, cn_ee, cn_bb):
+    pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
+    identity = jnp.ones(cn_ee.shape)
+    d_ee = jnp.sqrt((cf_ee + pre_factor * identity + 2 * cn_ee)
+                    * reciprocal_matrix(cf_ee))
+    d_bb = jnp.where(cf_bb != 0,
+                     jnp.sqrt((cf_bb + pre_factor * identity + 2 * cn_bb)
+                              * reciprocal_matrix(cf_bb)),
+                     1.0)
+    return d_ee, d_bb
 
 # ── G Matrix ──────────────────────────────────────────────────────────────
 
@@ -212,15 +335,26 @@ def get_g_matrix(cphi_fid, nphi, a_phi_fid, a_phi = 1):
 @jax.jit
 def get_g_matrix_lcdm(cphi_fid, cphi_curr, nphi, cn_tt):
 
+    # def g_matrix_noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=5, l_knee=100, alpha_knee=3):
+    #     ell_prime = jnp.arange(2, lmax_prime)
+    #     bls = beam_cls(beam_fwhm, ell_prime)
+    #     nls = 1 + (l_knee / ell_prime)**alpha_knee
+    #     cn_tt = jnp.nan_to_num(
+    #         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * nls / bls,
+    #         nan=0.0, posinf=0.0, neginf=0.0
+    #     )
+    #     return cn_tt
+    
+    # cn_tt_prime = g_matrix_noise_cls(4000, 10, beam_fwhm=5, l_knee=100, alpha_knee=3)
+    # qe = scalar_quadratic_estimate(cn["TT"], cf["TT"], cfl["TT"],
+    #                                    mask, beam, pix_width) / nphi_fac
+
     g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_fid))
     g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_curr))
     g = reciprocal_matrix(g0) * g
-
-    #NOTE experimenting with a G-analogue of the D-mixing matrix
-    # pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
-    # identity = jnp.ones(cn_tt.shape)
-    # g = cphi_curr + pre_factor * identity + 2 * cn_tt
-    # g = jnp.sqrt(g * reciprocal_matrix(cphi_curr))
+    # seed = jax.random.PRNGKey(456)
+    # white = jax.random.normal(seed, shape = (cn_tt.shape[0], cn_tt.shape[0]))
+    # g = 10 * jfft.rfft2(white)
     return g
 
 # @jax.jit
@@ -418,6 +552,16 @@ def get_polar_qe_norm_at_position(tf2e, cf_ee, sigma_e, tf2b, cf_bb, sigma_b,
 
 def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
               lmax_prime, k_pivot, Alens):
+    #compute above the ell we use: lensed Cl within ~lens_margin of the computed lmax are
+    #biased (lensing needs unlensed power beyond lmax), so add a buffer and slice down
+    # lmax_compute = lmax_prime + 300
+    # pars = camb.set_params(
+    #     H0=H0, ombh2=ombh2, omch2=omch2, cosmomc_theta=cosmomc_theta,
+    #     r=r, mnu=mnu, As=As, nt=nt, ns=ns, lmax=lmax_compute,
+    #     tau=tau, pivot_scalar=k_pivot, pivot_tensor=k_pivot, Alens=Alens,
+    #     lens_potential_accuracy=1, max_eta_k=2.5 * lmax_compute,
+    #     AccuracyBoost=2.0, lAccuracyBoost=2.0, lSampleBoost=3,
+    # )
     pars = camb.set_params(
         H0=H0, ombh2=ombh2, omch2=omch2, cosmomc_theta=cosmomc_theta,
         r=r, mnu=mnu, As=As, nt=nt, ns=ns, lmax=lmax_prime,
@@ -693,11 +837,13 @@ def interpolate_cls(cls, lmax, lmax_prime):
 def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
              ombh2=0.0224567, omch2=0.118489, cosmomc_theta=0.0104098,
              r=0.0, mnu=0.06, tau=0.05, As=jnp.exp(3.043) * 1e-10,
-             nt=0, ns=0.968602, lmax=17_000,
-             k_pivot = 0.05, Alens=1, nphi_fac=2, a_phi = 1): 
+             nt=0, ns=0.968602, lmax=4000,
+             k_pivot = 0.05, Alens=1, nphi_fac=2, a_phi = 1,
+             use_emulator_cls = True):
    #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
 
-    lmax_prime = min(lmax, EMULATOR_MAX_ELL)
+    #lmax_prime = min(lmax, EMULATOR_MAX_ELL)
+    lmax_prime = min(lmax, 4000)
 
     unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
         H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
@@ -709,89 +855,140 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     keys = jax.random.split(jax.random.PRNGKey(master_seed), 100)
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
-    #-------------------------------------------- DEBUG --------------------------------------------
-    #emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
-    emulator = cambemul.loademul("/resnick/groups/wugroup/zblood/cmb_lensing/camb_emulator")
-    output = emulator.predict({"theta_MC_100": cosmomc_theta * 100, 
-                                "logA": jnp.log(As * 1e10), 
-                                "ns": ns,
-                                "tau": tau,
-                                "ombh2": ombh2, 
-                                "omch2": omch2})
-    cls["phi"] = interpolate_cls(output["pp"], lmax, lmax_prime)
-    cls[f"scalar_TT"] = interpolate_cls(output["tt_unlensed"], lmax, lmax_prime)
-    #-------------------------------------------- DEBUG --------------------------------------------
+    #override the TT/PP spectra with the emulator's prediction so the data map is
+    #self-consistent with an emulator-based sampler. With use_emulator_cls = False the
+    #CAMB spectra from _extract_all_cls above are kept (for a CAMB-based sampler, e.g.
+    #the cached-CAMB 1D parameter splines from precompute_camb_1d.py used in
+    #sample_lcdm_legacy.py)
+    if use_emulator_cls:
+        #the emulator only predicts TT and PP, so an emulator-consistent polarization data
+        #map is impossible - EE/BB would silently come from CAMB while TT came from the
+        #emulator, and the model and data would disagree at the ~emulator-error level
+        if pol != "I":
+            raise ValueError("use_emulator_cls = True only supports pol = 'I' - the "
+                             "emulator has no EE/BB heads. Polarization data maps must "
+                             "be CAMB-generated (use_emulator_cls = False)")
+        emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
+        #emulator = cambemul.loademul("/resnick/groups/wugroup/zblood/cmb_lensing/camb_emulator")
+        output = emulator.predict({"theta_MC_100": cosmomc_theta * 100,
+                                    "logA": jnp.log(As * 1e10),
+                                    "ns": ns,
+                                    "tau": tau,
+                                    "ombh2": ombh2,
+                                    "omch2": omch2})
+        cls["phi"] = interpolate_cls(output["pp"], lmax, lmax_prime)
+        cls[f"scalar_TT"] = interpolate_cls(output["tt_unlensed"], lmax, lmax_prime)
+
+    #ells arrays matched to the cls lengths: the emulator override returns ells
+    #2..lmax inclusive while the CAMB dl2cl path returns 2..lmax-1
+    phi_ells = jnp.arange(2, 2 + cls["phi"].shape[0]).astype(jnp.float64)
 
     #Lensing potential
-    unscaled_cphi = covar_matrix_from_cls(nside, pix_width, ell_grid, 
-                                          jnp.arange(2, lmax + 1).astype(jnp.float64), 
+    unscaled_cphi = covar_matrix_from_cls(nside, pix_width, ell_grid,
+                                          phi_ells,
                                           cls["phi"], origin_value=0)
+    # unscaled_cphi = covar_matrix_from_cls(nside, pix_width, ell_grid, 
+    #                                       jnp.arange(2, lmax).astype(jnp.float64), 
+    #                                       cls["phi"], origin_value=0)
     cphi = a_phi * unscaled_cphi
     phi, kc = field_from_covar(nside, cphi, keys, 0)
 
-    #Unlensed field covariances (scalar + tensor)
+    #Unlensed field covariances (scalar + tensor). Unlensed scalar BB (identically zero
+    #at r = 0) cannot go through the log-interpolating covariance builder (log(0) -> NaN)
+    #so _covar_or_zeros maps it to an exactly zero matrix. TE crosses zero, so it is
+    #built from the correlation ratio rho = Cl_TE / sqrt(Cl_TT * Cl_EE) instead
+    #(te_covar_from_rho): linear interpolation of rho onto the ell grid, scaled by
+    #sqrt(cf_tt * cf_ee), which keeps the T/E block positive semi-definite by
+    #construction and matched to the sampler's grid-spline TE path
     cf = {}
     cf_scalar = {}
     cf_tensor = {}
-    for comp in ("TT",): # "TE", "EE", "BB"):
-        cf_scalar[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, 
-                                                jnp.arange(2, lmax + 1).astype(jnp.float64),
-                                                cls[f"scalar_{comp}"], origin_value=0)
-        cf_tensor[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
+    pol_comps = ("TT",) if pol == "I" else ("TT", "EE", "BB")
+    for comp in pol_comps:
+        scalar_ells = jnp.arange(2, 2 + cls[f"scalar_{comp}"].shape[0]).astype(jnp.float64)
+        cf_scalar[comp] = _covar_or_zeros(nside, pix_width, ell_grid,
+                                          scalar_ells,
+                                          cls[f"scalar_{comp}"], origin_value=0)
+        cf_tensor[comp] = _covar_or_zeros(nside, pix_width, ell_grid, ells,
                                           cls[f"tensor_{comp}"], origin_value=0)
         cf[comp] = cf_scalar[comp] #+ cf_tensor[comp]
+    if pol != "I":
+        scalar_ells = jnp.arange(2, 2 + cls["scalar_TE"].shape[0]).astype(jnp.float64)
+        rho_te = te_rho_from_cls(cls["scalar_TE"], cls["scalar_TT"], cls["scalar_EE"])
+        cf["TE"] = cf_scalar["TE"] = te_covar_from_rho(rho_te, scalar_ells, ell_grid,
+                                                       cf["TT"], cf["EE"])
+        cf_tensor["TE"] = jnp.zeros((nside, nside // 2 + 1))
 
-    #Lensed field covariances
+    #Lensed field covariances (TE via the same correlation-ratio route)
     cfl = {comp: covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
                                        cls[f"total_{comp}"], origin_value=0)
-           for comp in ("TT", "TE", "EE", "BB")}
+           for comp in ("TT", "EE", "BB")}
+    rho_te_lensed = te_rho_from_cls(cls["total_TE"], cls["total_TT"], cls["total_EE"])
+    cfl["TE"] = te_covar_from_rho(rho_te_lensed, ells, ell_grid, cfl["TT"], cfl["EE"])
 
-    #Unlensed random fields
-    field_t, kc = field_from_covar(nside, cf["TT"], keys, kc)
-    #field_e, kc = field_from_covar(nside, cf["EE"], keys, kc)
-    #field_b, kc = field_from_covar(nside, cf["BB"], keys, kc)
+    #Unlensed random fields. T and E are drawn CORRELATED to match the model's TE block:
+    #E ~ N(0, C_EE), then T = (C_TE / C_EE) E + t_indep with
+    #t_indep ~ N(0, C_TT - C_TE^2 / C_EE), which gives exactly
+    #Cov = [[C_TT, C_TE], [C_TE, C_EE]] (the conditional variance is
+    #C_TT (1 - rho^2) >= 0 by the |rho| <= 1 construction; the maximum(0) guards
+    #round-off only). The B draw against a zero covariance gives an exactly zero field
+    if pol == "I":
+        field_t, kc = field_from_covar(nside, cf["TT"], keys, kc)
+    else:
+        conditional_tt = jnp.maximum(
+            cf["TT"] - cf["TE"]**2 * reciprocal_matrix(cf["EE"]), 0.0)
+        t_indep, kc = field_from_covar(nside, conditional_tt, keys, kc)
+        field_e, kc = field_from_covar(nside, cf["EE"], keys, kc)
+        field_b, kc = field_from_covar(nside, cf["BB"], keys, kc)
+        te_ratio = cf["TE"] * reciprocal_matrix(cf["EE"])
+        field_t = jfft.irfft2(te_ratio * jfft.rfft2(field_e)) + t_indep
 
     #Lensing
-    # lensed_t, lensed_e, lensed_b = _lens_fields(
-    #     field_t, field_e, field_b, phi, pix_width, nside, theta_pix
-    # )
-    lensed_t = jfft.rfft2(primal_lense_flow(
-        field_t, phi, pix_width, n=10, direction=FORWARD_LENSE, adjoint=False
-    ))
+    if pol == "I":
+        lensed_t = jfft.rfft2(primal_lense_flow(
+            field_t, phi, pix_width, n=10, direction=FORWARD_LENSE, adjoint=False
+        ))
+    else:
+        lensed_t, lensed_e, lensed_b = _lens_fields(
+            field_t, field_e, field_b, phi, pix_width, nside, theta_pix
+        )
 
     #DEBUG: are the mask or beam influencing the poorness of the algorithm?
     #Instrument response
-    mask = jnp.ones_like(get_mask(3000, nside, pix_width, ell_grid))
+    mask = jnp.ones_like(get_mask(4000, nside, pix_width, ell_grid))
     beam = get_beam(nside, pix_width, ell_grid, lmax_prime)
 
-    #Noise covariance and white noise
+    #Noise covariance and white noise (the TE noise Cls are identically zero, so
+    #_covar_or_zeros keeps that block an exact zero matrix instead of NaN)
     n_tt, n_te, n_ee, n_bb = noise_cls(lmax_prime, uk_arcmin_t)
     ell_prime = jnp.arange(2, lmax_prime)
     cn = {}
     for comp, ncl in zip(("TT", "TE", "EE", "BB"), (n_tt, n_te, n_ee, n_bb)):
-        cn[comp] = covar_matrix_from_cls(nside, pix_width, ell_grid, ell_prime, ncl, origin_value=0)
+        cn[comp] = _covar_or_zeros(nside, pix_width, ell_grid, ell_prime, ncl, origin_value=0)
 
     wn_t, kc = field_from_covar(nside, cn["TT"], keys, kc)
-    # wn_e, kc = field_from_covar(nside, cn["EE"], keys, kc)
-    # wn_b, kc = field_from_covar(nside, cn["BB"], keys, kc)
+    if pol != "I":
+        wn_e, kc = field_from_covar(nside, cn["EE"], keys, kc)
+        wn_b, kc = field_from_covar(nside, cn["BB"], keys, kc)
 
     #Data = Mask * Beam * Lensed + Noise
     data_t = mask * beam * lensed_t + jfft.rfft2(wn_t)
-    # data_e = mask * beam * lensed_e + jfft.rfft2(wn_e)
-    # data_b = mask * beam * lensed_b + jfft.rfft2(wn_b)
+    if pol != "I":
+        data_e = mask * beam * lensed_e + jfft.rfft2(wn_e)
+        data_b = mask * beam * lensed_b + jfft.rfft2(wn_b)
 
     #Convert unlensed fields to Fourier space
-    #field_t, field_e, field_b = jfft.rfft2(field_t), jfft.rfft2(field_e), jfft.rfft2(field_b)
     field_t = jfft.rfft2(field_t)
+    if pol != "I":
+        field_e, field_b = jfft.rfft2(field_e), jfft.rfft2(field_b)
 
-    #D matrix
-    # d_tt, d_te, d_ee, d_bb = get_d_matrix(
-    #     cf["TT"], cf["TE"], cf["EE"], cf["BB"],
-    #     cn["TT"], cn["TE"], cn["EE"], cn["BB"]
-    # )
-
+    #D matrix (full T/E block including TE; see get_d_teb_matrix for the identity B
+    #block at r = 0)
     #d_tt = get_d_tt_matrix(cf["TT"], 0*cf["TT"], cn["TT"], 1, 1)
     d_tt = get_d_tt_matrix(cf["TT"], cf["TT"], cn["TT"])
+    if pol != "I":
+        d_tt, d_te, d_ee, d_bb = get_d_teb_matrix(cf["TT"], cf["TE"], cf["EE"], cf["BB"],
+                                                  cn["TT"], cn["TE"], cn["EE"], cn["BB"])
 
     #Quadratic estimate
     if pol == "I":
@@ -814,20 +1011,20 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
             cf, cf_scalar, cf_tensor, cfl, cn, d_tt, g, mask, beam,
             field_t, lensed_t, data_t, r, a_phi
         )
-    # elif pol == "P":
-    #     return _build_dataset_eb(
-    #         nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
-    #         cf, cf_scalar, cf_tensor, cfl, cn, d_ee, d_bb, g, mask, beam,
-    #         field_e, field_b, lensed_e, lensed_b, data_e, data_b, r, a_phi
-    #     )
-    # else:
-    #     return _build_dataset_teb(
-    #         nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
-    #         cf, cf_scalar, cf_tensor, cfl, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
-    #         field_t, field_e, field_b,
-    #         lensed_t, lensed_e, lensed_b,
-    #         data_t, data_e, data_b, r, a_phi
-    #     )
+    elif pol == "P":
+        return _build_dataset_eb(
+            nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
+            cf, cf_scalar, cf_tensor, cfl, cn, d_ee, d_bb, g, mask, beam,
+            field_e, field_b, lensed_e, lensed_b, data_e, data_b, r, a_phi
+        )
+    else:
+        return _build_dataset_teb(
+            nside, theta_pix, pix_width, cphi, unscaled_cphi, qe, phi,
+            cf, cf_scalar, cf_tensor, cfl, cn, d_tt, d_te, d_ee, d_bb, g, mask, beam,
+            field_t, field_e, field_b,
+            lensed_t, lensed_e, lensed_b,
+            data_t, data_e, data_b, r, a_phi
+        )
 
 def batch_simulated_trials(num_trials=10, nside=256, theta_pix=2,
                            uk_arcmin_t=10, lmax=17_000, pol="I"):

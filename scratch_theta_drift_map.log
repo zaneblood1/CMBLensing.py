@@ -1,0 +1,15 @@
+Running as unit: run-r475b362afbc04d929a6d74064e86dd02.scope; invocation ID: 13ee523848174ceb9fc3de7aa2b57332
+building data set...
+building args at truth...
+--- refresh_qe = True ---
+  theta_c = +0.00 sigma -> conditional argmax at +0.000 sigma (drift +0.000 sigma)
+  theta_c = +0.25 sigma -> conditional argmax at +0.300 sigma (drift +0.050 sigma)
+  theta_c = +0.50 sigma -> conditional argmax at +0.800 sigma (drift +0.300 sigma)
+  theta_c = +1.00 sigma -> conditional argmax at +1.050 sigma (drift +0.050 sigma)
+  theta_c = +1.50 sigma -> conditional argmax at +1.000 sigma (drift -0.500 sigma)
+--- refresh_qe = False ---
+  theta_c = +0.00 sigma -> conditional argmax at +0.000 sigma (drift +0.000 sigma)
+  theta_c = +0.25 sigma -> conditional argmax at +0.300 sigma (drift +0.050 sigma)
+  theta_c = +0.50 sigma -> conditional argmax at +0.800 sigma (drift +0.300 sigma)
+  theta_c = +1.00 sigma -> conditional argmax at +1.050 sigma (drift +0.050 sigma)
+  theta_c = +1.50 sigma -> conditional argmax at +1.000 sigma (drift -0.500 sigma)

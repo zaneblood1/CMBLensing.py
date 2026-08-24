@@ -9,7 +9,7 @@ from functools import singledispatch
 
 @jax.custom_vjp
 @jax.jit
-def lense_flow_wrapper(field, phi, n = 10, direction = 1, adjoint = False):
+def lense_flow_wrapper(field, phi, n = 12, direction = 1, adjoint = False):
     return lense_flow(field, phi, n, direction, adjoint)
 
 @jax.jit
@@ -286,7 +286,7 @@ def _(field):
 #Lense flow is just applied sequentially to each data matrix in the field
 #NOTE lense flow only works in the MAP basis and EB must be converted to QU
 #before the function is applied
-def lense_flow(field, phi, n = 10, direction = 1, adjoint = False):
+def lense_flow(field, phi, n = 12, direction = 1, adjoint = False):
     updates = {name: primal_lense_flow(getattr(field, name), phi.scalar_matrix,
                field.pix_width, n, direction, adjoint) for name in field._matrix_names()}
     return field.replace(**updates)

@@ -1,0 +1,24 @@
+Running as unit: run-rd4d08c3e50a34e7f8cb16fee48a804a1.scope; invocation ID: d04a6c22de9047a6a41c80da9852f6a0
+building data set...
+building args...
+evaluating conditional (17 thetas)...
+  theta = 0.979328 (-2.000 sigma): logpdf = 35449.4818
+  theta = 0.985879 (-1.750 sigma): logpdf = 35479.3423
+  theta = 0.992429 (-1.500 sigma): logpdf = 35515.2860
+  theta = 0.998980 (-1.250 sigma): logpdf = 35548.6173
+  theta = 1.005530 (-1.000 sigma): logpdf = 35575.3334
+  theta = 1.012081 (-0.750 sigma): logpdf = 35598.2825
+  theta = 1.018631 (-0.500 sigma): logpdf = 35620.2454
+  theta = 1.025182 (-0.250 sigma): logpdf = 35638.2190
+  theta = 1.031732 (+0.000 sigma): logpdf = 35645.7859
+  theta = 1.038282 (+0.250 sigma): logpdf = 35640.0141
+  theta = 1.044833 (+0.500 sigma): logpdf = 35622.5845
+  theta = 1.051383 (+0.750 sigma): logpdf = 35596.6017
+  theta = 1.057934 (+1.000 sigma): logpdf = 35565.2588
+  theta = 1.064484 (+1.250 sigma): logpdf = 35532.6130
+  theta = 1.071035 (+1.500 sigma): logpdf = 35501.7292
+  theta = 1.077585 (+1.750 sigma): logpdf = 35473.2308
+  theta = 1.084136 (+2.000 sigma): logpdf = 35445.1659
+argmax at theta = 1.031732 (+0.000 training sigma)
+logpdf(argmax) - logpdf(truth) = 0.0000
+fine argmax at theta = 1.031732 (+0.000 training sigma)

@@ -1,0 +1,28 @@
+Running as unit: run-red345b7455984e4e8d7355d5533b033d.scope; invocation ID: 714d8df0152f4a739f13fc2e35f18698
+building data set...
+running sample_joint (2 sweeps, f/phi sampling ON)...
+cambemul.Emulator loaded: obs=['PP', 'derived', 'uEE', 'uTE', 'uTT']
+  params=['theta_MC_100', 'logA', 'ns', 'ombh2', 'omch2']  nell=3999 (ell 2..4000)
+held-out precision:
+| observable   | metric     |   median |   95% |     max |   <1% |   n_test |
+|--------------|------------|----------|-------|---------|-------|----------|
+| PP           | fractional |    0.55% | 2.09% |  16.78% |   75% |    13107 |
+| sigma8       | fractional |    0.01% | 0.03% |   0.60% |     - |    13107 |
+| H0           | fractional |    0.01% | 0.07% |   0.78% |     - |    13107 |
+| uEE          | fractional |    0.74% | 2.79% |  53.23% |   62% |    13107 |
+| uTE          | err/RMS    |    1.62% | 7.90% | 219.98% |   33% |    13107 |
+| uTT          | fractional |    0.74% | 2.92% |  51.83% |   62% |    13107 |
+delta_H = -0.0007865786756156012
+phi accept rate = 1.0
+percent delta_h positive = 0.0
+theta_MC_100 accept rate = 1.0
+delta_H = -0.0010200809701927938
+phi accept rate = 1.0
+percent delta_h positive = 0.0
+theta_MC_100 accept rate = 1.0
+OK - completed 2 sweeps
+theta_MC_100 [1.031732, array(1.03136267), array(1.03039253)]
+logA [3.218387]
+ns [0.959814]
+ombh2 [0.022386]
+omch2 [0.109381]
