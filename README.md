@@ -60,13 +60,6 @@ The LCDM sampler evaluates CAMB spectra through a 5D cubic spline over ```(H0, l
 
 [Download camb_grid_spline.npz (Google Drive, ~7.9 GB)](https://drive.google.com/file/d/1HhVjNPMi4OR3vn7j7DkdK0pDnF_iNVBr/view?usp=sharingg)
 
-Google Drive interposes a "can't scan for viruses" page on files this large, which breaks plain ```wget```/```curl```; the ```gdown``` package handles it. From the repository root:
-
-```bash
-pip install gdown
-gdown --id <GOOGLE_DRIVE_FILE_ID> -O cmb_lensing/camb_splines/camb_grid_spline.npz
-```
-
 Free Drive accounts occasionally hit a daily download quota on large shared files; if ```gdown``` reports "too many users have viewed or downloaded this file", retry the next day or download it manually from the link above and place it at the path shown. The five small 1D caches (```camb_<param>_grid.npz```, ~3 MB each) are tracked in the repository and need no download. ```sample_lcdm.py``` looks for the grid at exactly ```cmb_lensing/camb_splines/camb_grid_spline.npz``` (```CAMB_GRID_PATH```).
 
 # FILE STRUCTURE
