@@ -839,7 +839,8 @@ def update_args_after_sample(current_params, predictors, args,
 
 #algorithm to jointly sample cosmological parameters
 def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, noise_level, 
-                 advanced_logging, iters_per_chain = 10_000, num_burn_in_fix_theta = 100, phi_init = "MAP",
+                 advanced_logging, fixed_fields = False, phi_init = "MAP",
+                 iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
                  num_burn_in_always_accept = 0, seed = None, map_idx = 1, sub_chain_idx = 1,  
                  lmax = DEFAULT_MAX_ELL, metropolis_num_steps = 1, hpc_path = None):
 
@@ -935,21 +936,26 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
 
     for iter in range(1, iters_per_chain + 1):
 
-        #1. sample the temperature field
-        rng_key, sub_key = jax.random.split(sub_key)
-        temp_field = gibbs_sample_f(field_zeroes, data_field, phi, args, rng_key)
+        #The "fixed_fields" flag can be used for quick debugging of the theta step 
+        #assuming we have perfect knowledge of the ground truth (f, phi) pair
+        if not fixed_fields:
+            #1. sample the temperature field
+            rng_key, sub_key = jax.random.split(sub_key)
+            temp_field = gibbs_sample_f(field_zeroes, data_field, phi, args, rng_key)
 
-        #2. mix the fields
-        mixed_temp, mixed_phi = mix(temp_field, phi, args["mixing_d"], args["mixing_g"])
+            #2. mix the fields
+            mixed_temp, mixed_phi = mix(temp_field, phi, args["mixing_d"], args["mixing_g"])
 
-        #3. sample the lensing potential phi
-        rng_key, sub_key = jax.random.split(sub_key)
-        mixed_phi, delta_h, accept = gibbs_sample_phi(mixed_phi, mixed_temp, data_field, rng_key,
-                                                args, iter, num_burn_in_always_accept)
-        if advanced_logging["phi_acceptance"]:
-            phi_acceptance.append(int(accept))
-            print(f"Phi accept rate = {np.sum(np.array(phi_acceptance)) / len(phi_acceptance)}")
-            print(f"delta_H = {delta_h}")
+            #3. sample the lensing potential phi
+            rng_key, sub_key = jax.random.split(sub_key)
+            mixed_phi, delta_h, accept = gibbs_sample_phi(mixed_phi, mixed_temp, data_field, rng_key,
+                                                    args, iter, num_burn_in_always_accept)
+            if advanced_logging["phi_acceptance"]:
+                phi_acceptance.append(int(accept))
+                print(f"Phi accept rate = {np.sum(np.array(phi_acceptance)) / len(phi_acceptance)}")
+                print(f"delta_H = {delta_h}")
+        else:
+            mixed_temp, mixed_phi = mix(data_set.unlensed_field, data_set.phi, args["mixing_d"], args["mixing_g"])
 
         #4. sample your cosmo parameters
         if iter >= num_burn_in_fix_theta:
@@ -981,7 +987,8 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
                                             args, pol = pol)
 
         #6. unmix the fields using the updated version of the G & D matrices
-        _, phi = unmix(mixed_temp, mixed_phi, args["mixing_d"], args["mixing_g"])
+        if not fixed_fields:
+            _, phi = unmix(mixed_temp, mixed_phi, args["mixing_d"], args["mixing_g"])
 
         #7. plot certain diagnostics if user specified
         if advanced_logging["plot_log_pdf"]:

@@ -54,6 +54,21 @@ Five sequential 1-D Metropolis-Hastings steps are used in the specific step of t
 
 Once the tuning has been done for the map size, resolution, polarity, noise levels, masking, and beam configurations you wish to use, you may then follow the example code in the ```\sampling_chains_TEMPLATE``` folder to run a larger experiment on an HPC by averaging over many data map realizations. Once the chains have converged, ```chain_analysis.py``` has code to convert these MCMC samples into distributions whose mode / std determine the best estimator / confidence level for the LCDM parameters given the input data maps. 
 
+# PRECOMPUTED CAMB GRID (DOWNLOAD)
+
+The LCDM sampler evaluates CAMB spectra through a 5D cubic spline over ```(H0, logA, ns, ombh2, omch2)``` stored in ```cmb_lensing/camb_splines/camb_grid_spline.npz```. That file is ~7.9 GB, so it is **not** in the repository (GitHub rejects it). Either rebuild it on an HPC with the scripts in ```sampling_chains_TEMPLATE/``` (```camb_grid.sh``` → ```merge_camb_grid.py``` → ```validate_camb_grid.py```, ~70k CAMB calls) or download the prebuilt copy from Google Drive:
+
+[Download camb_grid_spline.npz (Google Drive, ~7.9 GB)](https://drive.google.com/file/d/1HhVjNPMi4OR3vn7j7DkdK0pDnF_iNVBr/view?usp=sharingg)
+
+Google Drive interposes a "can't scan for viruses" page on files this large, which breaks plain ```wget```/```curl```; the ```gdown``` package handles it. From the repository root:
+
+```bash
+pip install gdown
+gdown --id <GOOGLE_DRIVE_FILE_ID> -O cmb_lensing/camb_splines/camb_grid_spline.npz
+```
+
+Free Drive accounts occasionally hit a daily download quota on large shared files; if ```gdown``` reports "too many users have viewed or downloaded this file", retry the next day or download it manually from the link above and place it at the path shown. The five small 1D caches (```camb_<param>_grid.npz```, ~3 MB each) are tracked in the repository and need no download. ```sample_lcdm.py``` looks for the grid at exactly ```cmb_lensing/camb_splines/camb_grid_spline.npz``` (```CAMB_GRID_PATH```).
+
 # FILE STRUCTURE
 
 ```
