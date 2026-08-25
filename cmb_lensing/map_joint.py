@@ -93,22 +93,3 @@ def logpdf_at_phi_new(alpha, grad_phi, mixed_field, phi_predict, data,
     
     #return negative one times the logpdf
     return -1*logpdf_value
-
-#Jitted line search which is just a dumb sequential lax.map
-#NOTE this is here if we want it but is not currently used in the actual MAP_joint code
-@jax.jit                                                                                                                                                                                    
-def line_search(alpha, mixed_phi, hessian, mixed_grad_phi, mixed_field,
-                mixing_d, mixing_g, data, noise_covariance,                                                                                                                                 
-                phi_covariance, field_covariance, mask, beam):                                                                                                                              
-                                                                                                                                                                                            
-    alphas = jnp.linspace(0, alpha, 10)                                                                                                                                                     
-                                                                                                                                                                                            
-    def evaluate(test_alpha):                                                                                                                                                                    
-        test_phi = mixed_phi + test_alpha * hessian * mixed_grad_phi
-        field, phi = unmix(mixed_field, test_phi, mixing_d, mixing_g)                                                                                                                       
-        return -1 * logpdf(field, phi, data, noise_covariance,                                                                                                                              
-                           phi_covariance, field_covariance, 
-                           mask, beam)                                                                                                                    
-                                                                                                                                                                                            
-    values = jax.lax.map(evaluate, alphas)                                                                                                                                                     
-    return alphas[jnp.argmin(values)]

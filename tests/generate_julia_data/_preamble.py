@@ -1,9 +1,8 @@
 import os
-os.environ["PYTHON_JULIAPKG_PROJECT"] = "/home/zane-blood/CMBLensing.jl"
+os.environ["PYTHON_JULIAPKG_PROJECT"] = "/<PATH_TO>/CMBLensing.jl"
 os.environ["PYTHON_JULIAPKG_OFFLINE"] = "yes"
 
 from cmb_lensing.constants import THETA_PIX_DEFAULT, NSIDE_DEFAULT
-
 
 def init_julia():
     from juliacall import Main as jl

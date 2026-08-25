@@ -11,9 +11,9 @@ once, off the tensor-product cubic spline built by merge_camb_grid.py.
     predictors.tt_lensed, predictors.ee_lensed, predictors.bb_lensed
 
 Every loader returns a GridPredictors namedtuple of functions with the emulator's
-predictor signature f(emu_params, params_batch) -> (M, n_ell), with emu_params ignored
-and params_batch ordered as sample_lcdm_legacy.PARAM_ORDER, so each drops straight into
-every existing call site (eval_logpdf_grid, _recompute_cosmo_matrices,
+predictor signature f(params_batch) -> (M, n_ell), with params_batch ordered as
+sample_lcdm.PARAM_ORDER, so each drops straight into
+every existing call site (make_eval_logpdf_batch, _recompute_cosmo_matrices,
 get_new_cf_matrix). The unlensed spectra feed the field covariances, PP the phi
 covariance, and the lensed spectra the theta-dependent quadratic-estimate (and through
 it mass-matrix / G) recompute. Unlensed scalar BB is identically zero on the r = 0
@@ -43,8 +43,7 @@ scipy's RegularGridInterpolator(method="cubic") on this grid shape was measured 
 per call - it rebuilds splines on every evaluation. Because merge_camb_grid.py already
 solved for the cubic B-spline coefficients, evaluation here is just a local
 4-point-per-axis separable contraction, which is both exact (it reproduces the same
-interpolating cubic spline) and fast. _eval_bspline is checked against an independent
-tensor-product reference in tests/test_camb_grid_interp.py.
+interpolating cubic spline) and fast.
 """
 
 import os
@@ -52,10 +51,9 @@ from collections import namedtuple
 import numpy as np
 import jax
 import jax.numpy as jnp
-
 jax.config.update("jax_enable_x64", True)
 
-#the sampler's parameter ordering (sample_lcdm_legacy.PARAM_ORDER)
+#the sampler's parameter ordering (sample_lcdm.PARAM_ORDER)
 PARAM_ORDER = ["theta_MC_100", "logA", "ns", "ombh2", "omch2"]
 #the grid's axis ordering - same, but with the acoustic axis in H0
 GRID_AXES = ["H0", "logA", "ns", "ombh2", "omch2"]
@@ -79,7 +77,6 @@ N_THETA_DENSE = 2000
 #how far outside an axis a query may land, as a fraction of that axis's span, before it is
 #treated as out of box rather than snapped to the edge. Covers round-off only
 BOUNDARY_TOL = 1e-9
-
 
 # ── Cubic B-spline evaluation ─────────────────────────────────────────────
 
@@ -236,7 +233,7 @@ class CambGrid:
         if not os.path.exists(path):
             raise FileNotFoundError(
                 f"no merged CAMB grid at {path} - generate the grid with "
-                f"performance_testing/sampling_chains/camb_grid.sh and merge it with "
+                f"camb_grid.sh and merge it with "
                 f"merge_camb_grid.py")
         data = np.load(path)
         self.path = path
@@ -319,7 +316,7 @@ class CambGrid:
                 raise KeyError(
                     f"the merged CAMB grid at {self.path} has no {spectrum} spectrum - it "
                     f"predates the polarization/lensed-Cl extension. Re-run "
-                    f"performance_testing/sampling_chains/camb_grid.sh and "
+                    f"sampling_chains/camb_grid.sh and "
                     f"merge_camb_grid.py to regenerate it")
             self._coeff_cache[spectrum] = self._data[key]
         return self._coeff_cache[spectrum]
@@ -420,171 +417,7 @@ class CambGrid:
         grads[:, 4] = g[:, 4] + g[:, 0] * dh0_doc[:, None]
         return grads
 
-
-# ── JAX-native (differentiable) evaluation ────────────────────────────────
-#The pure_callback predictors above are opaque to autodiff - jax.grad through them raises.
-#The functions below re-evaluate the SAME spline coefficients with jnp ops only, so the
-#whole Cl prediction (including the theta_MC_100 -> H0 inversion) sits inside the autodiff
-#graph. This is what gradient-based theta samplers (blackjax NUTS in sample_lcdm_legacy)
-#need. It also removes the vmap_method = "sequential" callback, so batched evaluations
-#vectorize instead of running one query at a time.
-
-def _basis_weights_jax(knots, x):
-    """The 4 cubic B-spline weights at x and the index of the first coefficient they
-    multiply - the jnp counterpart of one row of _axis_stencil. de Boor's BasisFuns
-    recursion with the degree-3 loops unrolled; differentiable in x. Assumes x already
-    lies inside [knots[3], knots[-4]]."""
-    degree = 3
-    i = jnp.clip(jnp.searchsorted(knots, x, side = "right") - 1,
-                 degree, knots.shape[0] - degree - 2)
-    left = [x - knots[i + 1 - j] for j in range(degree + 1)]
-    right = [knots[i + j] - x for j in range(degree + 1)]
-    weights = [jnp.ones_like(x)] + [jnp.zeros_like(x)] * degree
-    for j in range(1, degree + 1):
-        saved = jnp.zeros_like(x)
-        for r in range(j):
-            temp = weights[r] / (right[r + 1] + left[j - r])
-            weights[r] = saved + right[r + 1] * temp
-            saved = left[j - r] * temp
-        weights[j] = saved
-    return i - degree, jnp.stack(weights)
-
-
-def _eval_bspline_jax(coeff, knots, point):
-    """Differentiable counterpart of _eval_bspline for a SINGLE query point.
-
-    coeff  - jnp coefficients, shape (n_0, ..., n_{k-1}) + (any trailing dims)
-    knots  - list of k jnp knot vectors
-    point  - (k,) query in parameter units
-
-    Returns trailing-shaped values, all-NaN if the point falls outside the box (same
-    BOUNDARY_TOL semantics as _eval_bspline). Out-of-box or non-finite coordinates are
-    replaced by the box midpoint BEFORE any arithmetic: the final jnp.where still returns
-    NaN for them, but the branch that autodiff differentiates stays finite everywhere -
-    otherwise a 0 * NaN in the where cotangent would poison every upstream gradient."""
-    n_axes = len(knots)
-    trailing = coeff.shape[n_axes:]
-    valid = jnp.bool_(True)
-    starts = []
-    weight_vecs = []
-    for a, knot in enumerate(knots):
-        lo, hi = knot[3], knot[-4]
-        tol = BOUNDARY_TOL * (hi - lo)
-        x = point[a]
-        finite = jnp.isfinite(x)
-        valid = valid & finite & (x >= lo - tol) & (x <= hi + tol)
-        x_safe = jnp.where(finite, jnp.clip(x, lo, hi), 0.5 * (lo + hi))
-        idx, w = _basis_weights_jax(knot, x_safe)
-        starts.append(jnp.asarray(idx, dtype = jnp.int32))
-        weight_vecs.append(w)
-    #one dynamic_slice of the local 4-per-axis block, then the same separable contraction
-    #as the numpy path. the trailing starts must share the traced starts' dtype - a bare
-    #Python 0 would promote to int64 under x64 and dynamic_slice rejects the mix
-    block = jax.lax.dynamic_slice(coeff,
-                                  tuple(starts) + (jnp.int32(0),) * len(trailing),
-                                  (4,) * n_axes + trailing)
-    for w in weight_vecs:
-        block = jnp.tensordot(w, block, axes = ([0], [0]))
-    return jnp.where(valid, block, jnp.nan)
-
-
-_loaded_jax_predictors = {}
-
-
-def load_camb_grid_predictors_jax(path):
-    """Differentiable counterpart of load_camb_grid_predictors: the same GridPredictors
-    namedtuple of f(emu_params, params_batch) -> (M, n_ell) functions with emu_params
-    ignored, but built from jnp ops instead of a numpy pure_callback, so jax.grad flows
-    through the Cls (and through the theta_MC_100 -> H0 inversion) all the way back to
-    the parameter vector. Out-of-box queries still return NaN rows, with finite
-    (zero-contribution) gradients.
-
-    Costs one jnp copy per USED coefficient table (~1.1 GB each for the production grid,
-    converted lazily at first trace, on top of the numpy tables the callback path holds);
-    cached per path afterwards, like load_camb_grid. WARNING: jit additionally embeds
-    closed-over jnp arrays as constants in every executable that traces these predictors,
-    which OOMs small-RAM machines - use load_camb_grid_predictors_grad there instead; it
-    computes identical values and gradients from the shared numpy tables alone."""
-    path = os.path.abspath(path)
-    if path in _loaded_jax_predictors:
-        return _loaded_jax_predictors[path]
-    grid = load_camb_grid(path)
-
-    jnp_coeffs = {}
-
-    def jnp_coeff(spectrum):
-        #lazy per-spectrum jnp conversion so unused tables cost nothing
-        if spectrum not in jnp_coeffs:
-            jnp_coeffs[spectrum] = jnp.asarray(grid.coeff(spectrum))
-        return jnp_coeffs[spectrum]
-
-    knots = [jnp.asarray(k) for k in grid.knots]
-    coeff_theta = jnp.asarray(grid.coeff_theta_dense)
-    theta_knots = [jnp.asarray(k) for k in grid.theta_knots]
-    h0_dense = jnp.asarray(grid.h0_dense)
-
-    def h0_from_theta(theta, ombh2, omch2):
-        """jnp mirror of CambGrid.h0_from_theta for one query: spline the densified
-        theta(H0) curve to this (ombh2, omch2), then invert it by interpolation. NaN when
-        theta is unreachable inside the grid's H0 range (with the same round-off
-        tolerance), via the same sanitize-then-mask pattern as _eval_bspline_jax."""
-        curve = _eval_bspline_jax(coeff_theta, theta_knots, jnp.stack([ombh2, omch2]))
-        curve_ok = jnp.all(jnp.isfinite(curve))
-        #monotone finite stand-in for the invalid case so jnp.interp's vjp never sees NaN
-        curve_safe = jnp.where(curve_ok, curve,
-                               jnp.linspace(0.0, 1.0, curve.shape[0]))
-        tol = BOUNDARY_TOL * (curve_safe[-1] - curve_safe[0])
-        finite = jnp.isfinite(theta)
-        valid = (curve_ok & finite & (theta >= curve_safe[0] - tol)
-                 & (theta <= curve_safe[-1] + tol))
-        theta_safe = jnp.where(finite, jnp.clip(theta, curve_safe[0], curve_safe[-1]),
-                               0.5 * (curve_safe[0] + curve_safe[-1]))
-        h0 = jnp.interp(theta_safe, curve_safe, h0_dense)
-        return jnp.where(valid, h0, jnp.nan)
-
-    def grid_point(params):
-        """(5,) in PARAM_ORDER -> (5,) in the grid's own axes (theta_MC_100 -> H0)."""
-        h0 = h0_from_theta(params[0], params[3], params[4])
-        return jnp.stack([h0, params[1], params[2], params[3], params[4]])
-
-    def in_box(point):
-        #jnp mirror of CambGrid._points_valid for one grid-axes point, same tolerance
-        valid = jnp.bool_(True)
-        for a, knot in enumerate(knots):
-            lo, hi = knot[3], knot[-4]
-            tol = BOUNDARY_TOL * (hi - lo)
-            x = point[a]
-            valid = valid & jnp.isfinite(x) & (x >= lo - tol) & (x <= hi + tol)
-        return valid
-
-    def make_predictor(spectrum):
-        if not grid.has_spectrum(spectrum):
-            return _missing_spectrum_predictor(grid, spectrum)
-        if spectrum == "bb" and grid.bb_is_zero:
-            def predict_zero(emu_params, params_batch):
-                valid = jax.vmap(lambda p: in_box(grid_point(p)))(params_batch)
-                zeros = jnp.zeros((params_batch.shape[0], grid.n_ell))
-                return jnp.where(valid[:, None], zeros, jnp.nan)
-            return predict_zero
-
-        def predict(emu_params, params_batch):
-            coeff = jnp_coeff(spectrum)
-            if spectrum in LINEAR_SPECTRA:
-                return jax.vmap(
-                    lambda p: _eval_bspline_jax(coeff, knots, grid_point(p))
-                )(params_batch)
-            return jax.vmap(
-                lambda p: jnp.exp(_eval_bspline_jax(coeff, knots, grid_point(p)))
-            )(params_batch)
-        return predict
-
-    predictors = GridPredictors(*[make_predictor(name) for name in SPECTRA])
-    _loaded_jax_predictors[path] = predictors
-    return predictors
-
-
 _loaded_grids = {}
-
 
 def load_camb_grid(path):
     """Load (and cache) a merged grid. Cached so the file is opened once per process even
@@ -595,101 +428,24 @@ def load_camb_grid(path):
         _loaded_grids[path] = CambGrid(path)
     return _loaded_grids[path]
 
-
 def _missing_spectrum_predictor(grid, spectrum):
     """Stand-in slot for a spectrum the grid file does not hold: raises with a clear
     message the moment it is called (i.e. at trace time), so a pre-polarization grid
     file keeps working for T-only sampling."""
-    def predict(emu_params, params_batch):
+    def predict(params_batch):
         raise KeyError(
             f"the merged CAMB grid at {grid.path} has no {spectrum} spectrum - it "
             f"predates the polarization/lensed-Cl extension. Re-run "
-            f"performance_testing/sampling_chains/camb_grid.sh and merge_camb_grid.py "
+            f"sampling_chains/camb_grid.sh and merge_camb_grid.py "
             f"to regenerate it")
     return predict
 
-
-_loaded_grad_predictors = {}
-
-
-def load_camb_grid_predictors_grad(path):
-    """Differentiable predictors that keep the coefficient tables OUT of every XLA
-    program: the forward pass is the same numpy pure_callback as
-    load_camb_grid_predictors, and the backward pass is a second pure_callback evaluating
-    the analytic spline derivatives (CambGrid.spline_param_grads), glued with
-    jax.custom_vjp. Same GridPredictors namedtuple of
-    f(emu_params, params_batch) -> (M, n_ell) functions, emu_params ignored.
-
-    Prefer these over load_camb_grid_predictors_jax when memory is tight: jit embeds
-    closed-over jnp arrays as constants in EVERY executable that traces them, so the
-    pure-JAX predictors cost ~2.3 GB per jitted consumer (NUTS warmup, NUTS kernel, ...)
-    on top of the jnp copies themselves, which OOMs a 16 GB machine. Here the only copy
-    is the numpy one shared with the callback path. Out-of-box queries return NaN rows
-    with zero (finite) gradients, matching the pure-JAX predictors' behavior."""
-    path = os.path.abspath(path)
-    if path in _loaded_grad_predictors:
-        return _loaded_grad_predictors[path]
-    grid = load_camb_grid(path)
-
-    def make_predictor(spectrum):
-        if not grid.has_spectrum(spectrum):
-            return _missing_spectrum_predictor(grid, spectrum)
-
-        def eval_fn(params_batch):
-            return grid.cl(spectrum, params_batch)
-
-        @jax.custom_vjp
-        def predict_cl(params_batch):
-            M = params_batch.shape[0]
-            return jax.pure_callback(
-                eval_fn, jax.ShapeDtypeStruct((M, grid.n_ell), jnp.float64),
-                params_batch, vmap_method = "sequential"
-            )
-
-        def predict_cl_fwd(params_batch):
-            cl = predict_cl(params_batch)
-            return cl, (params_batch, cl)
-
-        def predict_cl_bwd(residuals, cotangent):
-            params_batch, cl = residuals
-
-            def host_grad(pb, cl_np, ct_np):
-                dspline = grid.spline_param_grads(pb, spectrum)    #(M, 5, n_ell)
-                if spectrum in LINEAR_SPECTRA:
-                    #the splined quantity IS the returned value (te_rho)
-                    dcl = dspline
-                else:
-                    #lnCl spline: d Cl / d params = Cl * d lnCl / d params
-                    dcl = cl_np[:, None, :] * dspline
-                #NaN rows (out-of-box queries) contribute zero gradient, matching the
-                #sanitize-then-mask behavior of the pure-JAX predictors
-                return np.einsum("ml,mkl->mk", np.nan_to_num(ct_np),
-                                 np.nan_to_num(dcl))
-
-            g = jax.pure_callback(
-                host_grad, jax.ShapeDtypeStruct(params_batch.shape, jnp.float64),
-                params_batch, cl, cotangent, vmap_method = "sequential"
-            )
-            return (g,)
-
-        predict_cl.defvjp(predict_cl_fwd, predict_cl_bwd)
-
-        def predict(emu_params, params_batch):
-            return predict_cl(params_batch)
-        return predict
-
-    predictors = GridPredictors(*[make_predictor(name) for name in SPECTRA])
-    _loaded_grad_predictors[path] = predictors
-    return predictors
-
-
 _loaded_callback_predictors = {}
-
 
 def load_camb_grid_predictors(path):
     """Returns a GridPredictors namedtuple of functions with the emulator predictor
-    signature f(emu_params, params_batch) -> (M, n_ell), backed by the 5D grid spline.
-    emu_params is ignored. jit-safe via jax.pure_callback, matching
+    signature f(params_batch) -> (M, n_ell), backed by the 5D grid spline.
+    jit-safe via jax.pure_callback, matching
     load_camb_spline_predictors. Cached per path so consumers passing the predictors as
     static jit arguments always see the same function objects."""
     path = os.path.abspath(path)
@@ -704,7 +460,7 @@ def load_camb_grid_predictors(path):
         def eval_fn(params_batch):
             return grid.cl(spectrum, params_batch)
 
-        def predict(emu_params, params_batch):
+        def predict(params_batch):
             M = params_batch.shape[0]
             return jax.pure_callback(
                 eval_fn, jax.ShapeDtypeStruct((M, grid.n_ell), jnp.float64),

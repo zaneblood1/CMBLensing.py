@@ -1,26 +1,71 @@
-CMBLensing.py is the JAX compatible version of the original CMBLensing.jl Julia package. Just like the original Julia code it was migrated from, it allows the user to generate sample temperature and polarization CMB fields, lensing potentials, and covariance matrices. The lense_flow algorithm can then be used to quickly lense, inverse lense, or adjoint lense these fields. By taking gradients of the logpdf function which computes the loglikelihood that a given f and phi pair were the sources of an observed data field, we can compute the maximum likelihood estimators for f and phi. 
+# BACKGROUND
 
-Once the code is downloaded onto your local computer (e.g. using git clone) run "pip install -e ." from the /cmb_lensing folder to compile the pyproject.toml file and load all the necessary dependencies. In order to generate fresh Julia comparison data to run the unit tests, you will need to have juliacall installed in your environment and the original CMBLensing.jl installed as well. 
+CMBLensing.py is the JAX compatible version of the original [CMBLensing.jl](https://github.com/marius311/CMBLensing.jl) Julia package. Just like the original Julia code it was migrated from, it allows the user to generate synthetic temperature and polarization CMB fields, lensing potentials, and covariance matrices. The ```lense_flow``` algorithm can then be used to quickly lense, inverse lense, or adjoint lense these fields. By taking gradients of the logpdf function which computes the log-likelihood that a given ```(f, phi)``` pair were the sources of an observed data field, we can compute the maximum likelihood estimators for ```f``` and ```phi```. For map sizes at or below 256 x 256 square pixels, the Julia code and Python code are on the same order of magnitude in terms of the time it takes for the ```map_joint``` algorithm to finish. For larger maps, the Python code base is slightly slower. Decreasing the time complexity here is an active area of investigation. 
 
-The unit tests can either be called in bulk or individually. To generate a fresh set of data for a specific set of unit tests, from the VSCode terminal run "python tests/generate_julia_data/generate_[name of test].py". To generate data for ALL the unit tests, simply run "python /tests/generate_julia_data/generate_all.py". In order to run specific unit tests, run "pytest /tests/test_[name of test].py" or to run all unit tests at once simply call "pytest". Whenever calling unit tests, you can specify the "--generate" flag which tells python to automatically generate a fresh batch of Julia data for that unit test or set of unit tests. 
+In addition to its ```map_joint``` implementation, CMBLensing.py also re-purposes the sampling algorithm employed in CMBLensing.jl (see e.g. [Millea M, et. al.](https://arxiv.org/abs/2002.00965)) to jointly sample the 5 LCDM parameters in the script ```sample_lcdm.py```. Given a synthetically generated data field as input (where the temperature and / or polarization fields were generated with known ground truth values) and a search range for each LCDM parameter, this algorithm recovers MCMC samples of each parameter which can be used to form probability distributions whose modes represent the inferred value of the cosmological parameter and whose widths indicate the uncertainty in the estimator. A single pilot chain can be run for a single data map by running the  ```__main__``` method in ```sample_lcdm.py``` or a larger experiment can be run by using the template slurm scripts provided in ```sampling_chains_TEMPLATE``` to average over many data map realizations and minimize cosmic variance.
 
-Note that the way these unit tests work is to compare the results from CMBLensing.jl to CMBLensing.py. Therefore, they are more of a set of benchmark tests than actual unit tests. This is just a sanity check to ensure that there is no different behavior between the two different language implementations of CMBLensing. Also note that many of the unit tests do not actually explicitly error if there is a dramatic difference between Julia and Python. Instead, to be safe, the user should launch the unit test visualizer located in /tests/index.html with e.g. the VSCode Go-Live extension and manually inspect the comparison plots. 
+# GENERAL USE SETUP GUIDE
 
-The file structure of the code is as follows:
+Once the code is downloaded onto your local computer (e.g. using ```git clone```) run ```pip install -e .``` from the ```/cmb_lensing``` folder to compile the ```pyproject.toml``` file and load all the necessary dependencies. 
+
+An example notebook which shows how to generate synthetic data, lense maps, and run the ```map_joint``` algorithm is located in the ```\docs``` folder.
+
+If your main wish is to use the sampling / LCDM parameter inference portion of the codebase over the ```map_joint``` algorithm, more information can be found in the "LCDM SAMPLING" section. 
+
+In order to generate fresh Julia comparison data to run the unit tests, you will need to have [juliacall](https://juliapy.github.io/PythonCall.jl/stable/juliacall/) installed in your environment and the original [CMBLensing.jl](https://github.com/marius311/CMBLensing.jl) installed as well. Unless you plan to act as a developer for the project and actually edit the source code - it is not necessary nor recommended to run or edit the unit tests.
+
+# DEVELOPER SETUP GUIDE & UNIT TESTS
+
+If you wish to add new features, upgrade existing portions of the code base, or otherwise serve in some similar "developer" role, it is recommended that you run and review the unit tests before pushing any changes. In order to run the unit tests, you must first edit the ```PYTHON_JULIAPKG_PROJECT``` file path in ```_preamble.py``` to match the actual location of ```CMBLensing.jl``` on your local machine. 
+
+The unit tests mainly cover the ```map_joint``` and ```load_sim``` sections of the code base and do not check the sampling algorithm / LCDM parameter inference portion of the code. The unit tests are more of an A/B test against the original Julia code base that this repository was migrated from rather than true unit tests. We mainly check that for the same inputs the two codebases agree up to numerical precision in terms of their corresponding outputs. 
+
+Most of the time the unit tests will only fail if something is horribly wrong. Often there can be silent failures and it is recommended to launch the unit test visualizer from the ```index.html``` file using e.g. VSCode's GoLive extension and visually inspect all of the diff plots. 
+
+The unit tests can either be called in bulk or individually. 
+
+To generate a fresh set of data for a specific set of unit tests, from the VSCode terminal run ```python tests/generate_julia_data/generate_[name of test].py```. 
+
+To generate data for ALL the unit tests, simply run ```python /tests/generate_julia_data/generate_all.py```. 
+
+Once the comparison data is generated, in order to run specific unit tests, run ```pytest /tests/test_[name of test]```.py" or to run all unit tests at once simply call ```pytest```. 
+
+Whenever calling unit tests, you can specify the ```--generate``` flag which tells python to automatically generate a fresh batch of Julia data for that unit test or set of unit tests.
+
+After you have made any development changes and confirmed the unit tests still function, simply submit a pull request to have your changes reviewed and merged.
+
+# SYNTHETIC FIELD GENERATION
+
+CMBLensing.py is able to generate synthetic temperature, polarization, or temperature + polarization CMB fields, lensing potential maps, and data fields (which include lensing effects and white, 1/f, or beam noise and masking added in) with the use of the ```load_sim``` method located in ```simulate.py```. All of these maps are generated in the flat sky approximation using Fourier modes instead of spherical harmonics. Refer to ```docs/map_joint_tutorial.ipynb``` for an example of how to call the field generating method. 
+
+# MAP JOINT
+
+The ```map_joint``` method is based on the algorithm of the same name in CMBLensing.jl and was first introduced in [Millea M, et. al.](https://arxiv.org/pdf/1708.06753). It jointly calculates the Maximum A Posteriori estimates of the unlensed CMB field and lensing potential given a noisy, lensed data map and known covariance matrices (generated using e.g. CAMB). Behind the scenes, the ```map_joint``` algorithm employs an alternating gradient descent algorithm in ```(f, phi)``` parameter space to find the specific pair which minimizes a Gaussian log-likelihood. Refer to the sample Jupyter notebook for examples of how to call and run this method.
+
+# LCDM SAMPLING
+
+The sampling algorithm ```sample_joint``` that CMBLensing.py employs was originally developed in this [paper](https://arxiv.org/pdf/1708.06753) to jointly infer the lensing potential band power and the tensor-to-scalar-ratio from noisy, lensed polarization data. We slightly modify the algorithm here in the Python version to allow the user to jointly sample any or all of the LCDM parameters. 
+
+The code is currently hard-coded to take a known prior value on the optical depth to reionization due to its strong degeneracies with some of the other parameters, but this could be modified if need be.
+
+It is possible to either use temperature only, polarization only, or temperature + polarization data as the input to the inference enginer by switching the ```pol``` flag to either ```"I", "P", or "IP"```. Switching to ```IP``` decreases the degeneracies between certain parameters, but it also raises the time complexity of the algorithm considerably. 
+
+Five sequential 1-D Metropolis-Hastings steps are used in the specific step of the MCMC algorithm that samples the LCDM parameters. Before running a larger experiment on an HPC using the code base, it is recommend to run a pilot chain on a smaller map (e.g. 128 x 128 pixels) in order to tune the 5 MH proposal widths for each parameter as well as the number of steps and step size for the HMC step used to sample the lensing potential. One should target an acceptance rate of about 44% for each of the LCDM parameters and 65% for the lensing potential step to effective explore the parameter space.
+
+Once the tuning has been done for the map size, resolution, polarity, noise levels, masking, and beam configurations you wish to use, you may then follow the example code in the ```\sampling_chains_TEMPLATE``` folder to run a larger experiment on an HPC by averaging over many data map realizations. Once the chains have converged, ```chain_analysis.py``` has code to convert these MCMC samples into distributions whose mode / std determine the best estimator / confidence level for the LCDM parameters given the input data maps. 
+
+# FILE STRUCTURE
 
 ```
 cmb_lensing/
+├── .gitignore
+├── CLAUDE.md
 ├── LICENSE
 ├── README.md
 ├── pyproject.toml
-├── camb_emulator/
-│   ├── emu_derived.npz
-│   ├── emu_PP.npz
-│   ├── emu_uEE.npz
-│   ├── emu_uTE.npz
-│   └── emu_uTT.npz
 ├── cmb_lensing/
 │   ├── __init__.py
+│   ├── camb_grid_interp.py
 │   ├── constants.py
 │   ├── dataset.py
 │   ├── fields.py
@@ -29,14 +74,39 @@ cmb_lensing/
 │   ├── map_joint.py
 │   ├── matrix_operators.py
 │   ├── mixing.py
+│   ├── precompute_camb_1d.py
 │   ├── sample_lcdm.py
-│   ├── sampling_ar.py
 │   ├── simulate.py
 │   ├── statistics.py
 │   ├── util.py
-│   └── wiener_filter.py
+│   ├── wiener_filter.py
+│   └── camb_splines/                  (generated locally, not tracked)
+│       ├── camb_grid_spline.npz       (5D CAMB grid from merge_camb_grid.py)
+│       ├── camb_logA_grid.npz         (1D caches from precompute_camb_1d.py)
+│       ├── camb_ns_grid.npz
+│       ├── camb_ombh2_grid.npz
+│       ├── camb_omch2_grid.npz
+│       └── camb_theta_MC_100_grid.npz
 ├── docs/
-│   └── tutorial.ipynb
+│   └── map_joint_tutorial.ipynb
+├── runtime_comparison_TEMPLATE/       (copy to runtime_comparison/ and fill in the placeholders)
+│   ├── julia_performance_test.jl
+│   ├── julia_performance_test.sh
+│   ├── performance_analysis.py
+│   ├── python_performance_test.py
+│   ├── python_performance_test.sh
+│   └── run_performance_test.sh
+├── sampling_chains_TEMPLATE/          (copy to sampling_chains/ and fill in the placeholders)
+│   ├── camb_grid.sh
+│   ├── chain_analysis.py
+│   ├── merge_camb_grid.py
+│   ├── run_single_camb_grid.py
+│   ├── run_single_camb_grid.sh
+│   ├── run_single_lcdm_chain.py
+│   ├── run_single_lcdm_chain.sh
+│   ├── sample_lcdm.sh
+│   ├── validate_camb_grid.py
+│   └── lcdm_chain_plots/
 └── tests/
     ├── conftest.py
     ├── index.html

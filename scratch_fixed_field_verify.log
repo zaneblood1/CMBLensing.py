@@ -1,7 +1,0 @@
-Running as unit: run-r370362a5906c45cda4b430c26b8a2755.scope; invocation ID: db262bacb6c1407c87b248545853999a
-building data set...
-building args...
-theta_c = truth : argmax at +0.050 training sigma
-theta_c = +1 sigma: argmax at +0.050 training sigma
-max |conditional(truth) - conditional(+1 sigma)| = 0.000e+00 (0 = drift structurally gone)
-conditional ~1-sigma half-width: 0.000 training sigma

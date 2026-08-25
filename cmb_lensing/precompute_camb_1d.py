@@ -1,6 +1,6 @@
 """Precompute CAMB TT/PP Cls on a fixed 1D grid of any single LCDM parameter.
 
-The 1D theta conditional in sample_lcdm_legacy.py only ever queries Cls along one
+The 1D theta conditional in sample_lcdm.py only ever queries Cls along one
 parameter's 50-point grid (all other parameters fixed at ground truth), and the Cls are
 map-independent, so a single one-time sweep of CAMB calls serves every chain of an HPC
 trial. This script runs that sweep for a chosen parameter (theta_MC_100, logA, ns, ombh2
@@ -14,17 +14,18 @@ Usage:
     python -m cmb_lensing.precompute_camb_1d ns --test      #3-point smoke test
     python -m cmb_lensing.precompute_camb_1d all            #sweep all five parameters
 
-In the sampler, swap the emulator predictors for the cached-CAMB ones:
+In the sampler (USE_CAMB_SPLINE = True in sample_lcdm.py), these replace the 5D grid
+predictors for a single sampled parameter:
     from cmb_lensing.precompute_camb_1d import load_camb_spline_predictors
     predict_tt, predict_pp = load_camb_spline_predictors("ns")
-    #emu_params is ignored by these predictors, so every downstream call site
-    #(eval_logpdf_grid, interp_cls_from_params_jax) works unchanged
+    #same f(params_batch) -> (M, n_ell) signature as the camb_grid_interp predictors, so
+    #every downstream call site (make_eval_logpdf_batch, _recompute_cosmo_matrices,
+    #get_new_cf_matrix) works unchanged
 
-The Cls are computed at ells 2..EMULATOR_MAX_ELL-1 (all real CAMB values, no
+The Cls are computed at ells 2..DEFAULT_MAX_ELL-1 (all real CAMB values, no
 extrapolation) - the same support as load_sim's CAMB data-map path, so the model and the
 data share the same log-log extrapolation anchor on the 2D grid. The covariance-build
-call sites in sample_lcdm_legacy.py size their ells arrays from the predictor output, so
-this length difference vs the emulator (2..4000) is handled automatically.
+call sites in sample_lcdm.py size their ells arrays from the predictor output.
 """
 
 import argparse
@@ -36,14 +37,13 @@ import jax.numpy as jnp
 from scipy.interpolate import CubicSpline
 
 from cmb_lensing.simulate import _camb_via_callback, _extract_all_cls
-from cmb_lensing.constants import EMULATOR_MAX_ELL
+from cmb_lensing.constants import DEFAULT_MAX_ELL
 
-#parameter ordering used by the emulator / sampler (must match sample_lcdm_legacy.PARAM_ORDER)
+#parameter ordering used by the sampler (must match sample_lcdm.PARAM_ORDER)
 PARAM_ORDER = ["theta_MC_100", "logA", "ns", "ombh2", "omch2"]
 PARAM_INDEX = {name: i for i, name in enumerate(PARAM_ORDER)}
 
-#ground-truth parameter values (the fiducial cosmology of sample_lcdm_legacy __main__);
-#a parameter's sweep holds the other four fixed at these
+#ground-truth parameter values
 GROUND_TRUTH = {
     "theta_MC_100": 1.031732,
     "logA": 3.218387,
@@ -52,12 +52,9 @@ GROUND_TRUTH = {
     "omch2": 0.109381,
 }
 
-#per-parameter sweep bounds: the same +/- 5 training-sigma endpoints as the param_ranges
-#grids in sample_lcdm_legacy __main__ (which builds its ranges from these, so the spline
-#support always covers the sampler's search range). the ombh2 endpoints reproduce the
-#original OMBH2_GRID exactly, so a pre-rename camb_ombh2_grid.npz cache stays valid
+#Search ranges for each parameter
 PARAM_BOUNDS = {
-    "theta_MC_100": (0.9328, 1.1452), #(0.900723, 1.156063),
+    "theta_MC_100": (0.9328, 1.1452),
     "logA": (2.661635, 3.782861),
     "ns": (0.867143, 1.042186),
     "ombh2": (0.020413, 0.024389),
@@ -66,9 +63,9 @@ PARAM_BOUNDS = {
 GRID_SIZE = 50
 PARAM_GRIDS = {name: np.linspace(lo, hi, GRID_SIZE) for name, (lo, hi) in PARAM_BOUNDS.items()}
 
-#training sigma of each parameter (the bounds above are roughly mean +/- 5 sigma); used
-#by sample_lcdm_legacy's progress plot to normalize the chain traces
-TRAINING_SIGMA = {
+#sigma of each parameter (the bounds above are roughly mean +/- 5 sigma); used
+#by sample_lcdm's progress plot to normalize the chain traces
+PARAM_SIGMA = {
     "theta_MC_100": 0.0262018,
     "logA": 0.1128948,
     "ns": 0.0164744,
@@ -76,32 +73,30 @@ TRAINING_SIGMA = {
     "omch2": 0.0059354,
 }
 
-#lmax = lmax_prime = EMULATOR_MAX_ELL makes dl2cl's ell grid arange(2, lmax) land on
-#ells 2..EMULATOR_MAX_ELL-1 with identity interpolation - pure CAMB, no extrapolation.
-#IMPORTANT: this must stay at EMULATOR_MAX_ELL (not +1) so the cache shares the exact
-#ell support of load_sim's CAMB data-map path (also 2..EMULATOR_MAX_ELL-1). The model
+#lmax = lmax_prime = DEFAULT_MAX_ELL makes dl2cl's ell grid arange(2, lmax) land on
+#ells 2..DEFAULT_MAX_ELL-1 with identity interpolation - pure CAMB, no extrapolation.
+#IMPORTANT: this must stay at DEFAULT_MAX_ELL (not +1) so the cache shares the exact
+#ell support of load_sim's CAMB data-map path (also 2..DEFAULT_MAX_ELL-1). The model
 #and the data then log-log extrapolate the 2D grid tail from the SAME anchor interval;
 #a one-multipole support mismatch was measured to shift the clamped ombh2 conditional
-#peak by ~+5e-5. The covariance call sites size their ells from the predictor output,
-#so the shorter-than-emulator length needs no further handling
-CAMB_LMAX = EMULATOR_MAX_ELL
+#peak by ~+5e-5. The covariance call sites size their ells from the predictor output
+CAMB_LMAX = DEFAULT_MAX_ELL
 
 def default_cache_path(param_name):
     #cache lives next to this module so the same relative layout works on the laptop and
     #the cluster - no hardcoded absolute path to flip per machine
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "camb_splines", 
                         f"camb_{param_name}_grid.npz")
 
 def camb_cls_at(param_name, value):
     """One CAMB run with param_name set to value and the other four parameters at their
-    GROUND_TRUTH values. Returns (cl_tt, cl_pp) on ells 2..EMULATOR_MAX_ELL-1, mirroring
-    _camb_cls_lcdm in sample_lcdm_legacy.py."""
+    GROUND_TRUTH values. Returns (cl_tt, cl_pp) on ells 2..DEFAULT_MAX_ELL-1."""
     params = dict(GROUND_TRUTH)
     params[param_name] = float(value)
     cosmomc_theta = params["theta_MC_100"] / 100
     As = np.exp(params["logA"]) * 1e-10
     #fixed (non-sampled) CAMB parameters: H0=None, r=0, mnu=0.06, tau=0.05, nt=0,
-    #k_pivot=0.05, Alens=1 - same as _camb_cls_lcdm / load_sim defaults
+    #k_pivot=0.05, Alens=1 - same as load_sim defaults
     unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
         None, params["ombh2"], params["omch2"], cosmomc_theta, 0.0, 0.06, 0.05,
         As, 0, params["ns"], CAMB_LMAX, 0.05, 1
@@ -153,7 +148,7 @@ def run_sweep(param_name, grid, out_path):
     #matching the layout of the original ombh2-only cache so old files keep loading
     save_kwargs = {f"{param_name}_grid": kept_grid, "ells": ells,
                    "cl_tt": cl_tt, "cl_pp": cl_pp,
-                   "swept_param": param_name, "emulator_max_ell": EMULATOR_MAX_ELL}
+                   "swept_param": param_name, "emulator_max_ell": DEFAULT_MAX_ELL}
     for name in PARAM_ORDER:
         if name != param_name:
             save_kwargs[f"fixed_{name}"] = GROUND_TRUTH[name]
@@ -172,9 +167,9 @@ def spline_accuracy_check(grid, cl_tt, cl_pp):
 
 
 def load_camb_spline_predictors(param_name, path = None):
-    """Returns (predict_tt, predict_pp) with the emulator predictor signature
-    f(emu_params, params_batch) -> (M, n_ell), backed by cubic splines in param_name
-    through the cached CAMB nodes. emu_params is ignored. jit-safe via jax.pure_callback.
+    """Returns (predict_tt, predict_pp) with the grid predictor signature
+    f(params_batch) -> (M, n_ell), backed by cubic splines in param_name
+    through the cached CAMB nodes. jit-safe via jax.pure_callback.
 
     Only the param_name column of params_batch is used - the cache is only valid while
     the other four parameters sit at their cached fixed values, so we assert they match."""
@@ -212,7 +207,7 @@ def load_camb_spline_predictors(param_name, path = None):
         return cls
 
     def make_predictor(spline):
-        def predict(emu_params, params_batch):
+        def predict(params_batch):
             M = params_batch.shape[0]
             return jax.pure_callback(
                 lambda pb: _eval(spline, pb),

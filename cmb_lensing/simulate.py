@@ -12,9 +12,7 @@ from cmb_lensing.util import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
 from cmb_lensing.statistics import *
-import cambemul
 
-_SPAWN_CTX = multiprocessing.get_context("spawn")
 _CAMB_COLS = {"TT": 0, "EE": 1, "BB": 2, "TE": 3}
 
 
@@ -55,7 +53,8 @@ def beam_cls(beam_fwhm, ell):
 def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
     ell_prime = jnp.arange(2, lmax_prime)
     bls = beam_cls(beam_fwhm, ell_prime)
-    nls = 1 #+ (l_knee / ell_prime)**alpha_knee
+    #NOTE temporarily remove 1/f noise for LCDM parameter inference
+    nls = 1 + (l_knee / ell_prime)**alpha_knee
     cn_tt = jnp.nan_to_num(
         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * nls / bls,
         nan=0.0, posinf=0.0, neginf=0.0
@@ -64,23 +63,6 @@ def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
     cn_ee = 2 * cn_tt
     cn_bb = 2 * cn_tt
     return cn_tt, cn_te, cn_ee, cn_bb
-
-#---------------------------------------------- DEBUG --------------------------------------------------
-#NOTE how do things change when we just use pure white noise which is not a function of multipole ell?
-# def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
-#     ell_prime = jnp.arange(2, lmax_prime)
-#     #bls = beam_cls(beam_fwhm, ell_prime)
-#     #nls = #1 + (l_knee / ell_prime)**alpha_knee
-#     ones = jnp.ones_like(ell_prime)
-#     cn_tt = jnp.nan_to_num(
-#         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * ones, #nls / bls,
-#         nan=0.0, posinf=0.0, neginf=0.0
-#     )
-#     cn_te = jnp.zeros(cn_tt.shape)
-#     cn_ee = 2 * cn_tt
-#     cn_bb = 2 * cn_tt
-#     return cn_tt, cn_te, cn_ee, cn_bb
-#---------------------------------------------- DEBUG --------------------------------------------------
 
 
 # ── Covariance and Field Generation ──────────────────────────────────────
@@ -97,17 +79,6 @@ def covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls, origin_value=No
             left="extrapolate", right="extrapolate"
         )).reshape(shape)
 
-    # def linear_interpolate(ell_grid, ells, cls):
-    #     fv = fill_value if fill_value is not None else 0.0
-    #     return jnp.interp(ell_grid.flatten(), ells, cls, left=fv, right=fv).reshape(shape)
-
-    # result = jax.lax.cond(
-    #     jnp.logical_and(jnp.all(cls > 0), jnp.logical_not(use_linear_interpolation)),
-    #     exponential_interpolate,
-    #     linear_interpolate,
-    #     ell_grid, ells, cls
-    # )
-
     result = exponential_interpolate(ell_grid, ells, cls)
 
     if origin_value is not None:
@@ -121,13 +92,11 @@ def covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls, origin_value=No
 #scalar BB at r = 0, the TE noise Cls) would come out NaN, not zero. This wrapper maps
 #all-zero spectra to an exactly zero covariance instead. The value-level check forces
 #eager evaluation, so this must only be called OUTSIDE jit (load_sim is eager)
-#@partial(jax.jit, static_argnames = ["cls"])
 def _covar_or_zeros(nside, pix_width, ell_grid, ells, cls, origin_value=None):
     if bool(jnp.all(cls == 0)):
         return jnp.zeros((nside, nside // 2 + 1))
     return covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls,
                                  origin_value=origin_value)
-
 
 #TE crosses zero, so it cannot go through the log-interpolating covariance builder. It is
 #carried instead as the correlation ratio rho = Cl_TE / sqrt(Cl_TT * Cl_EE): bounded in
@@ -226,44 +195,12 @@ def get_d_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
 
     return d_tt, d_te, d_ee, d_bb
 
-#A light-weight version of the full method for use in temp-only inference of parameters
-# @jax.jit
-# def get_d_tt_matrix(cfs_tt, cft_tt, cn_tt, r, r_fid):
-#     pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
-#     identity = jnp.ones(cn_tt.shape)
-#     cf_r = cfs_tt + (r/r_fid)*cft_tt
-#     d_tt = cf_r + pre_factor * identity + 2 * cn_tt
-#     d_tt = jnp.sqrt(d_tt * reciprocal_matrix(cf_r))
-#     return d_tt
-
 @jax.jit
-def get_d_tt_matrix(cf_curr, cf_fid, cn_tt):
-
-    # def d_matrix_noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=5, l_knee=100, alpha_knee=3):
-    #     ell_prime = jnp.arange(2, lmax_prime)
-    #     bls = beam_cls(beam_fwhm, ell_prime)
-    #     nls = 1 + (l_knee / ell_prime)**alpha_knee
-    #     cn_tt = jnp.nan_to_num(
-    #         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * nls / bls,
-    #         nan=0.0, posinf=0.0, neginf=0.0
-    #     )
-    #     return cn_tt
-    
-    # lmax_prime = 4000
-    # theta_pix = 2
-    # ncl = d_matrix_noise_cls(lmax_prime, 5, beam_fwhm=2, l_knee=100, alpha_knee=3)
-    # ell_prime = jnp.arange(2, lmax_prime)
-    # ell_grid, pix_width = gen_ell_grid(cn_tt.shape[0], theta_pix)
-    #cn_tt_prime = _covar_or_zeros(256, pix_width, ell_grid, ell_prime, ncl, origin_value=0)
-    # cn_tt_prime = covar_matrix_from_cls(512, pix_width, ell_grid, ell_prime, ncl,
-    #                              origin_value=0)
+def get_d_tt_matrix(cf_curr, cn_tt):
     pre_factor = jnp.deg2rad(5 / ARCMIN_PER_DEGREE)**2
     identity = jnp.ones(cn_tt.shape)
-    d_tt = cf_curr + pre_factor * identity + 2 * cn_tt #cn_tt_prime #
+    d_tt = cf_curr + pre_factor * identity + 2 * cn_tt
     d_tt = jnp.sqrt(d_tt * reciprocal_matrix(cf_curr))
-    # seed = jax.random.PRNGKey(123)
-    # white = jax.random.normal(seed, shape = (cn_tt.shape[0], cn_tt.shape[0]))
-    # d_tt = 10 * jfft.rfft2(white)
     return d_tt
 
 #D mixing matrix for T + P sampling with a full (nonzero-TE) 2x2 T/E block, following
@@ -334,33 +271,10 @@ def get_g_matrix(cphi_fid, nphi, a_phi_fid, a_phi = 1):
 
 @jax.jit
 def get_g_matrix_lcdm(cphi_fid, cphi_curr, nphi, cn_tt):
-
-    # def g_matrix_noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=5, l_knee=100, alpha_knee=3):
-    #     ell_prime = jnp.arange(2, lmax_prime)
-    #     bls = beam_cls(beam_fwhm, ell_prime)
-    #     nls = 1 + (l_knee / ell_prime)**alpha_knee
-    #     cn_tt = jnp.nan_to_num(
-    #         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * nls / bls,
-    #         nan=0.0, posinf=0.0, neginf=0.0
-    #     )
-    #     return cn_tt
-    
-    # cn_tt_prime = g_matrix_noise_cls(4000, 10, beam_fwhm=5, l_knee=100, alpha_knee=3)
-    # qe = scalar_quadratic_estimate(cn["TT"], cf["TT"], cfl["TT"],
-    #                                    mask, beam, pix_width) / nphi_fac
-
     g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_fid))
     g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_curr))
     g = reciprocal_matrix(g0) * g
-    # seed = jax.random.PRNGKey(456)
-    # white = jax.random.normal(seed, shape = (cn_tt.shape[0], cn_tt.shape[0]))
-    # g = 10 * jfft.rfft2(white)
     return g
-
-# @jax.jit
-# def get_g_matrix_lcdm(cphi_fid, cphi_curr, nphi):
-#     g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_curr))
-#     return g
 
 # ── Quadratic Estimate ────────────────────────────────────────────────────
 
@@ -552,16 +466,7 @@ def get_polar_qe_norm_at_position(tf2e, cf_ee, sigma_e, tf2b, cf_bb, sigma_b,
 
 def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
               lmax_prime, k_pivot, Alens):
-    #compute above the ell we use: lensed Cl within ~lens_margin of the computed lmax are
-    #biased (lensing needs unlensed power beyond lmax), so add a buffer and slice down
-    # lmax_compute = lmax_prime + 300
-    # pars = camb.set_params(
-    #     H0=H0, ombh2=ombh2, omch2=omch2, cosmomc_theta=cosmomc_theta,
-    #     r=r, mnu=mnu, As=As, nt=nt, ns=ns, lmax=lmax_compute,
-    #     tau=tau, pivot_scalar=k_pivot, pivot_tensor=k_pivot, Alens=Alens,
-    #     lens_potential_accuracy=1, max_eta_k=2.5 * lmax_compute,
-    #     AccuracyBoost=2.0, lAccuracyBoost=2.0, lSampleBoost=3,
-    # )
+    
     pars = camb.set_params(
         H0=H0, ombh2=ombh2, omch2=omch2, cosmomc_theta=cosmomc_theta,
         r=r, mnu=mnu, As=As, nt=nt, ns=ns, lmax=lmax_prime,
@@ -833,18 +738,14 @@ def interpolate_cls(cls, lmax, lmax_prime):
 
 # ── Main Simulation Entry Point ──────────────────────────────────────────
 
-#@partial(jax.jit, static_argnames=["nside", "theta_pix", "pol", "lmax"])
 def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
              ombh2=0.0224567, omch2=0.118489, cosmomc_theta=0.0104098,
              r=0.0, mnu=0.06, tau=0.05, As=jnp.exp(3.043) * 1e-10,
-             nt=0, ns=0.968602, lmax=4000,
-             k_pivot = 0.05, Alens=1, nphi_fac=2, a_phi = 1,
-             use_emulator_cls = True):
+             nt=0, ns=0.968602, lmax=4000, l_knee = 100,
+             k_pivot = 0.05, Alens=1, nphi_fac=2, a_phi = 1):
    #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
 
-    #lmax_prime = min(lmax, EMULATOR_MAX_ELL)
-    lmax_prime = min(lmax, 4000)
-
+    lmax_prime = min(lmax, DEFAULT_MAX_ELL)
     unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
         H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         lmax_prime, k_pivot, Alens
@@ -855,30 +756,6 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     keys = jax.random.split(jax.random.PRNGKey(master_seed), 100)
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
-    #override the TT/PP spectra with the emulator's prediction so the data map is
-    #self-consistent with an emulator-based sampler. With use_emulator_cls = False the
-    #CAMB spectra from _extract_all_cls above are kept (for a CAMB-based sampler, e.g.
-    #the cached-CAMB 1D parameter splines from precompute_camb_1d.py used in
-    #sample_lcdm_legacy.py)
-    if use_emulator_cls:
-        #the emulator only predicts TT and PP, so an emulator-consistent polarization data
-        #map is impossible - EE/BB would silently come from CAMB while TT came from the
-        #emulator, and the model and data would disagree at the ~emulator-error level
-        if pol != "I":
-            raise ValueError("use_emulator_cls = True only supports pol = 'I' - the "
-                             "emulator has no EE/BB heads. Polarization data maps must "
-                             "be CAMB-generated (use_emulator_cls = False)")
-        emulator = cambemul.loademul("/home/zane-blood/Desktop/cmb_lensing/camb_emulator")
-        #emulator = cambemul.loademul("/resnick/groups/wugroup/zblood/cmb_lensing/camb_emulator")
-        output = emulator.predict({"theta_MC_100": cosmomc_theta * 100,
-                                    "logA": jnp.log(As * 1e10),
-                                    "ns": ns,
-                                    "tau": tau,
-                                    "ombh2": ombh2,
-                                    "omch2": omch2})
-        cls["phi"] = interpolate_cls(output["pp"], lmax, lmax_prime)
-        cls[f"scalar_TT"] = interpolate_cls(output["tt_unlensed"], lmax, lmax_prime)
-
     #ells arrays matched to the cls lengths: the emulator override returns ells
     #2..lmax inclusive while the CAMB dl2cl path returns 2..lmax-1
     phi_ells = jnp.arange(2, 2 + cls["phi"].shape[0]).astype(jnp.float64)
@@ -887,9 +764,6 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
     unscaled_cphi = covar_matrix_from_cls(nside, pix_width, ell_grid,
                                           phi_ells,
                                           cls["phi"], origin_value=0)
-    # unscaled_cphi = covar_matrix_from_cls(nside, pix_width, ell_grid, 
-    #                                       jnp.arange(2, lmax).astype(jnp.float64), 
-    #                                       cls["phi"], origin_value=0)
     cphi = a_phi * unscaled_cphi
     phi, kc = field_from_covar(nside, cphi, keys, 0)
 
@@ -911,7 +785,7 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
                                           cls[f"scalar_{comp}"], origin_value=0)
         cf_tensor[comp] = _covar_or_zeros(nside, pix_width, ell_grid, ells,
                                           cls[f"tensor_{comp}"], origin_value=0)
-        cf[comp] = cf_scalar[comp] #+ cf_tensor[comp]
+        cf[comp] = cf_scalar[comp] + cf_tensor[comp]
     if pol != "I":
         scalar_ells = jnp.arange(2, 2 + cls["scalar_TE"].shape[0]).astype(jnp.float64)
         rho_te = te_rho_from_cls(cls["scalar_TE"], cls["scalar_TT"], cls["scalar_EE"])
@@ -953,14 +827,13 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
             field_t, field_e, field_b, phi, pix_width, nside, theta_pix
         )
 
-    #DEBUG: are the mask or beam influencing the poorness of the algorithm?
-    #Instrument response
+    #NOTE we have removed the mask for LCDM inference
     mask = jnp.ones_like(get_mask(4000, nside, pix_width, ell_grid))
     beam = get_beam(nside, pix_width, ell_grid, lmax_prime)
 
     #Noise covariance and white noise (the TE noise Cls are identically zero, so
     #_covar_or_zeros keeps that block an exact zero matrix instead of NaN)
-    n_tt, n_te, n_ee, n_bb = noise_cls(lmax_prime, uk_arcmin_t)
+    n_tt, n_te, n_ee, n_bb = noise_cls(lmax_prime, uk_arcmin_t, l_knee = l_knee)
     ell_prime = jnp.arange(2, lmax_prime)
     cn = {}
     for comp, ncl in zip(("TT", "TE", "EE", "BB"), (n_tt, n_te, n_ee, n_bb)):
@@ -984,8 +857,7 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
 
     #D matrix (full T/E block including TE; see get_d_teb_matrix for the identity B
     #block at r = 0)
-    #d_tt = get_d_tt_matrix(cf["TT"], 0*cf["TT"], cn["TT"], 1, 1)
-    d_tt = get_d_tt_matrix(cf["TT"], cf["TT"], cn["TT"])
+    d_tt = get_d_tt_matrix(cf["TT"], cn["TT"])
     if pol != "I":
         d_tt, d_te, d_ee, d_bb = get_d_teb_matrix(cf["TT"], cf["TE"], cf["EE"], cf["BB"],
                                                   cn["TT"], cn["TE"], cn["EE"], cn["BB"])

@@ -4,4 +4,6 @@ __pycache__/
 dist/
 build/
 .claude
-performance_testing/
+sampling_chains/
+runtime_comparison/
+cmb_lensing/camb_splines/camb_grid_spline.npz
