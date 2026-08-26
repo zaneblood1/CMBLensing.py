@@ -4,7 +4,7 @@
 #SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
 #SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
 #SBATCH --mem-per-cpu=4G   #memory per CPU core
-#SBATCH --mail-user=<USER>@<INSTITUTION>.edu #mail updates to this address
+#SBATCH --mail-user=<USER>@<INSTITUTE>.edu #mail updates to this address
 #SBATCH --mail-type=FAIL #mail updates on failure only
 #SBATCH --cpus-per-task=1 #parallelism is across jobs, so keep CAMB single threaded
 
@@ -17,7 +17,7 @@ conda activate myenv
 #one thread per job so 875 concurrent jobs do not each spawn a full OpenMP pool
 export OMP_NUM_THREADS=1
 #call the python grid script
-python3 ABSOLUTE_PATH_TO/sampling_chains/run_single_camb_grid.py \
+python3 ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/run_single_camb_grid.py \
     --log_a_index "$1" \
     --log_a "$2" \
     --ns_index "$3" \

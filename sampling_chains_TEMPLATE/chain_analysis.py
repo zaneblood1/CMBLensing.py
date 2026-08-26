@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from scipy.stats import gmean
 import os
@@ -124,7 +125,7 @@ def single_chain_plots(chains, output_path, ground_truth, param_name):
         plt.close()
     return
 
-def plot_geometric_mean(chains, output_path, ground_truth, param_name):
+def plot_multiplicative_mean(chains, output_path, ground_truth, param_name):
 
     #compute the geometric mean and arithmetic mean density across chains
     #using a gaussian_kde for each chain
@@ -602,13 +603,13 @@ def average_over_phi(chains, output_path, ground_truth, param_name):
     #return the list of the "phi-averaged" per-data-map PDFs
     return grid, pdfs_per_map
 
-def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth, default_burn_in, param_name):
+def per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, ground_truth, default_burn_in, param_name):
 
     #load the data
-    chains = []
+    raw_chains = []
     r_hats = []
-    data_path = os.getcwd() + f"/cmb_lensing/sampling_chains/{file_name}/"
-    output_path = os.getcwd() + f"/cmb_lensing/sampling_chains/lcdm_chain_plots/{param_name}/"
+    data_path = os.getcwd() + f"/sampling_chains/{file_name}/"
+    output_path = os.getcwd() + f"/sampling_chains/lcdm_chain_plots/{param_name}/"
     for map_idx in range(1, num_maps + 1):
         chains_per_map = []
         for chain_idx in range(1, num_chains + 1):
@@ -622,7 +623,7 @@ def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth, default_
             if len(concatenated_phi_chains) > 1:
                 #gelman-rubin R-statistic
                 r_hats.append(gelman_rubin(chains_per_map))
-                chains.append(concatenated_phi_chains)
+                raw_chains.append(concatenated_phi_chains)
 
     r_hats = np.array(r_hats)
     print(r_hats)
@@ -630,14 +631,14 @@ def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth, default_
     print(f"Std in Gelman-Rubin R Statistic = {np.std(r_hats)}")
 
     #auto-correlation plots
-    acfs = plot_autocorrelation_chains(chains, output_path, param_name)
+    acfs = plot_autocorrelation_chains(raw_chains, output_path, param_name)
 
     #integrated autocorrelation time
     iats = plot_iat_per_chain(acfs, output_path, param_name)
 
     #prune the chains by their individual strides (IAT or first zero crossing, per
     #USE_ZERO_CROSSING_PRUNE):
-    chains = prune_chains(chains, iats, acfs = acfs, use_zero_crossing = USE_ZERO_CROSSING_PRUNE)
+    chains = prune_chains(raw_chains, iats, acfs = acfs, use_zero_crossing = USE_ZERO_CROSSING_PRUNE)
     
     #make an all chain trace plot
     all_chain_trace(chains, output_path, param_name)
@@ -646,40 +647,146 @@ def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth, default_
     plot_marginals(chains, output_path, ground_truth, param_name)
 
     #combined geometric mean
-    plot_geometric_mean(chains, output_path, ground_truth, param_name)
+    plot_multiplicative_mean(chains, output_path, ground_truth, param_name)
 
     #histogram of per-map marginal modes
     plot_mode_histogram(chains, output_path, ground_truth, param_name)
 
+    return raw_chains, chains
+
+def plot_annotated_matrix(matrix, param_names, title, output_path, file_name, cmap = "coolwarm",
+                          norm = None, fmt = "{:+.3f}"):
+    """Draw a square matrix as a colored grid with the value of every entry printed in its box.
+
+    norm is a matplotlib color normalization (defaults to a symmetric linear scale about zero,
+    which suits correlation matrices); fmt is the format string applied to each entry. Text is
+    drawn black or white depending on the luminance of the cell behind it so it stays legible
+    across the whole colormap.
+    """
+    matrix = np.asarray(matrix)
+    n = len(param_names)
+    if norm is None:
+        limit = np.max(np.abs(matrix))
+        norm = matplotlib.colors.Normalize(vmin = -limit, vmax = limit)
+    fig, ax = plt.subplots(figsize = (1.7 * n + 2.5, 1.7 * n + 1.5))
+    image = ax.imshow(matrix, cmap = cmap, norm = norm)
+    ax.set_xticks(range(n)); ax.set_xticklabels(param_names, rotation = 45, ha = "right")
+    ax.set_yticks(range(n)); ax.set_yticklabels(param_names)
+    #minor ticks give the white grid lines separating the boxes
+    ax.set_xticks(np.arange(n + 1) - 0.5, minor = True)
+    ax.set_yticks(np.arange(n + 1) - 0.5, minor = True)
+    ax.grid(which = "minor", color = "white", linewidth = 2)
+    ax.tick_params(which = "minor", length = 0)
+    for i in range(n):
+        for j in range(n):
+            rgba = image.cmap(norm(matrix[i, j]))
+            luminance = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]
+            ax.text(j, i, fmt.format(matrix[i, j]), ha = "center", va = "center",
+                    color = "white" if luminance < 0.5 else "black", fontsize = 11)
+    fig.colorbar(image, ax = ax, fraction = 0.046, pad = 0.04)
+    ax.set_title(title)
+    plt.savefig(output_path + file_name, dpi = 150, bbox_inches = "tight")
+    plt.close(fig)
+
+def get_fisher_matrix(cov_mat, param_names):
+    """Gaussian-approximation Fisher matrix F = C^-1 of the sampled parameters, saved to
+    fisher_matrix.png. Entries span many orders of magnitude (theta_MC_100 is ~1e3 times
+    narrower than logA), so the colors use a symmetric log scale about zero and the boxes are
+    annotated in scientific notation."""
+    output_path = os.getcwd() + f"/sampling_chains/lcdm_chain_plots/"
+    fisher_mat = np.linalg.inv(cov_mat)
+    print("Fisher matrix (rows / columns ordered as", param_names, ")")
+    print(fisher_mat)
+    print("Fisher-implied marginal sigmas (sqrt of diagonal of F^-1):")
+    for name, sigma in zip(param_names, np.sqrt(np.diag(cov_mat))):
+        print(f"    {name}: {sigma:.4e}")
+    limit = np.max(np.abs(fisher_mat))
+    #linthresh sets where the log scaling gives way to linear about zero; the smallest
+    #nonzero magnitude keeps every entry inside the log regime
+    linthresh = np.min(np.abs(fisher_mat[fisher_mat != 0])) if np.any(fisher_mat != 0) else 1.0
+    norm = matplotlib.colors.SymLogNorm(linthresh = linthresh, vmin = -limit, vmax = limit)
+    plot_annotated_matrix(fisher_mat, param_names, "Fisher Matrix (inverse posterior covariance)",
+                          output_path, "fisher_matrix.png", norm = norm, fmt = "{:+.3e}")
+    return fisher_mat
+
+def get_correlation_matrix(raw_chains):
+    """Pooled posterior covariance and correlation matrices of the sampled parameters.
+
+    raw_chains maps each parameter name to its list of per-map concatenated chains (the output
+    of per_param_analysis). Every sampled parameter is written to its history file once per
+    iteration, and per_param_analysis walks maps and chains in the same order for each
+    parameter, so concatenating over maps gives columns that line up row-by-row. Saves
+    correlation_matrix.png with every entry printed in its box.
+    """
+    param_names = list(raw_chains.keys())
+    columns = []
+    for name in param_names:
+        columns.append(np.concatenate(raw_chains[name]))
+    lengths = [len(column) for column in columns]
+    #CLIP to min length in case we have SCP race conditions... This should
+    #not matter once the chains are fully finished running
+    min_length = min(lengths)
+    columns = [column[:min_length] for column in columns]
+    samples = np.column_stack(columns)
+    cov_mat = np.cov(samples, rowvar = False)
+    corr_mat = cov_mat / np.sqrt(np.outer(np.diag(cov_mat), np.diag(cov_mat)))
+    print("Correlation matrix (rows / columns ordered as", param_names, ")")
+    print(corr_mat)
+    output_path = os.getcwd() + f"/sampling_chains/lcdm_chain_plots/"
+    os.makedirs(output_path, exist_ok = True)
+    norm = matplotlib.colors.Normalize(vmin = -1, vmax = 1)
+    plot_annotated_matrix(corr_mat, param_names, "Posterior Correlation Matrix", output_path,
+                          "correlation_matrix.png", norm = norm, fmt = "{:+.3f}")
+    return cov_mat, corr_mat
+
+def joint_param_analysis(all_chains):
+    cov_mat, _ = get_correlation_matrix(all_chains)
+    get_fisher_matrix(cov_mat, list(all_chains.keys()))
     return
+
+def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values, was_sampled, default_burn_in):
+
+    #single parameter analyses
+    all_chains = {}
+    for param_name, ground_truth in ground_truth_values.items():
+        if was_sampled[param_name]:
+            chains_per_param, _ = per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, 
+                                                     ground_truth, default_burn_in, param_name)
+            all_chains[param_name] = chains_per_param
+
+    #fisher information or other multi-param joint statistics
+    if get_num_sampled(was_sampled) > 1:
+        joint_param_analysis(all_chains)
+    return
+
+def get_num_sampled(was_sampled):
+    num_sampled = 0
+    for _, sampled in was_sampled.items():
+        if sampled:
+            num_sampled += 1
+    return num_sampled
 
 if __name__ == "__main__":
 
     num_maps = 10
     num_chains = 5
-    default_burn_in = 0
+    default_burn_in = 500
     map_pre_factor = 234567
-    
-    #TODO you must replace the below file with your own data
-    file_name = "FILE_CONTAINING_LEARNED_DATA"
+    file_name = "<FILE_NAME>"
 
-    #NOTE uncomment one parameter at a time and run this script to turn 
-    #the MCMC data into pruned distributions
+    ground_truth_values = {}
+    ground_truth_values["omch2"] = 0.109381
+    ground_truth_values["ombh2"] = 0.022386 
+    ground_truth_values["ns"] = 0.959814
+    ground_truth_values["theta_MC_100"] = 1.031732
+    ground_truth_values["logA"] = 3.218387
 
-    ground_truth = 0.109381
-    param_name = "omch2"
-
-    # ground_truth = 0.022386 
-    # param_name = "ombh2"
-
-    # ground_truth = 0.959814
-    # param_name = "ns"
-
-    # ground_truth =  1.031732
-    # param_name = "theta_MC_100"
-
-    # ground_truth =  3.218387
-    # param_name = "logA"
+    was_sampled = {}
+    was_sampled["omch2"] = True
+    was_sampled["ombh2"] = False
+    was_sampled["ns"] = False
+    was_sampled["theta_MC_100"] = True
+    was_sampled["logA"] = True
 
     main(file_name, num_maps, num_chains, map_pre_factor, 
-         ground_truth, default_burn_in, param_name)
+         ground_truth_values, was_sampled, default_burn_in)

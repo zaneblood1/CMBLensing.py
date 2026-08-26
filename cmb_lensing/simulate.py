@@ -270,10 +270,8 @@ def get_g_matrix(cphi_fid, nphi, a_phi_fid, a_phi = 1):
     return g
 
 @jax.jit
-def get_g_matrix_lcdm(cphi_fid, cphi_curr, nphi, cn_tt):
-    g0 = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_fid))
+def get_g_matrix_lcdm(cphi_curr, nphi):
     g = jnp.sqrt(1 + 2 * nphi * reciprocal_matrix(cphi_curr))
-    g = reciprocal_matrix(g0) * g
     return g
 
 # ── Quadratic Estimate ────────────────────────────────────────────────────
@@ -743,8 +741,8 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
              r=0.0, mnu=0.06, tau=0.05, As=jnp.exp(3.043) * 1e-10,
              nt=0, ns=0.968602, lmax=4000, l_knee = 100,
              k_pivot = 0.05, Alens=1, nphi_fac=2, a_phi = 1):
-   #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
-
+    
+    #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
     lmax_prime = min(lmax, DEFAULT_MAX_ELL)
     unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
         H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,

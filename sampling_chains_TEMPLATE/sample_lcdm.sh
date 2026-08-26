@@ -3,7 +3,7 @@
 #SBATCH --time=00:10:00 #wall-time / max run time before termination in the format hh:mm:ss
 #SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
 #SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
-#SBATCH --mail-user=<USER>@<INSTITUTION>.edu #mail updates to this address
+#SBATCH --mail-user=<USER>@<INSTITUTE>.edu #mail updates to this address
 #SBATCH --mail-type=FAIL #mail updates on failure only
 
 #sytematics

@@ -75,15 +75,22 @@ should_sample["ns"] = False
 #Tune these with a single pilot chain to achieve around 44% acceptance per parameter
 proposal_sigmas = {}
 proposal_sigmas["ombh2"] = 1e-4
-proposal_sigmas["omch2"] = 1e-3
-proposal_sigmas["theta_MC_100"] = 1e-3
+proposal_sigmas["omch2"] = 3e-3
+proposal_sigmas["theta_MC_100"] = 3.5e-3
 proposal_sigmas["logA"] = 1e-2
-proposal_sigmas["ns"] = 1e-2
+proposal_sigmas["ns"] = 2.5e-2
 
+#Do not turn on any logging
+advanced_logging = {}
+advanced_logging["phi_acceptance"] = False
+advanced_logging["lcdm_acceptance"] = False
+advanced_logging["plot_log_pdf"] = False
+advanced_logging["plot_lcdm_sigmas"] = False
 
 #Plug the ground truth into sample_joint() to try and learn the LCDM distributions
-hpc_path = "/resnick/groups/wugroup/zblood/cmb_lensing/sampling_chains/joint_inference_08_24_26/"
-_ = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, args.noise_level,
+hpc_path = "ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/joint_inference_08_24_26/"
+_ = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, args.noise_level, advanced_logging,
+                 phi_init = "ZEROES", fixed_fields = False,
                  iters_per_chain = args.iters_per_chain, num_burn_in_fix_theta = args.num_burn_in_fix_theta,
                  map_idx = args.map_seed, sub_chain_idx = args.chain, seed = None,
                  num_burn_in_always_accept = 0, hpc_path = hpc_path)

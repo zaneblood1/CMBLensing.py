@@ -11,6 +11,7 @@ from cmb_lensing.precompute_camb_1d import load_camb_spline_predictors, GROUND_T
 from cmb_lensing.camb_grid_interp import (load_camb_grid_predictors,
                                           load_camb_grid, GridPredictors)
 import os
+import random
 
 PARAM_ORDER = ["theta_MC_100", "logA", "ns", "ombh2", "omch2"]
 PARAM_INDEX = {name: i for i, name in enumerate(PARAM_ORDER)}
@@ -295,18 +296,16 @@ def metropolis_sample_theta(eval_logpdf_grid, theta_name, theta_old, lo, hi, lcd
             theta_current = theta_prop
             if log_acceptance:
                 lcdm_acceptance[theta_name].append(int(True))
-                print(f"{theta_name} accept rate = {np.sum(np.array(lcdm_acceptance[theta_name])) \
-                                                    / len(lcdm_acceptance[theta_name])}")
+                print(f"{theta_name} accept rate = {np.sum(np.array(lcdm_acceptance[theta_name])) / len(lcdm_acceptance[theta_name])}")
         elif log_acceptance:
             lcdm_acceptance[theta_name].append(int(False))
-            print(f"{theta_name} accept rate = {np.sum(np.array(lcdm_acceptance[theta_name])) \
-                                                    / len(lcdm_acceptance[theta_name])}")
+            print(f"{theta_name} accept rate = {np.sum(np.array(lcdm_acceptance[theta_name])) / len(lcdm_acceptance[theta_name])}")
 
     return np.asarray(theta_current, dtype = np.float64)
 
 def make_eval_logpdf_batch(predictors,
                            mixed_temp_matrix, mixed_phi_matrix, data_matrix,
-                           cphi_fid, qe_scalar, cn_scalar,
+                           qe_scalar, cn_scalar,
                            mask_matrix, beam_matrix, fourier_weights,
                            nside, pix_width, theta_pix, ell_grid,
                            pol = "I", bb_is_zero = True):
@@ -402,7 +401,7 @@ def make_eval_logpdf_batch(predictors,
                                                   ell_grid, ells,
                                                   cl_bb_batch[i], origin_value = 0)
 
-                g = get_g_matrix_lcdm(cphi_fid, cphi, qe_scalar, cn_ee)
+                g = get_g_matrix_lcdm(cphi, qe_scalar)
                 d_ee, d_bb = get_d_eb_matrix(cf_ee, cf_bb, cn_ee, cn_bb)
 
                 return mixed_logpdf(mixed_temp, mixed_phi, data_field,
@@ -437,7 +436,7 @@ def make_eval_logpdf_batch(predictors,
                                                   ell_grid, ells,
                                                   cl_bb_batch[i], origin_value = 0)
 
-                g = get_g_matrix_lcdm(cphi_fid, cphi, qe_scalar, cn_tt)
+                g = get_g_matrix_lcdm(cphi, qe_scalar)
                 d_tt, d_te, d_ee, d_bb = get_d_teb_matrix(cf_tt, cf_te, cf_ee,
                                                               cf_bb, cn_tt, cn_te,
                                                               cn_ee, cn_bb)
@@ -449,7 +448,7 @@ def make_eval_logpdf_batch(predictors,
                                     _op_teb(d_tt, d_te, d_ee, d_bb))
             
             #TEMPERATURE ONLY DEFAULT
-            g = get_g_matrix_lcdm(cphi_fid, cphi, qe_scalar, cn_scalar)
+            g = get_g_matrix_lcdm(cphi, qe_scalar)
             d = get_d_tt_matrix(cf_tt, cn_scalar)
             return mixed_logpdf(mixed_temp, mixed_phi, data_field,
                                 noise_covariance, _op(cphi), _op(cf_tt),
@@ -464,7 +463,7 @@ def make_eval_logpdf_batch(predictors,
 def gibbs_sample_theta(theta_key_idx, theta_range, theta_old, lcdm_acceptance, log_acceptance,
                        mixed_temp_matrix, mixed_phi_matrix, data_matrix,
                        current_params, rng_key, nside, pix_width, theta_pix,
-                       ell_grid, cphi_fid, qe_scalar, cn_scalar, mask_matrix, beam_matrix,
+                       ell_grid, qe_scalar, cn_scalar, mask_matrix, beam_matrix,
                        fourier_weights, proposal_sigma = None, metropolis_num_steps = 1,
                        pol = "I", bb_is_zero = True):
 
@@ -478,7 +477,7 @@ def gibbs_sample_theta(theta_key_idx, theta_range, theta_old, lcdm_acceptance, l
     #evaluate the mixed logpdf over an arbitrary (M, 5) batch of parameter vectors
     eval_logpdf_batch = make_eval_logpdf_batch(predictors,
                                                mixed_temp_matrix, mixed_phi_matrix,
-                                               data_matrix, cphi_fid, 
+                                               data_matrix, 
                                                qe_scalar, cn_scalar, mask_matrix,
                                                beam_matrix, fourier_weights,
                                                nside, pix_width, theta_pix, ell_grid,
@@ -498,7 +497,7 @@ def gibbs_sample_theta(theta_key_idx, theta_range, theta_old, lcdm_acceptance, l
 #jitted core of the per-iteration covariance/mixing recompute
 @partial(jax.jit, static_argnames = ["predictors", "nside", "pix_width", "refresh_qe"])
 def _recompute_cosmo_matrices(current_params, ell_grid,
-                              cphi_fid, qe_scalar, cn_scalar,
+                              qe_scalar, cn_scalar,
                               mask_matrix, beam_matrix,
                               predictors, nside, pix_width,
                               refresh_qe = False):
@@ -523,14 +522,14 @@ def _recompute_cosmo_matrices(current_params, ell_grid,
     else:
         qe = qe_scalar
 
-    g = get_g_matrix_lcdm(cphi_fid, cphi, qe, cn_scalar)
+    g = get_g_matrix_lcdm(cphi, qe)
     d = get_d_tt_matrix(cf, cn_scalar)
     return g, d, cf, cphi, qe
 
 
 @partial(jax.jit, static_argnames = ["predictors", "nside", "pix_width", "refresh_qe", "bb_is_zero"])
 def _recompute_cosmo_matrices_teb(current_params, ell_grid,
-                                  cphi_fid, qe_scalar, cn_stack,
+                                  qe_scalar, cn_stack,
                                   mask_matrix, beam_matrix,
                                   predictors, nside, pix_width,
                                   refresh_qe = False, bb_is_zero = True):
@@ -569,7 +568,7 @@ def _recompute_cosmo_matrices_teb(current_params, ell_grid,
     else:
         qe = qe_scalar
 
-    g = get_g_matrix_lcdm(cphi_fid, cphi, qe, cn_tt)
+    g = get_g_matrix_lcdm(cphi, qe)
     d_tt, d_te, d_ee, d_bb = get_d_teb_matrix(cf_tt, cf_te, cf_ee, cf_bb,
                                               cn_tt, cn_te, cn_ee, cn_bb)
     return (g, jnp.stack([d_tt, d_te, d_ee, d_bb]),
@@ -577,7 +576,7 @@ def _recompute_cosmo_matrices_teb(current_params, ell_grid,
 
 @partial(jax.jit, static_argnames = ["predictors", "nside", "pix_width", "refresh_qe", "bb_is_zero"])
 def _recompute_cosmo_matrices_eb(current_params, ell_grid, 
-                                 cphi_fid, qe_scalar, cn_stack,
+                                 qe_scalar, cn_stack,
                                  mask_matrix, beam_matrix,
                                  predictors, nside, pix_width,
                                  refresh_qe = False, bb_is_zero = True):
@@ -611,7 +610,7 @@ def _recompute_cosmo_matrices_eb(current_params, ell_grid,
     else:
         qe = qe_scalar
 
-    g = get_g_matrix_lcdm(cphi_fid, cphi, qe, cn_ee)
+    g = get_g_matrix_lcdm(cphi, qe)
     d_ee, d_bb = get_d_eb_matrix(cf_ee, cf_bb, cn_ee, cn_bb)
     return g, jnp.stack([d_ee, d_bb]), jnp.stack([cf_ee, cf_bb]), cphi, qe
 
@@ -621,7 +620,6 @@ def get_new_cosmo_matrices(current_params, predictors, args,
     if pol == "IP":
         return _recompute_cosmo_matrices_teb(
             current_params, args["ell_grid"],
-            args["cphi_fid"],
             args["quadratic_estimate"].scalar_matrix,
             op_matrix_stack(args["noise_covariance"], pol),
             op_shared_matrix(args["mask"], pol), op_shared_matrix(args["beam"], pol),
@@ -631,7 +629,6 @@ def get_new_cosmo_matrices(current_params, predictors, args,
     if pol == "P":
         return _recompute_cosmo_matrices_eb(
             current_params, args["ell_grid"],
-            args["cphi_fid"],
             args["quadratic_estimate"].scalar_matrix,
             op_matrix_stack(args["noise_covariance"], pol),
             op_shared_matrix(args["mask"], pol), op_shared_matrix(args["beam"], pol),
@@ -640,7 +637,6 @@ def get_new_cosmo_matrices(current_params, predictors, args,
     
     return _recompute_cosmo_matrices(current_params,
                                      args["ell_grid"], 
-                                     args["cphi_fid"],
                                      args["quadratic_estimate"].scalar_matrix,
                                      args["noise_covariance"].scalar_matrix,
                                      op_shared_matrix(args["mask"], pol),
@@ -959,7 +955,9 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
 
         #4. sample your cosmo parameters
         if iter >= num_burn_in_fix_theta:
-            for theta, proposal_sigma in list(proposal_sigmas.items()):
+            shuffled_items = list(proposal_sigmas.items())
+            random.shuffle(shuffled_items)
+            for theta, proposal_sigma in shuffled_items:
                 if should_sample[theta]:
                     rng_key, sub_key = jax.random.split(sub_key)
                     theta_key_idx = PARAM_INDEX[theta]
@@ -970,7 +968,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
                                                    mixed_phi.scalar_matrix, data_stack,
                                                    current_params, rng_key, 
                                                    args["nside"], args["pix_width"], data_field.theta_pix,
-                                                   args["ell_grid"], args["cphi_fid"],
+                                                   args["ell_grid"],
                                                    args["quadratic_estimate"].scalar_matrix,
                                                    op_matrix_stack(args["noise_covariance"], pol),
                                                    op_shared_matrix(args["mask"], pol), 
@@ -1029,9 +1027,10 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
         #Log chains to .txt files if we are running a larger experiment on an HPC
         if hpc_path is not None:
             for theta, _ in list(param_vals.items()):
-                theta_path = hpc_path + f"{theta}_map_{map_idx}_chain_{sub_chain_idx}_history.txt"
-                with open(theta_path, "a") as file:
-                    file.write(str(param_vals[theta][-1]) + "\n")
+                if should_sample[theta]:
+                    theta_path = hpc_path + f"{theta}_map_{map_idx}_chain_{sub_chain_idx}_history.txt"
+                    with open(theta_path, "a") as file:
+                        file.write(str(param_vals[theta][-1]) + "\n")
 
     return param_vals
 
@@ -1057,8 +1056,8 @@ if __name__ == "__main__":
     #Starting points in parameter space
     param_init = {}
     param_init["ombh2"] = GROUND_TRUTH["ombh2"]
-    param_init["omch2"] =  PARAM_BOUNDS["omch2"][-1]
-    param_init["theta_MC_100"] = PARAM_BOUNDS["theta_MC_100"][-1]
+    param_init["omch2"] =  PARAM_BOUNDS["omch2"][0]
+    param_init["theta_MC_100"] = PARAM_BOUNDS["theta_MC_100"][0]
     param_init["logA"] = PARAM_BOUNDS["logA"][0]
     param_init["ns"] = GROUND_TRUTH["ns"]
 
@@ -1097,6 +1096,8 @@ if __name__ == "__main__":
 
     #run the sampling algorithm.
     param_distributions = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 
-                                       should_sample, noise_level, advanced_logging, phi_init = "ZEROES",
-                                       iters_per_chain = 10_000, num_burn_in_fix_theta = 100, seed = 67)
+                                       should_sample, noise_level, advanced_logging, 
+                                       fixed_fields = False, phi_init = "ZEROES",
+                                       iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
+                                       seed = 67)
 

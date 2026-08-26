@@ -26,7 +26,7 @@ l_sample_boost=1
 l_accuracy_boost=1
 
 #output folder shared by every job
-out_dir="ABSOLUTE_PATH_TO/sampling_chains/multi_param_CAMB_grid"
+out_dir="ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/multi_param_CAMB_grid"
 
 #Grid ranges. logA / ns / ombh2 / omch2 use the same -5 sigma to +5 sigma endpoints as
 #sample_lcdm.sh so the existing 1D caches stay a valid check along each axis. H0 replaces

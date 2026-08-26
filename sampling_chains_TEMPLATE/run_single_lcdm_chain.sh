@@ -4,7 +4,7 @@
 #SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
 #SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
 #SBATCH --mem-per-cpu=16G   #memory per CPU core
-#SBATCH --mail-user=<USER>@<INSTITUTION>.edu #mail updates to this address
+#SBATCH --mail-user=<USER>@<INSTITUTE>.edu #mail updates to this address
 #SBATCH --mail-type=FAIL #mail updates on failure only
 #SBATCH --cpus-per-task=4 #This is the flag that actually increases CPUs for JAX and Julia code
 
@@ -16,7 +16,7 @@ source ABSOLUTE_PATH_TO/miniconda3/etc/profile.d/conda.sh
 conda activate myenv
 #call the python sampling script
 export JULIA_PKG_PRECOMPILE_AUTO=0
-python3 ABSOLUTE_PATH_TO/sampling_chains/run_single_lcdm_chain.py \
+python3 ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/run_single_lcdm_chain.py \
     --map_seed "$1" \
     --chain "$2" \
     --ombh2_init "$3" \
