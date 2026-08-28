@@ -12,6 +12,7 @@ from cmb_lensing.util import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
 from cmb_lensing.statistics import *
+from cmb_lensing.constants import DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT, DEFAULT_MNU, DEFAULT_TAUREIO
 
 _CAMB_COLS = {"TT": 0, "EE": 1, "BB": 2, "TE": 3}
 
@@ -738,9 +739,9 @@ def interpolate_cls(cls, lmax, lmax_prime):
 
 def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
              ombh2=0.0224567, omch2=0.118489, cosmomc_theta=0.0104098,
-             r=0.0, mnu=0.06, tau=0.05, As=jnp.exp(3.043) * 1e-10,
+             r=0.0, mnu=DEFAULT_MNU, tau=DEFAULT_TAUREIO, As=jnp.exp(3.043) * 1e-10,
              nt=0, ns=0.968602, lmax=4000, l_knee = 100,
-             k_pivot = 0.05, Alens=1, nphi_fac=2, a_phi = 1):
+             k_pivot = DEFAULT_K_PIVOT, Alens = DEFAULT_A_LENSE, nphi_fac=2, a_phi = 1):
     
     #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
     lmax_prime = min(lmax, DEFAULT_MAX_ELL)

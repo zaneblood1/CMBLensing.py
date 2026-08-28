@@ -205,8 +205,13 @@ def build_coefficients_inplace(data, label):
 #table is appended as soon as it is built and freed before the next spectrum's grid is
 #allocated. np.load reads the result exactly as if np.savez had written it in one shot
 def zip_write_array(zf, name, arr):
+    #a 0-d array is already contiguous, and np.ascontiguousarray would promote it to shape
+    #(1,) - which then breaks float()/int() on the reader side under numpy 2
+    arr = np.asarray(arr)
+    if arr.ndim > 0:
+        arr = np.ascontiguousarray(arr)
     with zf.open(name + ".npy", "w", force_zip64 = True) as f:
-        np.lib.format.write_array(f, np.ascontiguousarray(arr), allow_pickle = False)
+        np.lib.format.write_array(f, arr, allow_pickle = False)
 
 print("building spline coefficients")
 knots = None

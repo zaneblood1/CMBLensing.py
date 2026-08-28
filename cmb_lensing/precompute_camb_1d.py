@@ -37,7 +37,7 @@ import jax.numpy as jnp
 from scipy.interpolate import CubicSpline
 
 from cmb_lensing.simulate import _camb_via_callback, _extract_all_cls
-from cmb_lensing.constants import DEFAULT_MAX_ELL
+from cmb_lensing.constants import DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT, DEFAULT_MNU, DEFAULT_TAUREIO
 
 #parameter ordering used by the sampler (must match sample_lcdm.PARAM_ORDER)
 PARAM_ORDER = ["theta_MC_100", "logA", "ns", "ombh2", "omch2"]
@@ -98,8 +98,8 @@ def camb_cls_at(param_name, value):
     #fixed (non-sampled) CAMB parameters: H0=None, r=0, mnu=0.06, tau=0.05, nt=0,
     #k_pivot=0.05, Alens=1 - same as load_sim defaults
     unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
-        None, params["ombh2"], params["omch2"], cosmomc_theta, 0.0, 0.06, 0.05,
-        As, 0, params["ns"], CAMB_LMAX, 0.05, 1
+        None, params["ombh2"], params["omch2"], cosmomc_theta, 0.0, DEFAULT_MNU, DEFAULT_TAUREIO,
+        As, 0, params["ns"], CAMB_LMAX, DEFAULT_K_PIVOT, DEFAULT_A_LENSE
     )
     cls = _extract_all_cls(unlensed_scalar, tensor, total, lens_potential,
                            CAMB_LMAX, CAMB_LMAX)

@@ -116,8 +116,8 @@ jax.config.update("jax_enable_x64", True)
 
 from cmb_lensing.util import gen_ell_grid, get_fourier_weights
 from cmb_lensing.simulate import (_camb_via_callback, _extract_all_cls,
-                                  covar_matrix_from_cls, noise_cls, get_beam)
-from cmb_lensing.constants import DEFAULT_MAX_ELL
+                                  covar_matrix_from_cls, noise_cls, get_beam, get_mask)
+from cmb_lensing.constants import DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT, DEFAULT_MNU, DEFAULT_TAUREIO
 from cmb_lensing.precompute_camb_1d import (PARAM_ORDER, GROUND_TRUTH, PARAM_SIGMA,
                                             CAMB_LMAX)
 
@@ -165,8 +165,8 @@ def camb_cls_at_params(params):
     cosmomc_theta = params["theta_MC_100"] / 100
     As = np.exp(params["logA"]) * 1e-10
     unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
-        None, params["ombh2"], params["omch2"], cosmomc_theta, 0.0, 0.06, 0.05,
-        As, 0, params["ns"], CAMB_LMAX, 0.05, 1
+        None, params["ombh2"], params["omch2"], cosmomc_theta, 0.0, DEFAULT_MNU, DEFAULT_TAUREIO,
+        As, 0, params["ns"], CAMB_LMAX, DEFAULT_K_PIVOT, DEFAULT_A_LENSE
     )
     cls = _extract_all_cls(unlensed_scalar, tensor, total, lens_potential,
                            CAMB_LMAX, CAMB_LMAX)
@@ -188,7 +188,7 @@ def camb_cls_at_params(params):
 # ── Covariance blocks on the flat-sky grid ────────────────────────────────
 
 def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
-                      noise_level, l_knee, beam_fwhm):
+                      noise_level, l_knee, beam_fwhm, l_cutoff):
     """The theta-dependent covariance block(s) whose Fisher information we are counting.
 
     Every block is built through the same covar_matrix_from_cls the sampler uses, so the
@@ -216,9 +216,11 @@ def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
     #load_sim forms data = mask * beam * lensed + noise with mask identically one, so the
     #observed covariance carries beam**2 on the signal only
     beam = get_beam(nside, pix_width, ell_grid, lmax_prime, beam_fwhm = beam_fwhm)
+    mask = get_mask(l_cutoff, nside, pix_width, ell_grid)
 
     source = "total_TT" if spectra == "lensed" else "scalar_TT"
-    return {"TT": beam**2 * covar(cls[source], ells) + noise}
+    return {"TT": (mask * beam)**2 * covar(cls[source], ells) + noise}
+
 
 
 def _fisher_from_blocks(blocks_plus, blocks_minus, blocks_fid, steps, weights):
@@ -256,7 +258,7 @@ def _fisher_from_blocks(blocks_plus, blocks_minus, blocks_fid, steps, weights):
 
 def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
              spectra = "lensed", step_fracs = None, l_knee = 0, beam_fwhm = 0,
-             verbose = True):
+             l_cutoff = 10_000, verbose = True):
     """Gaussian Fisher matrix for the sampled LCDM parameters on an nside x nside box.
 
     Args:
@@ -303,7 +305,8 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
 
     def blocks_at(params):
         return covariance_blocks(camb_cls_at_params(params), spectra, nside,
-                                 pix_width, ell_grid, noise_level, l_knee, beam_fwhm)
+                                 pix_width, ell_grid, noise_level, l_knee, 
+                                 beam_fwhm, l_cutoff)
 
     if verbose:
         ells_on_grid = ell_grid[ell_grid > 0]

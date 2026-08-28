@@ -240,7 +240,7 @@ def hmc_step(x, always_accept, nside, mass_matrix,
 def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance, 
                         phi_covariance, field_covariance, mask, beam, 
                         mixing_d, mixing_g, mass_matrix,
-                        num_steps = 10, step_size = 0.05):
+                        num_steps = 10, step_size = 0.025):
     
     #Get the mixed phi gradient at a certain mixed_phi value with all other
     #inputs held constant
@@ -1044,10 +1044,10 @@ if __name__ == "__main__":
 
     #Generate a "ground truth" simulated data set
     nside = 256
-    theta_pix = 2.5
+    theta_pix = 1.75
     pol = "I"
     master_seed = 469134
-    noise_level = 1
+    noise_level = 2
     data_set = load_sim(nside, theta_pix, pol, master_seed, **ground_truth_params,
                         uk_arcmin_t = noise_level, r = 0, nt = 0, l_knee = 0)
 
@@ -1095,7 +1095,7 @@ if __name__ == "__main__":
     #run the sampling algorithm.
     param_distributions = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 
                                        should_sample, noise_level, advanced_logging, 
-                                       fixed_fields = True, phi_init = "ZEROES",
-                                       iters_per_chain = 10_000, num_burn_in_fix_theta = 0, 
+                                       fixed_fields = False, phi_init = "ZEROES",
+                                       iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
                                        seed = 67)
 

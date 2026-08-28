@@ -8,6 +8,10 @@ INVERSE_LENSE = -1
 FORWARD_LENSE = +1
 BEAM_TRANSFER_SCALAR = 8*jnp.log(2)
 DEFAULT_MAX_ELL = 4000
+DEFAULT_MNU = 0.06
+DEFAULT_TAUREIO = 0.05
+DEFAULT_K_PIVOT = 0.05
+DEFAULT_A_LENSE = 1
 
 #The default field and operator constants are defined for a square 256 x 256 map
 #with 2 arcminute resolution...

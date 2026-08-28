@@ -37,11 +37,19 @@ args = parser.parse_args()
 
 grid = CambGrid(args.grid)
 meta = np.load(args.grid)
-tau, mnu = float(meta["tau"]), float(meta["mnu"])
-lmax, k_pivot, alens = int(meta["lmax"]), float(meta["k_pivot"]), float(meta["alens"])
-accuracy = {"AccuracyBoost": float(meta["accuracy_boost"]),
-            "lSampleBoost": float(meta["l_sample_boost"]),
-            "lAccuracyBoost": float(meta["l_accuracy_boost"])}
+
+#the CAMB settings are stored as single-element arrays, not 0-d ones: merge_camb_grid's
+#zip_write_array ran them through np.ascontiguousarray, which promotes a 0-d array to
+#shape (1,). numpy 2 raises on float() of anything that is not 0-d, so read them with
+#.item(), which handles both layouts and keeps every already-merged grid file readable
+def meta_scalar(key):
+    return meta[key].item()
+
+tau, mnu = meta_scalar("tau"), meta_scalar("mnu")
+lmax, k_pivot, alens = int(meta_scalar("lmax")), meta_scalar("k_pivot"), meta_scalar("alens")
+accuracy = {"AccuracyBoost": meta_scalar("accuracy_boost"),
+            "lSampleBoost": meta_scalar("l_sample_boost"),
+            "lAccuracyBoost": meta_scalar("l_accuracy_boost")}
 ells = grid.ells
 sl = slice(None) if args.ell_max is None else slice(0, int(np.searchsorted(ells, args.ell_max)))
 
