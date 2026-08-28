@@ -75,9 +75,9 @@ should_sample["ns"] = False
 #Tune these with a single pilot chain to achieve around 44% acceptance per parameter
 proposal_sigmas = {}
 proposal_sigmas["ombh2"] = 1e-4
-proposal_sigmas["omch2"] = 3e-3
-proposal_sigmas["theta_MC_100"] = 3.5e-3
-proposal_sigmas["logA"] = 1e-2
+proposal_sigmas["omch2"] = 8e-4
+proposal_sigmas["theta_MC_100"] = 3e-3
+proposal_sigmas["logA"] = 2e-2
 proposal_sigmas["ns"] = 2.5e-2
 
 #Do not turn on any logging

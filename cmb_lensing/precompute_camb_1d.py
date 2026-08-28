@@ -58,7 +58,7 @@ PARAM_BOUNDS = {
     "logA": (2.661635, 3.782861),
     "ns": (0.867143, 1.042186),
     "ombh2": (0.020413, 0.024389),
-    "omch2": (0.079704, 0.155541),
+    "omch2": (0.085, 0.155541),
 }
 GRID_SIZE = 50
 PARAM_GRIDS = {name: np.linspace(lo, hi, GRID_SIZE) for name, (lo, hi) in PARAM_BOUNDS.items()}

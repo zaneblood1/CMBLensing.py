@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
 from scipy.stats import gmean
 import os
 from scipy.stats import gaussian_kde
@@ -74,9 +75,19 @@ def autocorrelation(chain, max_lag = None):
 
 def all_chain_trace(chains, output_path, param_name):
     plt.figure(figsize = (16, 5))
-    for idx, chain in enumerate(chains):
-        plt.plot(range(len(chain)), chain, lw = 0.7, label = f"Chain {idx} (n={len(chain)})")
-        plt.axhline(chain.mean(), ls = "--", lw = 0.8, alpha = 0.4)
+    for chain in chains:
+        plt.plot(range(len(chain)), chain, lw = 0.7)
+
+    len_samps_array = np.array([len(chain) for chain in chains])
+    mean_num_samps = np.mean(len_samps_array)
+    plt.plot([], [], label = f"Mean Num. Samples = {mean_num_samps}", color = "white")
+    std_num_samps = np.std(len_samps_array)
+    plt.plot([], [], label = f"Std. Num. Samples = {std_num_samps}", color = "white")
+    min_num_samps = np.min(len_samps_array)
+    plt.plot([], [], label = f"Min. Num. Samples = {min_num_samps}", color = "white")
+    max_num_samps = np.max(len_samps_array)
+    plt.plot([], [], label = f"Max. Num. Samples = {max_num_samps}", color = "white")
+
     plt.xlabel("Iteration"); plt.ylabel("Value")
     plt.title(f"{param_name} Markov Chain Traces")
     plt.legend(loc = "upper left", fontsize = 6, ncol = 2); plt.grid(alpha= 0.2)
@@ -125,7 +136,7 @@ def single_chain_plots(chains, output_path, ground_truth, param_name):
         plt.close()
     return
 
-def plot_multiplicative_mean(chains, output_path, ground_truth, param_name):
+def plot_multiplicative_mean(chains, avg_sigma_single, output_path, ground_truth, param_name):
 
     #compute the geometric mean and arithmetic mean density across chains
     #using a gaussian_kde for each chain
@@ -157,8 +168,12 @@ def plot_multiplicative_mean(chains, output_path, ground_truth, param_name):
     plt.axvline(multiplicative_mean + multiplicative_std, 
                 label = f"+/- 1 Mult. Std = {round(multiplicative_std, 7)}", color = "grey")
     plt.axvline(multiplicative_mean - multiplicative_std, color = "grey")
-    z_score = (ground_truth - multiplicative_mean)/multiplicative_std
-    plt.plot([], [], label=f"Z-score = {z_score}")
+    
+    product_z_score = (ground_truth - multiplicative_mean)/multiplicative_std
+    plt.plot([], [], label=f"Product Z-score = {product_z_score}")
+
+    std_err_z_score = (ground_truth - multiplicative_mean)/avg_sigma_single
+    plt.plot([], [], label=f"Std. Err. Z-score = {std_err_z_score}")
 
     plt.xlabel("Value"); plt.ylabel("Density")
     plt.title(f"{param_name} Combined Geometric Distribution")
@@ -202,34 +217,40 @@ def plot_geometric_mean_from_pdfs(grid, pdfs, output_path, ground_truth, param_n
     plt.close()
     return
 
-def plot_autocorrelation_chains(chains, output_path, param_name):
-    acfs = []
+def plot_autocorrelation_chains(chains_per_map, output_path, param_name):
+    acfs_per_map = []
     plt.figure()
-    for chain in chains:
-        acf = autocorrelation(chain)
-        acfs.append(acf)
-        plt.plot(acf)
+    for chains in chains_per_map:
+        acfs = []
+        for chain in chains:
+            acf = autocorrelation(chain)
+            acfs.append(acf)
+            plt.plot(acf)
+        acfs_per_map.append(acfs)
     plt.xlabel("Lag"); plt.ylabel("Auto-Correlation")
     plt.axhline(0, color = "black")
     plt.title(f"{param_name} Auto-Correlation")
     plt.savefig(output_path + f"{param_name}_auto_correlation.png")
     plt.close()
-    return acfs
+    return acfs_per_map
 
-def plot_iat_per_chain(acfs, output_path, param_name):
+def plot_iat_per_chain(acfs_per_map, output_path, param_name):
     plt.figure()
-    iats = []
-    for acf in acfs:
-        iat = integrated_autocorrelation_time(acf)
-        iats.append(iat)
-    plt.barh(range(len(np.array(iats))), np.array(iats))
+    iats_per_map = []
+    for acfs in acfs_per_map:
+        iats = []
+        for acf in acfs:
+            iat = integrated_autocorrelation_time(acf)
+            iats.append(iat)
+        iats_per_map.append(iats)
+    plt.barh(range(len(np.array(iats_per_map).flatten())), np.array(iats_per_map).flatten())
     plt.ylabel("Chain"); plt.xlabel("Integrated Auto-Correlation Time")
-    plt.axvline(np.mean(np.array(np.array(iats).flatten())), label = "Mean IAT", color = "black")
+    plt.axvline(np.mean(np.array(np.array(iats_per_map).flatten())), label = "Mean IAT", color = "black")
     plt.legend()
     plt.title(f"{param_name} Integrated Auto Correlation Time per Chain")
     plt.savefig(output_path + f"{param_name}_integrated_autocorrelation_times.png")
     plt.close()
-    return iats
+    return iats_per_map
 
 def scalar_series_map_series_correlation(scalars, arrays):
     #Compute the pixelwise Pearson correlation across the time axis. If you have N scalars
@@ -512,7 +533,7 @@ def plot_mode_histogram(chains, output_path, ground_truth, param_name):
     plt.legend(); plt.grid(alpha = 0.2)
     plt.savefig(output_path + f"{param_name}_mode_histogram.png", dpi = 150, bbox_inches = "tight")
     plt.close()
-    return
+    return avg_sigma_single
 
 def plot_mode_histogram_from_pdfs(grid, pdfs, output_path, ground_truth, param_name):
     #mode of each per-map marginal via KDE argmax
@@ -546,21 +567,24 @@ def plot_mode_histogram_from_pdfs(grid, pdfs, output_path, ground_truth, param_n
     plt.close()
     return
 
-def prune_chains(chains, iats, acfs = None,
+def prune_chains(chains_per_map, iats_per_map, acfs_per_map = None,
                  use_zero_crossing = USE_ZERO_CROSSING_PRUNE):
     #thin each chain by its own stride so the retained points are not correlated. the
     #stride is either the integrated autocorrelation time (default) or, with
     #use_zero_crossing, the lag just before that chain's acf first crosses zero
-    if use_zero_crossing and acfs is None:
+    if use_zero_crossing and acfs_per_map is None:
         raise ValueError("use_zero_crossing pruning requires the per-chain acfs")
     pruned_chains = []
-    for idx, chain in enumerate(chains):
-        if use_zero_crossing:
-            stride = first_zero_crossing_lag(acfs[idx])
-        else:
-            #clamp so an IAT below 1 cannot produce a zero slice step
-            stride = max(1, int(iats[idx]))
-        pruned_chains.append(chain[0:-1:stride])
+    for i, chains in enumerate(chains_per_map):
+        concatenated_chain = []
+        for j, chain in enumerate(chains):
+            if use_zero_crossing:
+                stride = first_zero_crossing_lag(acfs_per_map[i][j])
+            else:
+                #clamp so an IAT below 1 cannot produce a zero slice step
+                stride = max(1, int(iats_per_map[i][j]))
+            concatenated_chain.append(chain[0:-1:stride])
+        pruned_chains.append(np.concatenate([chain for chain in concatenated_chain]))
     return pruned_chains
 
 def average_over_phi(chains, output_path, ground_truth, param_name):
@@ -618,27 +642,24 @@ def per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, ground_t
                 array = np.loadtxt(file_path)
                 if len(array) > default_burn_in:
                     chains_per_map.append(np.loadtxt(file_path)[default_burn_in:])
-        if len(chains_per_map) > 1:
-            concatenated_phi_chains = np.concatenate([chain for chain in chains_per_map])
-            if len(concatenated_phi_chains) > 1:
-                #gelman-rubin R-statistic
-                r_hats.append(gelman_rubin(chains_per_map))
-                raw_chains.append(concatenated_phi_chains)
+        #gelman-rubin R-statistic
+        r_hats.append(gelman_rubin(chains_per_map))
+        raw_chains.append(chains_per_map)
 
     r_hats = np.array(r_hats)
     print(r_hats)
-    print(f"Average Gelman-Rubin R Statistic = {np.mean(r_hats)}")
-    print(f"Std in Gelman-Rubin R Statistic = {np.std(r_hats)}")
+    print(f"{param_name} Average Gelman-Rubin R Statistic = {np.mean(r_hats)}")
+    print(f"{param_name} Std in Gelman-Rubin R Statistic = {np.std(r_hats)}")
 
     #auto-correlation plots
-    acfs = plot_autocorrelation_chains(raw_chains, output_path, param_name)
+    acfs_per_map = plot_autocorrelation_chains(raw_chains, output_path, param_name)
 
     #integrated autocorrelation time
-    iats = plot_iat_per_chain(acfs, output_path, param_name)
+    iats_per_map = plot_iat_per_chain(acfs_per_map, output_path, param_name)
 
     #prune the chains by their individual strides (IAT or first zero crossing, per
     #USE_ZERO_CROSSING_PRUNE):
-    chains = prune_chains(raw_chains, iats, acfs = acfs, use_zero_crossing = USE_ZERO_CROSSING_PRUNE)
+    chains = prune_chains(raw_chains, iats_per_map, acfs_per_map = acfs_per_map, use_zero_crossing = USE_ZERO_CROSSING_PRUNE)
     
     #make an all chain trace plot
     all_chain_trace(chains, output_path, param_name)
@@ -646,13 +667,24 @@ def per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, ground_t
     #plot each single map's distribution
     plot_marginals(chains, output_path, ground_truth, param_name)
 
-    #combined geometric mean
-    plot_multiplicative_mean(chains, output_path, ground_truth, param_name)
-
     #histogram of per-map marginal modes
-    plot_mode_histogram(chains, output_path, ground_truth, param_name)
+    avg_sigma_single = plot_mode_histogram(chains, output_path, ground_truth, param_name)
 
-    return raw_chains, chains
+    #combined geometric mean
+    plot_multiplicative_mean(chains, avg_sigma_single, output_path, ground_truth, param_name)
+
+    #concatenate the columns to turn the D x N raw_chains list of list of lists
+    #into a D length list of lists
+    stacked_chains = stack_chains(raw_chains)
+
+    return stacked_chains
+
+def stack_chains(raw_chains):
+    stacked_chains = []
+    for chains in raw_chains:
+        stacked_chain = np.concatenate([chain for chain in chains])
+        stacked_chains.append(stacked_chain)
+    return stacked_chains
 
 def plot_annotated_matrix(matrix, param_names, title, output_path, file_name, cmap = "coolwarm",
                           norm = None, fmt = "{:+.3f}"):
@@ -737,11 +769,76 @@ def get_correlation_matrix(raw_chains):
     norm = matplotlib.colors.Normalize(vmin = -1, vmax = 1)
     plot_annotated_matrix(corr_mat, param_names, "Posterior Correlation Matrix", output_path,
                           "correlation_matrix.png", norm = norm, fmt = "{:+.3f}")
-    return cov_mat, corr_mat
+    return cov_mat, corr_mat, param_names
+
+def triangle_plot(cov_mat, param_names, means, sigmas = (1,)):
+    """Gaussian-approximation triangle plot of the pooled posterior.
+
+    Draws the marginal Gaussian of every sampled parameter down the diagonal and the joint
+    confidence ellipse of every pair below it, all built from the posterior covariance and
+    means. sigmas lists which contours to draw (1-sigma only by default); each level k gives
+    semi-axes k * sqrt(eigenvalue) of the pair's 2x2 covariance block.
+    """
+    output_path = os.getcwd() + f"/sampling_chains/lcdm_chain_plots/"
+    cov_mat = np.asarray(cov_mat)
+    means = np.asarray(means)
+    n = len(param_names)
+    #pad the axes out past the widest requested contour so no ellipse is clipped
+    pad = max(sigmas) + 1
+    limits = [(means[i] - pad * np.sqrt(cov_mat[i, i]), means[i] + pad * np.sqrt(cov_mat[i, i]))
+              for i in range(n)]
+
+    fig, axes = plt.subplots(n, n, figsize = (2.8 * n, 2.8 * n), squeeze = False)
+    for i in range(n):
+        for j in range(n):
+            ax = axes[i, j]
+            #only the lower triangle carries a panel
+            if j > i:
+                ax.axis("off")
+                continue
+            if i == j:
+                sigma = np.sqrt(cov_mat[i, i])
+                grid = np.linspace(*limits[i], 500)
+                ax.plot(grid, np.exp(-0.5 * ((grid - means[i]) / sigma) ** 2), color = "black")
+                ax.set_ylim(0, 1.1)
+                ax.set_yticks([])
+            else:
+                #column j is the x parameter, row i the y parameter; the eigenvectors of their
+                #2x2 block are the ellipse axes and the eigenvalues its squared semi-axes
+                block = cov_mat[np.ix_([j, i], [j, i])]
+                eig_vals, eig_vecs = np.linalg.eigh(block)
+                angle = np.degrees(np.arctan2(eig_vecs[1, -1], eig_vecs[0, -1]))
+                #widest contour first so the tighter ones stay visible on top of it
+                for k in sorted(sigmas, reverse = True):
+                    width, height = 2 * k * np.sqrt(eig_vals[::-1])
+                    ax.add_patch(Ellipse((means[j], means[i]), width, height, angle = angle,
+                                         facecolor = "tab:blue", edgecolor = "black",
+                                         alpha = 0.55 / k, label = f"{k}$\\sigma$"))
+                ax.set_ylim(*limits[i])
+            ax.set_xlim(*limits[j])
+            ax.grid(alpha = 0.2)
+            ax.tick_params(labelsize = 8)
+            if i == n - 1:
+                ax.set_xlabel(param_names[j])
+                plt.setp(ax.get_xticklabels(), rotation = 45, ha = "right")
+            else:
+                ax.set_xticklabels([])
+            if j == 0 and i != 0:
+                ax.set_ylabel(param_names[i])
+            elif i != j:
+                ax.set_yticklabels([])
+    if n > 1:
+        axes[1, 0].legend(loc = "best", fontsize = 8)
+    fig.suptitle("Posterior Triangle Plot (Gaussian approximation)")
+    plt.savefig(output_path + "triangle_plot.png", dpi = 150, bbox_inches = "tight")
+    plt.close(fig)
+    return
 
 def joint_param_analysis(all_chains):
-    cov_mat, _ = get_correlation_matrix(all_chains)
+    cov_mat, _ , param_names= get_correlation_matrix(all_chains)
     get_fisher_matrix(cov_mat, list(all_chains.keys()))
+    means = [np.mean(np.concatenate(all_chains[name])) for name in param_names]
+    triangle_plot(cov_mat, param_names, means)
     return
 
 def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values, was_sampled, default_burn_in):
@@ -750,7 +847,7 @@ def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values, w
     all_chains = {}
     for param_name, ground_truth in ground_truth_values.items():
         if was_sampled[param_name]:
-            chains_per_param, _ = per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, 
+            chains_per_param = per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, 
                                                      ground_truth, default_burn_in, param_name)
             all_chains[param_name] = chains_per_param
 
@@ -768,10 +865,10 @@ def get_num_sampled(was_sampled):
 
 if __name__ == "__main__":
 
-    num_maps = 10
+    num_maps = 50
     num_chains = 5
-    default_burn_in = 500
-    map_pre_factor = 234567
+    default_burn_in = 600
+    map_pre_factor = 234567 #SHOULD MATCH WHAT IS IN SUBMISSION SCRIPT
     file_name = "<FILE_NAME>"
 
     ground_truth_values = {}

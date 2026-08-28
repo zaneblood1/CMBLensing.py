@@ -28,7 +28,7 @@ num_chains=5 #5 different MCMC chains per data map
 ombh2_min=0.020413
 ombh2_max=0.024389
 
-omch2_min=0.079704
+omch2_min=0.085
 omch2_max=0.155541
 
 theta_MC_100_min=0.9328
@@ -41,7 +41,7 @@ ns_min=0.867143
 ns_max=1.042186
 
 num_burn_in_fix_theta=100 
-iters_per_chain=1500
+iters_per_chain=3000
 num_burn_in_always_accept=0
 
 #store all these common parameters in an 

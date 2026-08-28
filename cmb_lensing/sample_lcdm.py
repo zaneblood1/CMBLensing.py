@@ -240,7 +240,7 @@ def hmc_step(x, always_accept, nside, mass_matrix,
 def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance, 
                         phi_covariance, field_covariance, mask, beam, 
                         mixing_d, mixing_g, mass_matrix,
-                        num_steps = 5, step_size = 0.1):
+                        num_steps = 10, step_size = 0.05):
     
     #Get the mixed phi gradient at a certain mixed_phi value with all other
     #inputs held constant
@@ -909,7 +909,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
         rng_key, sub_key = jax.random.split(sub_key)
         phi_rng_matrix = field_from_covar_single_key(data_set.data.nside, inv_mass_matrix.scalar_matrix, rng_key)
         phi_rng = phi_map.replace(scalar_matrix = jfft.rfft2(phi_rng_matrix))
-        phi = phi_rng + phi_map
+        phi = phi_rng + phi_map     
     else:
         phi = 0*data_set.phi
 
@@ -955,9 +955,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
 
         #4. sample your cosmo parameters
         if iter >= num_burn_in_fix_theta:
-            shuffled_items = list(proposal_sigmas.items())
-            random.shuffle(shuffled_items)
-            for theta, proposal_sigma in shuffled_items:
+            for theta, proposal_sigma in list(proposal_sigmas.items()):
                 if should_sample[theta]:
                     rng_key, sub_key = jax.random.split(sub_key)
                     theta_key_idx = PARAM_INDEX[theta]
@@ -1045,39 +1043,39 @@ if __name__ == "__main__":
     ground_truth_params["ns"] = GROUND_TRUTH["ns"]
 
     #Generate a "ground truth" simulated data set
-    nside = 128
+    nside = 256
     theta_pix = 2.5
     pol = "I"
-    master_seed = 1283746 * 4
-    noise_level = 5
+    master_seed = 469134
+    noise_level = 1
     data_set = load_sim(nside, theta_pix, pol, master_seed, **ground_truth_params,
                         uk_arcmin_t = noise_level, r = 0, nt = 0, l_knee = 0)
 
     #Starting points in parameter space
     param_init = {}
-    param_init["ombh2"] = GROUND_TRUTH["ombh2"]
-    param_init["omch2"] =  PARAM_BOUNDS["omch2"][0]
-    param_init["theta_MC_100"] = PARAM_BOUNDS["theta_MC_100"][0]
-    param_init["logA"] = PARAM_BOUNDS["logA"][0]
-    param_init["ns"] = GROUND_TRUTH["ns"]
+    param_init["ombh2"] = PARAM_BOUNDS["ombh2"][-1]
+    param_init["omch2"] =  GROUND_TRUTH["omch2"]
+    param_init["theta_MC_100"] =  GROUND_TRUTH["theta_MC_100"]
+    param_init["logA"] =  GROUND_TRUTH["logA"]
+    param_init["ns"] = PARAM_BOUNDS["ns"][0]
 
     #Whether or not to sample each parameter
     should_sample = {}
-    should_sample["ombh2"] = False
-    should_sample["omch2"] = True
-    should_sample["theta_MC_100"] = True
-    should_sample["logA"] = True
-    should_sample["ns"] = False
+    should_sample["ombh2"] = True
+    should_sample["omch2"] = False
+    should_sample["theta_MC_100"] = False
+    should_sample["logA"] = False
+    should_sample["ns"] = True
 
     #Width of the proposed Gaussian distribution used in the Metropolis
     #step for sampling the LCDM parameters. These should be tuned to around
     #a 44 - 50% acceptance rate
     proposal_sigmas = {}
     proposal_sigmas["ombh2"] = 1e-4
-    proposal_sigmas["omch2"] = 3e-3
-    proposal_sigmas["theta_MC_100"] = 3.5e-3
-    proposal_sigmas["logA"] = 2.5e-2
-    proposal_sigmas["ns"] = 1e-2
+    proposal_sigmas["omch2"] = 8e-4
+    proposal_sigmas["theta_MC_100"] = 3e-3
+    proposal_sigmas["logA"] = 2e-2
+    proposal_sigmas["ns"] = 5e-3
 
     #allowed search ranges for each of the LCDM parameters
     param_ranges = {}
@@ -1097,7 +1095,7 @@ if __name__ == "__main__":
     #run the sampling algorithm.
     param_distributions = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 
                                        should_sample, noise_level, advanced_logging, 
-                                       fixed_fields = False, phi_init = "ZEROES",
-                                       iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
+                                       fixed_fields = True, phi_init = "ZEROES",
+                                       iters_per_chain = 10_000, num_burn_in_fix_theta = 0, 
                                        seed = 67)
 
