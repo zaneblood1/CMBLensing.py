@@ -12,7 +12,9 @@ from cmb_lensing.util import *
 from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
 from cmb_lensing.statistics import *
-from cmb_lensing.constants import DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT, DEFAULT_MNU, DEFAULT_TAUREIO
+from cmb_lensing.constants import (DEFAULT_MAX_ELL, DEFAULT_A_LENSE, 
+                                   DEFAULT_K_PIVOT, DEFAULT_MNU, 
+                                   DEFAULT_TAUREIO, DEFAULT_THETA_H0_RANGE)
 
 _CAMB_COLS = {"TT": 0, "EE": 1, "BB": 2, "TE": 3}
 
@@ -469,7 +471,8 @@ def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
     pars = camb.set_params(
         H0=H0, ombh2=ombh2, omch2=omch2, cosmomc_theta=cosmomc_theta,
         r=r, mnu=mnu, As=As, nt=nt, ns=ns, lmax=lmax_prime,
-        tau=tau, pivot_scalar=k_pivot, pivot_tensor=k_pivot, Alens=Alens
+        tau=tau, pivot_scalar=k_pivot, pivot_tensor=k_pivot, Alens=Alens,
+        theta_H0_range=DEFAULT_THETA_H0_RANGE
     )
     pars.max_l_tensor = 600 #NOTE switching to Yuuki's values from 2 * lmax_prime
     pars.max_eta_k_tensor = 1200 #NOTE switching to Yuuki's values from 4 * lmax_prime
@@ -492,8 +495,7 @@ def _camb_callback_fn(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         power_spectra, lens_potential = _run_camb(
             H0, float(ombh2), float(omch2), float(cosmomc_theta),
             float(r), float(mnu), float(tau), float(As), float(nt), float(ns),
-            lmax_prime, float(k_pivot), float(Alens)
-        )
+            lmax_prime, float(k_pivot), float(Alens))
         unlensed_scalar = jnp.asarray(power_spectra["unlensed_scalar"], dtype=jnp.float64)
         tensor = jnp.asarray(power_spectra["tensor"], dtype=jnp.float64)
         total = jnp.asarray(power_spectra["total"], dtype=jnp.float64)
@@ -737,11 +739,11 @@ def interpolate_cls(cls, lmax, lmax_prime):
 
 # ── Main Simulation Entry Point ──────────────────────────────────────────
 
-def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t=3, H0=None,
-             ombh2=0.0224567, omch2=0.118489, cosmomc_theta=0.0104098,
-             r=0.0, mnu=DEFAULT_MNU, tau=DEFAULT_TAUREIO, As=jnp.exp(3.043) * 1e-10,
-             nt=0, ns=0.968602, lmax=4000, l_knee = 100,
-             k_pivot = DEFAULT_K_PIVOT, Alens = DEFAULT_A_LENSE, nphi_fac=2, a_phi = 1):
+def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
+             ombh2 = 0.0224567, omch2 = 0.118489, cosmomc_theta = 0.0104098,
+             r = 0.0, mnu = DEFAULT_MNU, tau = DEFAULT_TAUREIO, As = jnp.exp(3.043) * 1e-10,
+             nt = 0, ns = 0.968602, lmax = 4000, l_knee = 100,
+             k_pivot = DEFAULT_K_PIVOT, Alens = DEFAULT_A_LENSE, nphi_fac = 2, a_phi = 1):
     
     #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
     lmax_prime = min(lmax, DEFAULT_MAX_ELL)

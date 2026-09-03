@@ -307,6 +307,47 @@ def plot_uncached_run_times():
         plt.close(fig)
 
 
+# --- Goal 1b / 5b: The same run times in tabular form ---
+def format_time(mean, std):
+    return f"{mean:.4g} ± {std:.3g}"
+
+
+def save_run_time_table(cached = True):
+    out_dir = os.path.join(ANALYSIS_DIR, "run_time_vs_map_size")
+    os.makedirs(out_dir, exist_ok = True)
+    label = "Cached" if cached else "Uncached"
+
+    for polarity in get_available_polarities():
+        available_map_sizes = get_available_map_sizes(polarity)
+        julia_means, julia_stds = average_times(JULIA_DIR, polarity, available_map_sizes, cached = cached)
+        python_means, python_stds = average_times(PYTHON_DIR, polarity, available_map_sizes, cached = cached)
+
+        col_labels = ["Map Size (Nside)", "Julia (s)", "Python (s)", "Python / Julia"]
+        cell_text = []
+        for i, map_size in enumerate(available_map_sizes):
+            ratio = python_means[i] / julia_means[i] if julia_means[i] > 0 else np.nan
+            cell_text.append([
+                str(map_size),
+                format_time(julia_means[i], julia_stds[i]),
+                format_time(python_means[i], python_stds[i]),
+                f"{ratio:.3g}"
+            ])
+
+        fig, ax = plt.subplots(figsize = (2.2 * len(col_labels), 0.45 * (len(cell_text) + 2)))
+        ax.axis("off")
+        table = ax.table(cellText = cell_text, colLabels = col_labels, cellLoc = "center", loc = "center")
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.auto_set_column_width(col = list(range(len(col_labels))))
+        table.scale(1, 1.5)
+        for col in range(len(col_labels)):
+            table[0, col].set_facecolor("#dddddd")
+            table[0, col].set_text_props(weight = "bold")
+        ax.set_title(f"{label} Run Time (mean ± std) vs Map Size — Polarity: {polarity}", pad = 12)
+        fig.savefig(os.path.join(out_dir, f"{label.lower()}_run_time_table_{polarity}.png"), dpi = 150, bbox_inches = "tight")
+        plt.close(fig)
+
+
 # --- Goal 2: Fractional difference (sim vs prediction) vs map size ---
 def plot_fractional_difference():
     out_dir = os.path.join(ANALYSIS_DIR, "perc_diff_vs_map_size")
@@ -357,6 +398,21 @@ def plot_julia_vs_python_diff():
 
 
 # --- Goal 4: Cross correlation vs map size ---
+PANEL_ORDER = ["t_field", "e_field", "b_field", "phi"]
+COMPONENT_LABELS = {"t_field": "T", "e_field": "E", "b_field": "B", "phi": "$\\phi$"}
+
+
+def draw_cross_correlation(ax, component, map_size, js_jp, js_pp, pp_jp):
+    ell_1, rho_1 = js_jp[component][map_size]
+    ell_2, rho_2 = js_pp[component][map_size]
+    ell_3, rho_3 = pp_jp[component][map_size]
+    ax.plot(ell_1, rho_1, label="Julia Sim x Julia Pred")
+    ax.plot(ell_2, rho_2, label="Julia Sim x Python Pred")
+    ax.plot(ell_3, rho_3, label="Python Pred x Julia Pred")
+    ax.set_xlabel("$\\ell$")
+    ax.set_ylabel("Cross Correlation $\\rho(\\ell)$")
+
+
 def plot_cross_correlations():
     out_dir = os.path.join(ANALYSIS_DIR, "correlation_vs_map_size")
     os.makedirs(out_dir, exist_ok=True)
@@ -368,24 +424,41 @@ def plot_cross_correlations():
             for map_size in available_map_sizes:
                 if map_size not in js_jp[component]:
                     continue
-                ell_1, rho_1 = js_jp[component][map_size]
-                ell_2, rho_2 = js_pp[component][map_size]
-                ell_3, rho_3 = pp_jp[component][map_size]
                 fig, ax = plt.subplots()
-                ax.plot(ell_1, rho_1, label="Julia Sim x Julia Pred")
-                ax.plot(ell_2, rho_2, label="Julia Sim x Python Pred")
-                ax.plot(ell_3, rho_3, label="Python Pred x Julia Pred")
-                ax.set_xlabel("$\\ell$")
-                ax.set_ylabel("Cross Correlation $\\rho(\\ell)$")
+                draw_cross_correlation(ax, component, map_size, js_jp, js_pp, pp_jp)
                 ax.set_title(f"Cross Correlation — {component} — N={map_size} — Polarity: {polarity}")
                 ax.legend()
                 fig.savefig(os.path.join(out_dir, f"cross_correlation_{polarity}_{component}_N{map_size}.png"), dpi=150, bbox_inches="tight")
                 plt.close(fig)
 
+        #one combined figure per map size (2 x 2 for "IP") holding every component together
+        for map_size in available_map_sizes:
+            panels = [c for c in PANEL_ORDER if c in components and map_size in js_jp[c]]
+            if len(panels) == 0:
+                continue
+            ncols = min(2, len(panels))
+            nrows = int(np.ceil(len(panels) / ncols))
+            fig, axes = plt.subplots(nrows, ncols, figsize = (6 * ncols, 4 * nrows), squeeze = False)
+            flat_axes = axes.ravel()
+            #every panel keeps its own axis labels: the ell range differs per component
+            for ax, component in zip(flat_axes, panels):
+                draw_cross_correlation(ax, component, map_size, js_jp, js_pp, pp_jp)
+                ax.set_title(COMPONENT_LABELS[component])
+            for ax in flat_axes[len(panels):]:
+                ax.axis("off")
+            handles, labels = flat_axes[0].get_legend_handles_labels()
+            fig.legend(handles, labels, loc = "lower center", ncol = len(labels), frameon = False)
+            fig.suptitle(f"Cross Correlation — N={map_size} — Polarity: {polarity}")
+            fig.tight_layout(rect = [0, 0.06, 1, 1])
+            fig.savefig(os.path.join(out_dir, f"cross_correlation_{polarity}_all_N{map_size}.png"), dpi=150, bbox_inches="tight")
+            plt.close(fig)
+
 
 if __name__ == "__main__":
     plot_cached_run_times()
     plot_uncached_run_times()
+    save_run_time_table(cached = True)
+    save_run_time_table(cached = False)
     plot_fractional_difference()
     plot_julia_vs_python_diff()
     plot_cross_correlations()

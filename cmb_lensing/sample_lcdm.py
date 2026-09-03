@@ -240,7 +240,7 @@ def hmc_step(x, always_accept, nside, mass_matrix,
 def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance, 
                         phi_covariance, field_covariance, mask, beam, 
                         mixing_d, mixing_g, mass_matrix,
-                        num_steps = 10, step_size = 0.025):
+                        num_steps = 10, step_size = 0.05):
     
     #Get the mixed phi gradient at a certain mixed_phi value with all other
     #inputs held constant
@@ -836,8 +836,8 @@ def update_args_after_sample(current_params, predictors, args,
 #algorithm to jointly sample cosmological parameters
 def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, noise_level, 
                  advanced_logging, fixed_fields = False, phi_init = "MAP",
-                 iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
-                 num_burn_in_always_accept = 0, seed = None, map_idx = 1, sub_chain_idx = 1,  
+                 iters_per_chain = 10_000, num_burn_in_fix_theta = 100, num_burn_in_always_accept = 0, 
+                 resume_chain_key = None, seed = None, map_idx = 1, sub_chain_idx = 1,  
                  lmax = DEFAULT_MAX_ELL, metropolis_num_steps = 1, hpc_path = None):
 
     #polarization mode follows the dataset 
@@ -898,6 +898,8 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
     #otherwise use machine entropy to generate a random number
     if seed is not None:
         sub_key = jax.random.PRNGKey(seed)
+    elif resume_chain_key is not None:
+        sub_key = resume_chain_key
     else:
         sub_key = jax.random.PRNGKey(np.random.randint(0, 2**31))
 
@@ -905,11 +907,12 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
     #of the Hessian pre-conditioner empirically seems to decrease the burn-in time (DEFAULT)
     if phi_init == "MAP":
         _, phi_map = map_joint(data_set)
+        phi = phi_map
+    elif phi_init == "RNG":
         inv_mass_matrix = pinv(pinv(args["phi_covariance"]) + pinv(args["quadratic_estimate"]))
         rng_key, sub_key = jax.random.split(sub_key)
         phi_rng_matrix = field_from_covar_single_key(data_set.data.nside, inv_mass_matrix.scalar_matrix, rng_key)
-        phi_rng = phi_map.replace(scalar_matrix = jfft.rfft2(phi_rng_matrix))
-        phi = phi_rng + phi_map     
+        phi = data_set.phi.replace(scalar_matrix = jfft.rfft2(phi_rng_matrix))
     else:
         phi = 0*data_set.phi
 
@@ -945,7 +948,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
             #3. sample the lensing potential phi
             rng_key, sub_key = jax.random.split(sub_key)
             mixed_phi, delta_h, accept = gibbs_sample_phi(mixed_phi, mixed_temp, data_field, rng_key,
-                                                    args, iter, num_burn_in_always_accept)
+                                                          args, iter, num_burn_in_always_accept)
             if advanced_logging["phi_acceptance"]:
                 phi_acceptance.append(int(accept))
                 print(f"Phi accept rate = {np.sum(np.array(phi_acceptance)) / len(phi_acceptance)}")
@@ -1030,7 +1033,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
                     with open(theta_path, "a") as file:
                         file.write(str(param_vals[theta][-1]) + "\n")
 
-    return param_vals
+    return param_vals, phi, sub_key 
 
 if __name__ == "__main__":
 
@@ -1043,37 +1046,37 @@ if __name__ == "__main__":
     ground_truth_params["ns"] = GROUND_TRUTH["ns"]
 
     #Generate a "ground truth" simulated data set
-    nside = 256
-    theta_pix = 1.75
+    nside = 128
+    theta_pix = 2.5
     pol = "I"
     master_seed = 469134
-    noise_level = 2
+    noise_level = 2.5
     data_set = load_sim(nside, theta_pix, pol, master_seed, **ground_truth_params,
                         uk_arcmin_t = noise_level, r = 0, nt = 0, l_knee = 0)
 
     #Starting points in parameter space
     param_init = {}
-    param_init["ombh2"] = PARAM_BOUNDS["ombh2"][-1]
-    param_init["omch2"] =  GROUND_TRUTH["omch2"]
-    param_init["theta_MC_100"] =  GROUND_TRUTH["theta_MC_100"]
-    param_init["logA"] =  GROUND_TRUTH["logA"]
-    param_init["ns"] = PARAM_BOUNDS["ns"][0]
+    param_init["ombh2"] = GROUND_TRUTH["ombh2"]
+    param_init["omch2"] =  PARAM_BOUNDS["omch2"][-1]
+    param_init["theta_MC_100"] =  PARAM_BOUNDS["theta_MC_100"][-1]
+    param_init["logA"] =  PARAM_BOUNDS["logA"][0]
+    param_init["ns"] = GROUND_TRUTH["ns"]
 
     #Whether or not to sample each parameter
     should_sample = {}
-    should_sample["ombh2"] = True
-    should_sample["omch2"] = False
-    should_sample["theta_MC_100"] = False
-    should_sample["logA"] = False
-    should_sample["ns"] = True
+    should_sample["ombh2"] = False
+    should_sample["omch2"] = True
+    should_sample["theta_MC_100"] = True
+    should_sample["logA"] = True
+    should_sample["ns"] = False
 
     #Width of the proposed Gaussian distribution used in the Metropolis
     #step for sampling the LCDM parameters. These should be tuned to around
     #a 44 - 50% acceptance rate
     proposal_sigmas = {}
     proposal_sigmas["ombh2"] = 1e-4
-    proposal_sigmas["omch2"] = 8e-4
-    proposal_sigmas["theta_MC_100"] = 3e-3
+    proposal_sigmas["omch2"] = 1.5e-3
+    proposal_sigmas["theta_MC_100"] = 2e-3
     proposal_sigmas["logA"] = 2e-2
     proposal_sigmas["ns"] = 5e-3
 
@@ -1093,9 +1096,9 @@ if __name__ == "__main__":
     advanced_logging["plot_lcdm_sigmas"] = True
 
     #run the sampling algorithm.
-    param_distributions = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 
-                                       should_sample, noise_level, advanced_logging, 
-                                       fixed_fields = False, phi_init = "ZEROES",
-                                       iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
-                                       seed = 67)
+    param_distributions, _, _ = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 
+                                             should_sample, noise_level, advanced_logging, 
+                                             fixed_fields = False, phi_init = "ZEROES",
+                                             iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
+                                             seed = 67)
 

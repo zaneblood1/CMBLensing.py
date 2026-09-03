@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
+from matplotlib.lines import Line2D
 from scipy.stats import gmean
 import os
 from scipy.stats import gaussian_kde
@@ -9,6 +10,7 @@ from scipy.stats import mode
 from cmb_lensing.util import precision_load
 import jax.numpy.fft as jfft
 from cmb_lensing.statistics import *
+from cmb_lensing.fisher_forecast import annotated_heatmap, forecast, covariance_from_fisher, GROUND_TRUTH
 
 BUFFER = 1e-4
 GRID_SIZE = 5_000
@@ -769,24 +771,57 @@ def get_correlation_matrix(raw_chains):
     norm = matplotlib.colors.Normalize(vmin = -1, vmax = 1)
     plot_annotated_matrix(corr_mat, param_names, "Posterior Correlation Matrix", output_path,
                           "correlation_matrix.png", norm = norm, fmt = "{:+.3f}")
+    plot_covariance_matrix(cov_mat, param_names, output_path)
     return cov_mat, corr_mat, param_names
 
-def triangle_plot(cov_mat, param_names, means, sigmas = (1,)):
-    """Gaussian-approximation triangle plot of the pooled posterior.
+def plot_covariance_matrix(cov_mat, names, path):
+    figure, axis = plt.subplots(figsize = (7.5, 6.5))
+    annotated_heatmap(axis, cov_mat, names,
+                      "Covariance Matrix", "Value")
+    figure.tight_layout()
+    figure.savefig(path + "covariance_matrix.png", dpi = 150)
+    plt.close(figure)
 
-    Draws the marginal Gaussian of every sampled parameter down the diagonal and the joint
-    confidence ellipse of every pair below it, all built from the posterior covariance and
-    means. sigmas lists which contours to draw (1-sigma only by default); each level k gives
-    semi-axes k * sqrt(eigenvalue) of the pair's 2x2 covariance block.
+def triangle_plot(measured_cov_mat, forecasted_cov_mat, param_names, means, sigmas = (1,)):
+    """Triangle plot comparing the sampled posterior against the Fisher forecast.
+
+    Two Gaussian approximations are drawn on the same axes: the MEASURED one, pooled from
+    the Gibbs chains by get_correlation_matrix, and the FORECASTED one, the inverse Fisher
+    matrix from fisher_forecast. The diagonal carries each parameter's marginal Gaussian,
+    the lower triangle each pair's joint confidence ellipse. sigmas lists which contours to
+    draw (1-sigma only by default); each level k gives semi-axes k * sqrt(eigenvalue) of the
+    pair's 2x2 covariance block.
+
+    Both are centred on the MEASURED means. The forecast is a curvature, not a location -
+    it has a shape but no centre - so drawing the two around a common point makes the plot
+    a direct read of width and orientation, which is the only thing the two matrices can be
+    compared on. Each diagonal panel is annotated with sigma_measured / sigma_forecast:
+    above 1 means the sampler is doing worse than the forecast says the data allows, near 1
+    means it is saturating the forecast, and below 1 means it is extracting information the
+    Gaussian two-point forecast does not model (or has not converged).
+
+    forecasted_cov_mat MUST already be permuted into param_names order - see
+    get_forecasted_covariance, which does it.
     """
     output_path = os.getcwd() + f"/sampling_chains/lcdm_chain_plots/"
-    cov_mat = np.asarray(cov_mat)
+    measured = np.asarray(measured_cov_mat)
+    forecasted = np.asarray(forecasted_cov_mat)
     means = np.asarray(means)
     n = len(param_names)
-    #pad the axes out past the widest requested contour so no ellipse is clipped
+    if forecasted.shape != measured.shape:
+        raise ValueError(f"measured covariance is {measured.shape} but the forecast is "
+                         f"{forecasted.shape}; they must cover the same {n} parameters "
+                         f"in the same order ({param_names})")
+
+    #(covariance, colour, filled) - the measured contour is shaded, the forecast is left as
+    #a dashed outline so the two stay legible where they overlap
+    layers = [(measured, "tab:blue", True), (forecasted, "tab:red", False)]
+
+    #pad the axes out past the widest requested contour of the WIDER of the two matrices,
+    #so whichever one is broader still fits
     pad = max(sigmas) + 1
-    limits = [(means[i] - pad * np.sqrt(cov_mat[i, i]), means[i] + pad * np.sqrt(cov_mat[i, i]))
-              for i in range(n)]
+    widest = np.maximum(np.sqrt(np.diag(measured)), np.sqrt(np.diag(forecasted)))
+    limits = [(means[i] - pad * widest[i], means[i] + pad * widest[i]) for i in range(n)]
 
     fig, axes = plt.subplots(n, n, figsize = (2.8 * n, 2.8 * n), squeeze = False)
     for i in range(n):
@@ -796,24 +831,37 @@ def triangle_plot(cov_mat, param_names, means, sigmas = (1,)):
             if j > i:
                 ax.axis("off")
                 continue
+            for cov_mat, colour, filled in layers:
+                if i == j:
+                    sigma = np.sqrt(cov_mat[i, i])
+                    grid = np.linspace(*limits[i], 500)
+                    ax.plot(grid, np.exp(-0.5 * ((grid - means[i]) / sigma) ** 2),
+                            color = colour, ls = "-" if filled else "--", lw = 1.6)
+                else:
+                    #column j is the x parameter, row i the y parameter; the eigenvectors of
+                    #their 2x2 block are the ellipse axes and the eigenvalues its squared
+                    #semi-axes
+                    block = cov_mat[np.ix_([j, i], [j, i])]
+                    eig_vals, eig_vecs = np.linalg.eigh(block)
+                    angle = np.degrees(np.arctan2(eig_vecs[1, -1], eig_vecs[0, -1]))
+                    #widest contour first so the tighter ones stay visible on top of it
+                    for k in sorted(sigmas, reverse = True):
+                        width, height = 2 * k * np.sqrt(eig_vals[::-1])
+                        ax.add_patch(Ellipse(
+                            (means[j], means[i]), width, height, angle = angle,
+                            facecolor = colour if filled else "none",
+                            edgecolor = "black" if filled else colour,
+                            ls = "-" if filled else "--",
+                            lw = 1.0 if filled else 1.6,
+                            alpha = 0.55 / k if filled else 1.0))
             if i == j:
-                sigma = np.sqrt(cov_mat[i, i])
-                grid = np.linspace(*limits[i], 500)
-                ax.plot(grid, np.exp(-0.5 * ((grid - means[i]) / sigma) ** 2), color = "black")
-                ax.set_ylim(0, 1.1)
+                #how far the sampler is from the forecast, in this parameter's own units
+                ratio = np.sqrt(measured[i, i] / forecasted[i, i])
+                ax.text(0.04, 0.93, f"$\\sigma_{{meas}}/\\sigma_{{fisher}}$ = {ratio:.2f}",
+                        transform = ax.transAxes, fontsize = 8, va = "top")
+                ax.set_ylim(0, 1.25)
                 ax.set_yticks([])
             else:
-                #column j is the x parameter, row i the y parameter; the eigenvectors of their
-                #2x2 block are the ellipse axes and the eigenvalues its squared semi-axes
-                block = cov_mat[np.ix_([j, i], [j, i])]
-                eig_vals, eig_vecs = np.linalg.eigh(block)
-                angle = np.degrees(np.arctan2(eig_vecs[1, -1], eig_vecs[0, -1]))
-                #widest contour first so the tighter ones stay visible on top of it
-                for k in sorted(sigmas, reverse = True):
-                    width, height = 2 * k * np.sqrt(eig_vals[::-1])
-                    ax.add_patch(Ellipse((means[j], means[i]), width, height, angle = angle,
-                                         facecolor = "tab:blue", edgecolor = "black",
-                                         alpha = 0.55 / k, label = f"{k}$\\sigma$"))
                 ax.set_ylim(*limits[i])
             ax.set_xlim(*limits[j])
             ax.grid(alpha = 0.2)
@@ -827,21 +875,60 @@ def triangle_plot(cov_mat, param_names, means, sigmas = (1,)):
                 ax.set_ylabel(param_names[i])
             elif i != j:
                 ax.set_yticklabels([])
-    if n > 1:
-        axes[1, 0].legend(loc = "best", fontsize = 8)
-    fig.suptitle("Posterior Triangle Plot (Gaussian approximation)")
+
+    contours = ", ".join(f"{k}$\\sigma$" for k in sorted(sigmas))
+    handles = [Line2D([0], [0], color = "tab:blue", lw = 2, label = "measured (chains)"),
+               Line2D([0], [0], color = "tab:red", lw = 2, ls = "--",
+                      label = "Fisher forecast")]
+    #the vacant upper triangle is the natural home for the legend; keep it clear of the
+    #suptitle, which bbox_inches = "tight" would otherwise let it overlap
+    fig.legend(handles = handles, loc = "upper right", fontsize = 11,
+               bbox_to_anchor = (0.98, 0.94))
+    fig.suptitle(f"Posterior vs Fisher Forecast (Gaussian approximation, {contours})",
+                 y = 0.995)
     plt.savefig(output_path + "triangle_plot.png", dpi = 150, bbox_inches = "tight")
     plt.close(fig)
     return
 
-def joint_param_analysis(all_chains):
-    cov_mat, _ , param_names= get_correlation_matrix(all_chains)
-    get_fisher_matrix(cov_mat, list(all_chains.keys()))
+def joint_param_analysis(all_chains, nside, theta_pix, noise, is_sampled):
+    measured_cov_mat, _ , param_names= get_correlation_matrix(all_chains)
+    get_fisher_matrix(measured_cov_mat, list(all_chains.keys()))
     means = [np.mean(np.concatenate(all_chains[name])) for name in param_names]
-    triangle_plot(cov_mat, param_names, means)
+    forecasted_cov_mat = get_forecasted_covariance(nside, theta_pix, noise, is_sampled,
+                                                   param_names)
+    print("Forecast-implied marginal sigmas (rows / columns ordered as", param_names, ")")
+    for name, measured, forecasted in zip(param_names, np.sqrt(np.diag(measured_cov_mat)),
+                                          np.sqrt(np.diag(forecasted_cov_mat))):
+        print(f"    {name}: measured {measured:.4e}  forecast {forecasted:.4e}  "
+              f"ratio {measured / forecasted:.3f}")
+    triangle_plot(measured_cov_mat, forecasted_cov_mat, param_names, means)
     return
 
-def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values, was_sampled, default_burn_in):
+def get_forecasted_covariance(nside, theta_pix, noise, is_sampled, param_names):
+    """Fisher-forecast covariance for the sampled parameters, reordered to match param_names.
+
+    forecast() returns its parameters in fisher_forecast's PARAM_ORDER (theta_MC_100, logA,
+    ns, ombh2, omch2), which is NOT the order chain_analysis builds its chains dict in (that
+    follows ground_truth_values). The permutation is not cosmetic: without it the triangle
+    plot would silently pair each measured parameter with a different forecasted one.
+
+    nside / theta_pix / noise must match the run that produced the chains - see the values
+    at the top of sample_lcdm.sh.
+    """
+    fisher, names = forecast(nside, theta_pix, noise, is_sampled,
+                             GROUND_TRUTH, spectra = "ceiling",
+                             l_knee = 0, beam_fwhm = 0)
+    covariance = covariance_from_fisher(fisher, names)
+    missing = [name for name in param_names if name not in names]
+    if missing:
+        raise ValueError(f"the forecast did not cover {missing}; was_sampled and the "
+                         f"chains that were actually found disagree on which parameters "
+                         f"were sampled")
+    order = [names.index(name) for name in param_names]
+    return covariance[np.ix_(order, order)]
+
+def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values, 
+         was_sampled, default_burn_in, nside, theta_pix, noise):
 
     #single parameter analyses
     all_chains = {}
@@ -853,7 +940,7 @@ def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values, w
 
     #fisher information or other multi-param joint statistics
     if get_num_sampled(was_sampled) > 1:
-        joint_param_analysis(all_chains)
+        joint_param_analysis(all_chains, nside, theta_pix, noise, was_sampled)
     return
 
 def get_num_sampled(was_sampled):
@@ -868,8 +955,14 @@ if __name__ == "__main__":
     num_maps = 50
     num_chains = 5
     default_burn_in = 600
-    map_pre_factor = 234567 #SHOULD MATCH WHAT IS IN SUBMISSION SCRIPT
-    file_name = "<FILE_NAME>"
+    map_pre_factor = 234567
+    file_name = "omch2_logA_theta_MC_100_joint_inference_08_27_26"
+
+    #the Fisher forecast the triangle plot compares against is only meaningful if it is
+    #built on the same box and noise level the chains ran on - MATCH sample_lcdm.sh
+    nside = 128
+    theta_pix = 2.5
+    noise = 5
 
     ground_truth_values = {}
     ground_truth_values["omch2"] = 0.109381
@@ -885,5 +978,5 @@ if __name__ == "__main__":
     was_sampled["theta_MC_100"] = True
     was_sampled["logA"] = True
 
-    main(file_name, num_maps, num_chains, map_pre_factor, 
-         ground_truth_values, was_sampled, default_burn_in)
+    main(file_name, num_maps, num_chains, map_pre_factor,
+         ground_truth_values, was_sampled, default_burn_in, nside, theta_pix, noise)

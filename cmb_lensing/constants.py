@@ -13,6 +13,14 @@ DEFAULT_TAUREIO = 0.05
 DEFAULT_K_PIVOT = 0.05
 DEFAULT_A_LENSE = 1
 
+#Bracket CAMB searches when it has to solve for H0 from cosmomc_theta. CAMB's own
+#default is (10, 100), which has no solution for theta_MC_100 above ~1.117 - that sits
+#inside PARAM_BOUNDS, whose top edge of 1.1452 needs H0 ~ 102, so proposals near the top
+#of the theta box raised CAMBParamRangeError and were silently turned into NaN spectra.
+#150 covers the whole box (theta_MC_100 reaches 1.22-1.27 at H0 = 150 across the omch2
+#range). CAMB ignores this whenever H0 is passed directly
+DEFAULT_THETA_H0_RANGE = [10, 150]
+
 #The default field and operator constants are defined for a square 256 x 256 map
 #with 2 arcminute resolution...
 NSIDE_DEFAULT = 256

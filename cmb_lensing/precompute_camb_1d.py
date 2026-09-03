@@ -120,9 +120,11 @@ def run_sweep(param_name, grid, out_path):
         elapsed = time.time() - t0
         remaining = (grid.size - i - 1) * (time.time() - t_start) / (i + 1)
         if not (np.all(np.isfinite(tt)) and np.all(np.isfinite(pp))):
-            #CAMB cannot solve some corners of the +/- 5 sigma box with the other four
-            #parameters pinned at ground truth (e.g. theta_MC_100 > ~1.117 needs H0 > 100,
-            #outside CAMB's H0 search range, so _camb_callback_fn returns NaNs). the
+            #CAMB may still fail to solve some corners of the +/- 5 sigma box with the other
+            #four parameters pinned at ground truth, in which case _camb_callback_fn returns
+            #NaNs. (the historical cause here was theta_MC_100 > ~1.117 needing H0 > 100,
+            #outside CAMB's default bracket - _run_camb now passes DEFAULT_THETA_H0_RANGE,
+            #so a cache regenerated from here on should keep all 50 theta nodes.) the
             #sampler's direct-CAMB path turns those NaNs into a rejected proposal, so
             #drop the node here; load_camb_spline_predictors reproduces the NaN behavior
             #for queries beyond the surviving grid
@@ -200,9 +202,12 @@ def load_camb_spline_predictors(param_name, path = None):
         values = pb[:, PARAM_INDEX[param_name]]
         cls = np.exp(spline(values))
         #run_sweep drops CAMB-unsolvable nodes, so the cached grid can end short of
-        #PARAM_BOUNDS (e.g. theta_MC_100 > ~1.117 needs H0 > 100). mirror
-        #_camb_callback_fn beyond the surviving grid by returning NaN: the logpdf goes
-        #non-finite and the proposal is rejected, exactly as the direct-CAMB path would
+        #PARAM_BOUNDS. mirror _camb_callback_fn beyond the surviving grid by returning
+        #NaN: the logpdf goes non-finite and the proposal is rejected, exactly as the
+        #direct-CAMB path would. the shipped theta_MC_100 cache is the one case that hits
+        #this - it was generated before _run_camb widened CAMB's H0 bracket to
+        #DEFAULT_THETA_H0_RANGE, so it holds 42/50 nodes and stops at 1.114375 (+3.1 sigma)
+        #instead of the box top 1.1452. regenerate it to recover the top of the box
         cls[(values < grid[0]) | (values > grid[-1])] = np.nan
         return cls
 

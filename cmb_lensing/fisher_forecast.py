@@ -41,34 +41,49 @@ collapses to
     F_ij = 1/4 sum_k w_k^2 (2 / w_k) dln(C_k)/dtheta_i dln(C_k)/dtheta_j
          = 1/2 sum_k w_k dln(C_k)/dtheta_i dln(C_k)/dtheta_j
 
-VALIDATION. Unlensed scalar TT is exactly proportional to As = exp(logA) * 1e-10, so in
-"ceiling" mode dln(C)/dlogA is identically 1 and the f block must return exactly
-1/2 * sum_k w_k = (nside^2 - 1) / 2 (the [0, 0] origin is excluded). At nside 64 that is
-2047.5; the code returns 2047.63. That single number pins the weights, the factor of 1/2,
-the origin handling and the finite difference simultaneously - re-run it after any change
-to this module.
+VALIDATION. Unlensed scalar TT is exactly proportional to As = exp(logA) * 1e-10, so as
+the noise goes to zero dln(Cf)/dlogA is identically 1 and the "ceiling" f_unlensed block
+ALONE must return exactly 1/2 * sum_k w_k = (nside^2 - 1) / 2 (the [0, 0] origin is
+excluded). At nside 64 that is 2047.5; at noise_level 1e-4 the code returns 2047.63. That
+single number pins the weights, the factor of 1/2, the origin handling and the finite
+difference simultaneously - re-run it after any change to this module. NOTE it is now a
+PER-BLOCK check: pass one block at a time to _fisher_from_blocks, because every mode
+carries a second block and the f block itself carries C_n at any realistic noise level
+(F_logA,logA falls to 2022.3 at 5 uK-arcmin). The phi block has no such closed form -
+Cl_phiphi is not exactly proportional to As, and N_phi stays finite as the instrumental
+noise vanishes (a cosmic-variance-limited QE is still a noisy QE), so it lands at 85.3
+rather than 2047.5.
 
-Three spectra modes, bracketing the answer:
+Three spectra modes, bracketing the answer. Every mode carries a lensing block
+C_phi + N_phi, with N_phi the temperature quadratic-estimate reconstruction noise from
+qe_noise_matrix (frozen at the fiducial cosmology - see covariance_blocks):
 
-  "lensed"   (DEFAULT) C = beam^2 * Cl_lensed + N. The achievable baseline: the Fisher of
-             a surrogate Gaussian model matched to the second moment of the observed map.
-             The data is NOT actually a GRF draw of Cl_lensed (load_sim draws unlensed f
-             and phi and lenses them), so this surrogate is wrong above second order - it
-             discards the trispectrum, i.e. all lensing-reconstruction information. That
-             omission is exactly the gap sample_joint is meant to close.
-  "unlensed" C = beam^2 * Cl_unlensed + N. The perfect-delensing heuristic. NOT a
-             Cramer-Rao bound on the real data - no estimator acting on d is guaranteed
-             to reach it, and delensing correlates the noise (L^-1 n is not isotropic).
-             Quote it as a marker, not a bound.
-  "ceiling"  Complete-data Fisher: f and phi known exactly. Because noise_cls / mask /
-             beam carry no cosmology, log p(d | f, phi) is theta-INDEPENDENT, so given the
-             fields the data says nothing about theta and all the information sits in the
-             two priors. Hence NOISELESS unlensed Cl plus a Cphi term:
-                 F = F[Cf_unlensed] + F[Cphi]
-             This is a loose ceiling (noiseless mode counting), not a forecast. Its value
-             is as a validation target: it is the ensemble average of Louis's first term,
-             so a Monte-Carlo estimate of -<d2/dtheta2 log p(f, phi | theta)> over prior
-             draws must reproduce it.
+  "lensed"   (DEFAULT) C_TT = (mask * beam)^2 * Cl_lensed + N, plus C_PP = Cl_phiphi +
+             N_phi. The achievable baseline: the Fisher of a surrogate Gaussian model
+             matched to the second moment of the observed map, plus the lensing power
+             spectrum measured by a QE. The map-level data is NOT actually a GRF draw of
+             Cl_lensed (load_sim draws unlensed f and phi and lenses them), so the TT
+             surrogate is wrong above second order; the PP block restores the part of the
+             trispectrum a standard lensing-reconstruction analysis recovers, but the two
+             blocks are added as if independent, which double counts the lensing signal
+             that is already in Cl_lensed. Treat it as a two-point analysis, not a bound.
+  "unlensed" C_TT = (mask * beam)^2 * Cl_unlensed + N, plus the same PP block. The
+             perfect-delensing heuristic. NOT a Cramer-Rao bound on the real data - no
+             estimator acting on d is guaranteed to reach it, and delensing correlates the
+             noise (L^-1 n is not isotropic). Quote it as a marker, not a bound.
+  "ceiling"  Complete-data Fisher: f and phi measured, each to within its noise. Because
+             noise_cls / mask / beam carry no cosmology, log p(d | f, phi) is
+             theta-INDEPENDENT, so given the fields the data says nothing about theta and
+             all the information sits in the two priors:
+                 F = F[Cf_unlensed + C_n] + F[Cphi + N_phi]
+             The f block deliberately carries no beam or mask: it is what a measurement of
+             the UNLENSED field would carry, not what the instrument returns. Its value is
+             as a validation target: it is the ensemble average of Louis's first term, so a
+             Monte-Carlo estimate of -<d2/dtheta2 log p(f, phi | theta)> over prior draws
+             must reproduce it. With the noise terms in it is no longer a strict upper
+             bound on the other two modes - at nside 64 / 5 uK-arcmin it now sits only
+             ~1.0-1.2x above "lensed" per parameter, where the noiseless version was far
+             looser.
 
 WHAT THIS IS NOT. None of these is the marginal Fisher of p(d | theta) = the integral of
 p(d, f, phi | theta) over the fields, which is what sample_joint actually targets. That
@@ -116,8 +131,10 @@ jax.config.update("jax_enable_x64", True)
 
 from cmb_lensing.util import gen_ell_grid, get_fourier_weights
 from cmb_lensing.simulate import (_camb_via_callback, _extract_all_cls,
-                                  covar_matrix_from_cls, noise_cls, get_beam, get_mask)
-from cmb_lensing.constants import DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT, DEFAULT_MNU, DEFAULT_TAUREIO
+                                  covar_matrix_from_cls, noise_cls, get_beam, get_mask,
+                                  scalar_quadratic_estimate)
+from cmb_lensing.constants import (DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT,
+                                   DEFAULT_MNU, DEFAULT_TAUREIO, NPHI_FAC)
 from cmb_lensing.precompute_camb_1d import (PARAM_ORDER, GROUND_TRUTH, PARAM_SIGMA,
                                             CAMB_LMAX)
 
@@ -177,8 +194,9 @@ def camb_cls_at_params(params):
     if not bool(jnp.all(jnp.isfinite(cls["total_TT"]))):
         raise RuntimeError(
             f"CAMB returned non-finite Cls at {dict((k, float(params[k])) for k in PARAM_ORDER)}. "
-            f"theta_MC_100 has no H0 < 100 solution above ~1.117 - check the stencil "
-            f"point is reachable, or shrink FD_STEP_FRAC for that parameter."
+            f"check the stencil point is reachable by CAMB (H0 is solved from "
+            f"cosmomc_theta inside DEFAULT_THETA_H0_RANGE), or shrink FD_STEP_FRAC "
+            f"for that parameter."
         )
 
     _CAMB_CACHE[key] = cls
@@ -187,14 +205,58 @@ def camb_cls_at_params(params):
 
 # ── Covariance blocks on the flat-sky grid ────────────────────────────────
 
+def _instrument_matrices(nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
+                         l_cutoff):
+    """(noise, mask, beam) on the rfft grid - the theta-INDEPENDENT part of every block."""
+    lmax_prime = min(DEFAULT_MAX_ELL, CAMB_LMAX)
+    n_tt, _, _, _ = noise_cls(lmax_prime, noise_level, beam_fwhm = beam_fwhm,
+                              l_knee = l_knee)
+    noise = covar_matrix_from_cls(nside, pix_width, ell_grid,
+                                  jnp.arange(2, lmax_prime).astype(jnp.float64), n_tt,
+                                  origin_value = 0)
+    beam = get_beam(nside, pix_width, ell_grid, lmax_prime, beam_fwhm = beam_fwhm)
+    mask = get_mask(l_cutoff, nside, pix_width, ell_grid)
+    return noise, mask, beam
+
+
+def qe_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
+                    l_cutoff):
+    """N_phi: the scalar quadratic-estimate reconstruction noise at this cosmology.
+
+    Built exactly the way sample_lcdm.py builds it (unlensed Cf, lensed Cfl, the same mask
+    and beam, and the same division by NPHI_FAC), so the phi / PP block below carries the
+    very reconstruction noise the sampler's G matrix and phi mass matrix are built from.
+    Temperature-only, matching everything else in this module.
+    """
+    ells = jnp.arange(2, 2 + cls["total_TT"].shape[0]).astype(jnp.float64)
+    noise, mask, beam = _instrument_matrices(nside, pix_width, ell_grid, noise_level,
+                                             l_knee, beam_fwhm, l_cutoff)
+
+    def covar(cl):
+        return covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cl,
+                                     origin_value = 0)
+
+    return scalar_quadratic_estimate(noise, covar(cls["scalar_TT"]),
+                                     covar(cls["total_TT"]), mask, beam,
+                                     pix_width) / NPHI_FAC
+
+
 def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
-                      noise_level, l_knee, beam_fwhm, l_cutoff):
+                      noise_level, l_knee, beam_fwhm, l_cutoff, nphi):
     """The theta-dependent covariance block(s) whose Fisher information we are counting.
 
     Every block is built through the same covar_matrix_from_cls the sampler uses, so the
     signal and noise share a normalization (the 1/pix_width**2 rescale). The trace formula
     is invariant under any theta-independent rescaling of C, so only that relative
     normalization matters.
+
+    `nphi` is the QE reconstruction noise from qe_noise_matrix, evaluated ONCE at the
+    fiducial cosmology and passed in frozen. Freezing it is deliberate: N_phi is a property
+    of the estimator and the experiment, not of the model being constrained, so only the
+    signal should carry theta dependence - the same convention that makes the instrumental
+    C_n theta-independent, and the same thing the sampler does (its QE norm stays at the
+    param_init cosmology for the whole chain). Letting it move would credit the forecast
+    with information from dN_phi/dtheta, which no C_l^phiphi likelihood actually uses.
     """
     ells = jnp.arange(2, 2 + cls["total_TT"].shape[0]).astype(jnp.float64)
     phi_ells = jnp.arange(2, 2 + cls["phi"].shape[0]).astype(jnp.float64)
@@ -203,23 +265,27 @@ def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
         return covar_matrix_from_cls(nside, pix_width, ell_grid, ell_axis, cl,
                                      origin_value = 0)
 
+    noise, mask, beam = _instrument_matrices(nside, pix_width, ell_grid, noise_level,
+                                             l_knee, beam_fwhm, l_cutoff)
+
+    #C_phi + N_phi: a QE lensing reconstruction, i.e. phi measured to within the
+    #quadratic estimator's noise rather than known exactly
+    phi_block = covar(cls["phi"], phi_ells) + nphi
+
     if spectra == "ceiling":
         #conditional on (f, phi) the data term carries no theta dependence at all, so the
-        #complete-data information is the two priors, noiseless, with no beam or mask
-        return {"f_unlensed": covar(cls["scalar_TT"], ells),
-                "phi": covar(cls["phi"], phi_ells)}
+        #complete-data information is the two priors - but the fields are known only to
+        #within the noise, so C_f picks up C_n and C_phi picks up N_phi. No beam or mask
+        #on the f block: this is what a measurement of the UNLENSED field would carry,
+        #not what the instrument returns
+        return {"f_unlensed": covar(cls["scalar_TT"], ells) + noise,
+                "phi": phi_block}
 
-    lmax_prime = min(DEFAULT_MAX_ELL, CAMB_LMAX)
-    n_tt, _, _, _ = noise_cls(lmax_prime, noise_level, beam_fwhm = beam_fwhm,
-                              l_knee = l_knee)
-    noise = covar(n_tt, jnp.arange(2, lmax_prime).astype(jnp.float64))
-    #load_sim forms data = mask * beam * lensed + noise with mask identically one, so the
-    #observed covariance carries beam**2 on the signal only
-    beam = get_beam(nside, pix_width, ell_grid, lmax_prime, beam_fwhm = beam_fwhm)
-    mask = get_mask(l_cutoff, nside, pix_width, ell_grid)
-
+    #load_sim forms data = mask * beam * lensed + noise, so the observed covariance
+    #carries (mask * beam)**2 on the signal only
     source = "total_TT" if spectra == "lensed" else "scalar_TT"
-    return {"TT": (mask * beam)**2 * covar(cls[source], ells) + noise}
+    return {"TT": (mask * beam)**2 * covar(cls[source], ells) + noise,
+            "PP": phi_block}
 
 
 
@@ -303,10 +369,15 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
     weights = jnp.broadcast_to(jnp.real(get_fourier_weights((nside, nside // 2 + 1))),
                                (nside, nside // 2 + 1))
 
+    #the QE reconstruction noise is evaluated once, at the fiducial cosmology, and held
+    #fixed across the whole finite-difference stencil - see covariance_blocks for why
+    nphi_fid = qe_noise_matrix(camb_cls_at_params(param_ground), nside, pix_width,
+                               ell_grid, noise_level, l_knee, beam_fwhm, l_cutoff)
+
     def blocks_at(params):
         return covariance_blocks(camb_cls_at_params(params), spectra, nside,
-                                 pix_width, ell_grid, noise_level, l_knee, 
-                                 beam_fwhm, l_cutoff)
+                                 pix_width, ell_grid, noise_level, l_knee,
+                                 beam_fwhm, l_cutoff, nphi_fid)
 
     if verbose:
         ells_on_grid = ell_grid[ell_grid > 0]
@@ -385,7 +456,7 @@ def step_stability(nside, theta_pix, noise_level, is_sampled, param_ground,
 
 # ── Plotting ──────────────────────────────────────────────────────────────
 
-def _annotated_heatmap(axis, matrix, names, title, colorbar_label):
+def annotated_heatmap(axis, matrix, names, title, colorbar_label):
     """Heatmap coloured by the correlation-normalized matrix (bounded, readable) with the
     raw entries annotated - the raw values span many orders of magnitude across
     parameters with wildly different units, so colouring by them directly is useless."""
@@ -412,7 +483,7 @@ def _annotated_heatmap(axis, matrix, names, title, colorbar_label):
 
 def plot_fisher_matrix(fisher, names, path, subtitle = ""):
     figure, axis = plt.subplots(figsize = (7.5, 6.5))
-    _annotated_heatmap(axis, fisher, names,
+    annotated_heatmap(axis, fisher, names,
                        "Fisher matrix $F_{ij}$" + (f"\n{subtitle}" if subtitle else ""),
                        r"$F_{ij}\,/\,\sqrt{F_{ii}F_{jj}}$")
     figure.tight_layout()
@@ -427,7 +498,7 @@ def plot_covariance_matrix(covariance, names, path, subtitle = ""):
     figure, (left, right) = plt.subplots(
         1, 2, figsize = (12.5, 6.0), gridspec_kw = {"width_ratios": [1.35, 1]})
 
-    _annotated_heatmap(left, covariance, names,
+    annotated_heatmap(left, covariance, names,
                        "Covariance $F^{-1}$" + (f"\n{subtitle}" if subtitle else ""),
                        "correlation coefficient")
 
