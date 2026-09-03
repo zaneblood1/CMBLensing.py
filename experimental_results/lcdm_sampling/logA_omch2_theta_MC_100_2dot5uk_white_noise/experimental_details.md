@@ -1,0 +1,27 @@
+- 128 x 128 sized temperature only maps
+- theta_pix = 2.5
+- (f, phi) both sampled, phi using HMC with step_size = 0.0175, num_steps = 10
+- working in mixed parametrization withOUT perfect G using cphi_fid
+- phi_init = ZEROES (MAP seems to sometimes go NaN for certain LCDM parameter combos)
+- 3 sequential 1-D MH steps for omch2, logA, theta_MC_100 with theta_MC_100_step = 2e-3, logA_step = 2e-2, omch2_step = 1.5e-3
+- Starting out at random initial points in the 3-D param space... (raised lower bound on omch2 from ~ 0.079 to 0.085)
+- No 1/f noise OR beam, only white noise at a noise-level of 2.5 uk-arcmin. 
+- No mask
+- Using CAMB multi-dimensional interpolator
+- map_prefix = 234567
+- num_burn_in_fix_theta = 100
+- 6000 iterations per sub-chain, 5 sub-chains per map, 10 maps
+- deterministic order of theta parameter sampling
+- h0 search range for CAMB = [10, 150]
+- post-processing burn-in = 1000
+- ground_truth_omch2 = 0.109381
+- ground_truth_ombh2 = 0.022386 
+- ground_truth_ns = 0.959814
+- ground_truth_theta_MC_100 = 1.031732
+- ground_truth_logA = 3.218387
+- omch2 Unpruned Average Gelman-Rubin R Statistic = 1.0349543838300648
+- omch2 Unpruned Std in Gelman-Rubin R Statistic = 0.020097712116514704
+- theta_MC_100 Unpruned Average Gelman-Rubin R Statistic = 1.0374040556980704
+- theta_MC_100 Unpruned Std in Gelman-Rubin R Statistic = 0.01720996680671649
+- logA Unpruned Average Gelman-Rubin R Statistic = 1.0107052688154392
+- logA Unpruned Std in Gelman-Rubin R Statistic = 0.004665957101333784
