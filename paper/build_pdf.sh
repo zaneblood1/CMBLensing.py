@@ -13,7 +13,7 @@
 #then log out and back in (a new login session is required for the group to
 #take effect) and re-run this script.
 
-#To run call "! ./paper/build_pdf.sh"
+#To run locally call "! ./paper/build_pdf.sh"
 
 set -euo pipefail
 
