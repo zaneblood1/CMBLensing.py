@@ -8,3 +8,6 @@ sampling_chains/
 runtime_comparison/
 cmb_lensing/camb_splines/camb_grid_spline.npz
 .vscode
+
+#JOSS paper build product
+paper/paper.pdf
