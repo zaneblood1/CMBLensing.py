@@ -1,5 +1,5 @@
 ---
-title: 'CMBLensing.py: A Python package for MAP Estimation of CMB Fields and Cosmological Parameter Sampling'
+title: 'CMBLensing.py: A Python Package for MAP Estimation of CMB Fields and Cosmological Parameter Sampling'
 tags:
   - Python
   - cosmology
@@ -96,7 +96,7 @@ Unit tests in the ```\tests``` folder validate that corresponding methods in the
 
 # Research Impact Statement
 
-Besides making CMBLensing natively available in JAX, the sampling algorithm in ```sample_lcdm.py``` represents the first field-level joint inference of the LCDM parameters that we are aware of. Other work, such as ```TODO```, has inferred them from the CMB power spectra, whereas we use image data as the input. The main entry point to the sampling algorithm is ```sample_joint```. We include an example HPC slurm submission script in ```\sampling_chains_TEMPLATE```.
+Besides making CMBLensing natively available in JAX, the sampling algorithm in ```sample_lcdm.py``` represents the first field-level joint inference of the LCDM parameters that we are aware of. Other work, such as ```TODO```, has inferred these parameters from the CMB power spectra, but in this approach we use image data as the input to our algorithm. 
 
 During development we confirmed that each of the 5 sampled parameters could be learned in isolation with the other 4 held at ground truth.  We also find that learning $\left[\log(A_s), \theta_{MC}, \Omega_ch^2\right]$ jointly is relatively easy for smaller temperature maps. The sampler could in theory be applied to larger subsets or the full set of 6 LCDM parameters, but in practice the map sizes needed to break the degeneracies and produce meaningful distributions with small widths become prohibitively large.
 
@@ -113,7 +113,12 @@ Table 3 outlines an experiment jointly inferring $\left[\log(A_s), \theta_{MC}, 
 | Mask | None |
 | Sampled parameters | $\log(A_s)$, $\theta_\mathrm{MC}$, $\Omega_ch^2$ |
 | Parameters held at ground truth | $\Omega_bh^2$, $n_s$, $\tau_\mathrm{reio}$ |
-| Ground truth $\left[\log(A_s), \theta_{MC}, \Omega_ch^2, \Omega_bh^2, n_s, \tau_\mathrm{reio}\right]$ | $\left[3.218387, 1.031732, 0.109381, 0.022386, 0.959814, 0.05\right]$ |
+| Ground truth $\log(A_s)$ | $3.218387$ |
+| Ground truth $\theta_{MC}$ | $1.031732$ |
+| Ground truth $\Omega_ch^2$ | $0.109381$ |
+| Ground truth $\Omega_bh^2$ | $0.022386$ |
+| Ground truth $n_s$ | $0.959814$ |
+| Ground truth $\tau_\mathrm{reio}$ | $0.05$ |
 | Search range, $\theta_\mathrm{MC}$ | $[0.9328, 1.1452]$ |
 | Search range, $\log(A_s)$ | $[2.661635, 3.782861]$ |
 | Search range, $\Omega_ch^2$ | $[0.085, 0.155541]$ |
@@ -132,7 +137,7 @@ Table 3 outlines an experiment jointly inferring $\left[\log(A_s), \theta_{MC}, 
 Table: Configuration of the joint $\left[\log(A_s), \theta_{MC}, \Omega_ch^2\right]$ sampling experiment run with ```sample_joint```.
 
 
-After running the 50 map realizations and 5 sub-chains per map of Table 3 for 6000 iterations each, burn-in was removed, the sub-chains thinned by their integrated auto-correlation time and concatenated into 50 processed chains, one per map. A Gaussian kernel density estimate on each gives 50 "per-map" distributions, whose product is taken and re-normalized. Its mean is our best estimate, across all input data maps, of a given parameter's fiducial value. Figure 4 shows the result for $\Omega_ch^2$; plots for $\log(A_s)$ and $\theta_\mathrm{MC}$ are in the ```\supplementary_materials``` folder.
+After running the 50 map realizations and 5 sub-chains per map of Table 3 for 6000 iterations each, burn-in was removed, the sub-chains thinned by their integrated auto-correlation time and concatenated into 50 processed chains, one per map. A Gaussian kernel density estimate on each gives 50 "per-map" distributions, whose product is taken and re-normalized. Its mean is our best estimate, across all input data maps, of a given parameter's fiducial value. Figure 4 shows the result for $\Omega_ch^2$; plots for $\log(A_s)$ and $\theta_\mathrm{MC}$ are in the ```\experimental_results``` folder.
 
 ![The resulting $\Omega_ch^2$ product distribution from 50 temperature data map realizations.](omch2_product_distribution_5uk.png)
 
