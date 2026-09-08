@@ -10,7 +10,7 @@ from scipy.stats import mode
 from cmb_lensing.util import precision_load
 import jax.numpy.fft as jfft
 from cmb_lensing.statistics import *
-from cmb_lensing.fisher_forecast import annotated_heatmap, forecast, covariance_from_fisher, GROUND_TRUTH
+from cmb_lensing.fisher_forecast import annotated_heatmap, forecast, covariance_from_fisher, plot_annotated_matrix, GROUND_TRUTH
 
 BUFFER = 1e-4
 GRID_SIZE = 5_000
@@ -688,40 +688,6 @@ def stack_chains(raw_chains):
         stacked_chains.append(stacked_chain)
     return stacked_chains
 
-def plot_annotated_matrix(matrix, param_names, title, output_path, file_name, cmap = "coolwarm",
-                          norm = None, fmt = "{:+.3f}"):
-    """Draw a square matrix as a colored grid with the value of every entry printed in its box.
-
-    norm is a matplotlib color normalization (defaults to a symmetric linear scale about zero,
-    which suits correlation matrices); fmt is the format string applied to each entry. Text is
-    drawn black or white depending on the luminance of the cell behind it so it stays legible
-    across the whole colormap.
-    """
-    matrix = np.asarray(matrix)
-    n = len(param_names)
-    if norm is None:
-        limit = np.max(np.abs(matrix))
-        norm = matplotlib.colors.Normalize(vmin = -limit, vmax = limit)
-    fig, ax = plt.subplots(figsize = (1.7 * n + 2.5, 1.7 * n + 1.5))
-    image = ax.imshow(matrix, cmap = cmap, norm = norm)
-    ax.set_xticks(range(n)); ax.set_xticklabels(param_names, rotation = 45, ha = "right")
-    ax.set_yticks(range(n)); ax.set_yticklabels(param_names)
-    #minor ticks give the white grid lines separating the boxes
-    ax.set_xticks(np.arange(n + 1) - 0.5, minor = True)
-    ax.set_yticks(np.arange(n + 1) - 0.5, minor = True)
-    ax.grid(which = "minor", color = "white", linewidth = 2)
-    ax.tick_params(which = "minor", length = 0)
-    for i in range(n):
-        for j in range(n):
-            rgba = image.cmap(norm(matrix[i, j]))
-            luminance = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]
-            ax.text(j, i, fmt.format(matrix[i, j]), ha = "center", va = "center",
-                    color = "white" if luminance < 0.5 else "black", fontsize = 11)
-    fig.colorbar(image, ax = ax, fraction = 0.046, pad = 0.04)
-    ax.set_title(title)
-    plt.savefig(output_path + file_name, dpi = 150, bbox_inches = "tight")
-    plt.close(fig)
-
 def get_fisher_matrix(cov_mat, param_names):
     """Gaussian-approximation Fisher matrix F = C^-1 of the sampled parameters, saved to
     fisher_matrix.png. Entries span many orders of magnitude (theta_MC_100 is ~1e3 times
@@ -782,45 +748,78 @@ def plot_covariance_matrix(cov_mat, names, path):
     figure.savefig(path + "covariance_matrix.png", dpi = 150)
     plt.close(figure)
 
-def triangle_plot(measured_cov_mat, forecasted_cov_mat, param_names, means, sigmas = (1,)):
-    """Triangle plot comparing the sampled posterior against the Fisher forecast.
+#Contour styling for the triangle plot. The measured posterior is the shaded one; every
+#forecast is an outline in its own colour so several can share the axes. "marginal" is
+#listed ready for merge_marginal_fisher.py's output - nothing is drawn for a label that is
+#not actually passed to triangle_plot
+MEASURED_COLOUR = "tab:red"
+FORECAST_STYLES = {
+    "ceiling": {"colour": "tab:blue", "linestyle": "--", "short": "ceil",
+                "label": "ceiling (complete-data bound)"},
+    "lensed": {"colour": "tab:purple", "linestyle": ":", "short": "lens",
+               "label": "lensed (two-point bound)"},
+    "marginal": {"colour": "tab:green", "linestyle": "-.", "short": "marg",
+                 "label": "marginal (Louis)"},
+}
+DEFAULT_FORECAST_STYLE = {"colour": "tab:gray", "linestyle": "--", "short": "fisher",
+                          "label": "Fisher forecast"}
 
-    Two Gaussian approximations are drawn on the same axes: the MEASURED one, pooled from
-    the Gibbs chains by get_correlation_matrix, and the FORECASTED one, the inverse Fisher
-    matrix from fisher_forecast. The diagonal carries each parameter's marginal Gaussian,
-    the lower triangle each pair's joint confidence ellipse. sigmas lists which contours to
-    draw (1-sigma only by default); each level k gives semi-axes k * sqrt(eigenvalue) of the
-    pair's 2x2 covariance block.
 
-    Both are centred on the MEASURED means. The forecast is a curvature, not a location -
-    it has a shape but no centre - so drawing the two around a common point makes the plot
-    a direct read of width and orientation, which is the only thing the two matrices can be
-    compared on. Each diagonal panel is annotated with sigma_measured / sigma_forecast:
-    above 1 means the sampler is doing worse than the forecast says the data allows, near 1
-    means it is saturating the forecast, and below 1 means it is extracting information the
-    Gaussian two-point forecast does not model (or has not converged).
+def triangle_plot(measured_cov_mat, forecasts, param_names, means, sigmas = (1,)):
+    """Triangle plot comparing the sampled posterior against one or more Fisher forecasts.
 
-    forecasted_cov_mat MUST already be permuted into param_names order - see
+    `forecasts` maps a label from FORECAST_STYLES to a covariance matrix, e.g.
+    {"ceiling": ..., "lensed": ...}. The MEASURED posterior (pooled from the Gibbs chains)
+    is drawn shaded in red; each forecast is left as a coloured outline so they stay
+    legible where they overlap - blue for ceiling, purple for lensed. The diagonal carries
+    each parameter's marginal Gaussian, the lower triangle each pair's joint confidence
+    ellipse. sigmas lists which contours to draw (1-sigma only by default); each level k
+    gives semi-axes k * sqrt(eigenvalue) of the pair's 2x2 covariance block.
+
+    Drawing BOTH bounds at once is the point. Neither is the marginal Fisher of
+    p(d | theta) that the sampler targets - "lensed" is a two-point analysis of a surrogate
+    Gaussian model, "ceiling" is the complete-data information given (f, phi) - and the
+    measured posterior sits BETWEEN them, in the widths and in the degeneracy directions
+    alike. A single forecast contour hides that: with only "ceiling" drawn, the
+    omch2 - theta_MC_100 ellipse tilts the wrong way, because that pair's bracket straddles
+    zero (ceiling -0.13, chains +0.38, lensed +0.55). Seeing the measured ellipse nested
+    between the two is the correct reading, not a discrepancy to chase.
+
+    Everything is centred on the MEASURED means. A forecast is a curvature, not a location
+    - it has a shape but no centre - so a common centre makes the plot a direct read of
+    width and orientation, which is the only thing these matrices can be compared on. Each
+    diagonal panel is annotated with sigma_measured / sigma_forecast per forecast: above 1
+    means the sampler is doing worse than that forecast says the data allows, near 1 means
+    it is saturating it, below 1 means it is extracting information that forecast does not
+    model (or the chain has not converged).
+
+    Every covariance in `forecasts` MUST already be permuted into param_names order - see
     get_forecasted_covariance, which does it.
     """
     output_path = os.getcwd() + f"/sampling_chains/lcdm_chain_plots/"
     measured = np.asarray(measured_cov_mat)
-    forecasted = np.asarray(forecasted_cov_mat)
     means = np.asarray(means)
     n = len(param_names)
-    if forecasted.shape != measured.shape:
-        raise ValueError(f"measured covariance is {measured.shape} but the forecast is "
-                         f"{forecasted.shape}; they must cover the same {n} parameters "
-                         f"in the same order ({param_names})")
 
-    #(covariance, colour, filled) - the measured contour is shaded, the forecast is left as
-    #a dashed outline so the two stay legible where they overlap
-    layers = [(measured, "tab:blue", True), (forecasted, "tab:red", False)]
+    forecasts = {label: np.asarray(cov_mat) for label, cov_mat in forecasts.items()}
+    for label, cov_mat in forecasts.items():
+        if cov_mat.shape != measured.shape:
+            raise ValueError(f"measured covariance is {measured.shape} but the "
+                             f"'{label}' forecast is {cov_mat.shape}; they must cover the "
+                             f"same {n} parameters in the same order ({param_names})")
 
-    #pad the axes out past the widest requested contour of the WIDER of the two matrices,
-    #so whichever one is broader still fits
+    #(covariance, colour, filled, linestyle) - measured shaded, forecasts as outlines
+    layers = [(measured, MEASURED_COLOUR, True, "-")]
+    for label, cov_mat in forecasts.items():
+        style = FORECAST_STYLES.get(label, DEFAULT_FORECAST_STYLE)
+        layers.append((cov_mat, style["colour"], False, style["linestyle"]))
+
+    #pad the axes out past the widest requested contour of the WIDEST matrix, so whichever
+    #one is broader still fits
     pad = max(sigmas) + 1
-    widest = np.maximum(np.sqrt(np.diag(measured)), np.sqrt(np.diag(forecasted)))
+    widest = np.sqrt(np.diag(measured))
+    for cov_mat in forecasts.values():
+        widest = np.maximum(widest, np.sqrt(np.diag(cov_mat)))
     limits = [(means[i] - pad * widest[i], means[i] + pad * widest[i]) for i in range(n)]
 
     fig, axes = plt.subplots(n, n, figsize = (2.8 * n, 2.8 * n), squeeze = False)
@@ -831,12 +830,12 @@ def triangle_plot(measured_cov_mat, forecasted_cov_mat, param_names, means, sigm
             if j > i:
                 ax.axis("off")
                 continue
-            for cov_mat, colour, filled in layers:
+            for cov_mat, colour, filled, linestyle in layers:
                 if i == j:
                     sigma = np.sqrt(cov_mat[i, i])
                     grid = np.linspace(*limits[i], 500)
                     ax.plot(grid, np.exp(-0.5 * ((grid - means[i]) / sigma) ** 2),
-                            color = colour, ls = "-" if filled else "--", lw = 1.6)
+                            color = colour, ls = linestyle, lw = 1.6)
                 else:
                     #column j is the x parameter, row i the y parameter; the eigenvectors of
                     #their 2x2 block are the ellipse axes and the eigenvalues its squared
@@ -851,14 +850,18 @@ def triangle_plot(measured_cov_mat, forecasted_cov_mat, param_names, means, sigm
                             (means[j], means[i]), width, height, angle = angle,
                             facecolor = colour if filled else "none",
                             edgecolor = "black" if filled else colour,
-                            ls = "-" if filled else "--",
+                            ls = linestyle,
                             lw = 1.0 if filled else 1.6,
                             alpha = 0.55 / k if filled else 1.0))
             if i == j:
-                #how far the sampler is from the forecast, in this parameter's own units
-                ratio = np.sqrt(measured[i, i] / forecasted[i, i])
-                ax.text(0.04, 0.93, f"$\\sigma_{{meas}}/\\sigma_{{fisher}}$ = {ratio:.2f}",
-                        transform = ax.transAxes, fontsize = 8, va = "top")
+                #how far the sampler is from each forecast, in this parameter's own units
+                ratios = []
+                for label, cov_mat in forecasts.items():
+                    short = FORECAST_STYLES.get(label, DEFAULT_FORECAST_STYLE)["short"]
+                    ratio = np.sqrt(measured[i, i] / cov_mat[i, i])
+                    ratios.append(f"$\\sigma_{{meas}}/\\sigma_{{{short}}}$ = {ratio:.2f}")
+                ax.text(0.04, 0.93, "\n".join(ratios), transform = ax.transAxes,
+                        fontsize = 8, va = "top")
                 ax.set_ylim(0, 1.25)
                 ax.set_yticks([])
             else:
@@ -877,46 +880,97 @@ def triangle_plot(measured_cov_mat, forecasted_cov_mat, param_names, means, sigm
                 ax.set_yticklabels([])
 
     contours = ", ".join(f"{k}$\\sigma$" for k in sorted(sigmas))
-    handles = [Line2D([0], [0], color = "tab:blue", lw = 2, label = "measured (chains)"),
-               Line2D([0], [0], color = "tab:red", lw = 2, ls = "--",
-                      label = "Fisher forecast")]
+    handles = [Line2D([0], [0], color = MEASURED_COLOUR, lw = 2,
+                      label = "measured (chains)")]
+    for label in forecasts:
+        style = FORECAST_STYLES.get(label, DEFAULT_FORECAST_STYLE)
+        handles.append(Line2D([0], [0], color = style["colour"], lw = 2,
+                              ls = style["linestyle"], label = style["label"]))
     #the vacant upper triangle is the natural home for the legend; keep it clear of the
     #suptitle, which bbox_inches = "tight" would otherwise let it overlap
     fig.legend(handles = handles, loc = "upper right", fontsize = 11,
                bbox_to_anchor = (0.98, 0.94))
-    fig.suptitle(f"Posterior vs Fisher Forecast (Gaussian approximation, {contours})",
+    fig.suptitle(f"Posterior vs Fisher Forecasts (Gaussian approximation, {contours})",
                  y = 0.995)
     plt.savefig(output_path + "triangle_plot.png", dpi = 150, bbox_inches = "tight")
     plt.close(fig)
     return
 
+def report_forecast_comparison(measured_cov_mat, forecasts, param_names):
+    """Print each parameter's measured sigma beside every forecast, and flag the bracket.
+
+    "between" is the expected outcome: the sampler works with the full hierarchical
+    likelihood, so it should beat the two-point "lensed" bound while staying inside the
+    complete-data "ceiling". Anything outside that bracket is worth investigating - either
+    the chain has not converged, or the forecast is not describing this data set.
+    """
+    labels = list(forecasts)
+    print("Measured vs forecast marginal sigmas (order:", param_names, ")")
+    for i, name in enumerate(param_names):
+        measured = np.sqrt(measured_cov_mat[i, i])
+        parts = []
+        for label in labels:
+            forecasted = np.sqrt(forecasts[label][i, i])
+            parts.append(f"{label} {forecasted:.4e} (ratio {measured / forecasted:.3f})")
+        print(f"    {name}: measured {measured:.4e}  " + "  ".join(parts))
+
+    if "ceiling" in forecasts and "lensed" in forecasts:
+        for i, name in enumerate(param_names):
+            measured = np.sqrt(measured_cov_mat[i, i])
+            low = np.sqrt(forecasts["ceiling"][i, i])
+            high = np.sqrt(forecasts["lensed"][i, i])
+            inside = min(low, high) <= measured <= max(low, high)
+            print(f"    {name}: sigma {'inside' if inside else 'OUTSIDE'} the "
+                  f"ceiling-lensed bracket [{min(low, high):.4e}, {max(low, high):.4e}]")
+        #the correlations bracket too, and that is where the bounds can disagree on SIGN
+        for i in range(len(param_names)):
+            for j in range(i + 1, len(param_names)):
+                def correlation(matrix):
+                    return matrix[i, j] / np.sqrt(matrix[i, i] * matrix[j, j])
+                measured = correlation(measured_cov_mat)
+                low = correlation(forecasts["ceiling"])
+                high = correlation(forecasts["lensed"])
+                inside = min(low, high) <= measured <= max(low, high)
+                print(f"    r({param_names[i]}, {param_names[j]}): measured "
+                      f"{measured:+.3f}  ceiling {low:+.3f}  lensed {high:+.3f}  "
+                      f"-> {'inside' if inside else 'OUTSIDE'} the bracket")
+    return
+
+
 def joint_param_analysis(all_chains, nside, theta_pix, noise, is_sampled):
     measured_cov_mat, _ , param_names= get_correlation_matrix(all_chains)
     get_fisher_matrix(measured_cov_mat, list(all_chains.keys()))
     means = [np.mean(np.concatenate(all_chains[name])) for name in param_names]
-    forecasted_cov_mat = get_forecasted_covariance(nside, theta_pix, noise, is_sampled,
-                                                   param_names)
-    print("Forecast-implied marginal sigmas (rows / columns ordered as", param_names, ")")
-    for name, measured, forecasted in zip(param_names, np.sqrt(np.diag(measured_cov_mat)),
-                                          np.sqrt(np.diag(forecasted_cov_mat))):
-        print(f"    {name}: measured {measured:.4e}  forecast {forecasted:.4e}  "
-              f"ratio {measured / forecasted:.3f}")
-    triangle_plot(measured_cov_mat, forecasted_cov_mat, param_names, means)
+    #both bounds: the measured posterior should sit BETWEEN them, in the widths and in the
+    #degeneracy directions alike, so plotting only one hides where the sampler really lands
+    forecasts = {label: get_forecasted_covariance(nside, theta_pix, noise, is_sampled,
+                                                  param_names, spectra = label)
+                 for label in ("ceiling", "lensed")}
+    report_forecast_comparison(measured_cov_mat, forecasts, param_names)
+    triangle_plot(measured_cov_mat, forecasts, param_names, means)
     return
 
-def get_forecasted_covariance(nside, theta_pix, noise, is_sampled, param_names):
+def get_forecasted_covariance(nside, theta_pix, noise, is_sampled, param_names,
+                             spectra = "ceiling"):
     """Fisher-forecast covariance for the sampled parameters, reordered to match param_names.
 
-    forecast() returns its parameters in fisher_forecast's PARAM_ORDER (theta_MC_100, logA,
-    ns, ombh2, omch2), which is NOT the order chain_analysis builds its chains dict in (that
-    follows ground_truth_values). The permutation is not cosmetic: without it the triangle
-    plot would silently pair each measured parameter with a different forecasted one.
+    `spectra` selects which bound: "ceiling" (complete-data information given f and phi)
+    or "lensed" (a two-point analysis of the observed map). Call it once per bound and hand
+    both to triangle_plot - CAMB results are memoized in fisher_forecast._CAMB_CACHE and
+    the two bounds share the same stencil POINTS, so the second call re-runs no CAMB, only
+    the covariance-block builds.
+
+    forecast() returns its parameters in fisher_forecast's OUTPUT_PARAM_ORDER (omch2, ombh2,
+    ns, theta_MC_100, logA), which is the order ground_truth_values is written in here, so
+    the permutation below is normally the identity. It is kept because nothing enforces that
+    agreement: reorder ground_truth_values and, without it, the triangle plot would silently
+    pair each measured parameter with a different forecasted one.
 
     nside / theta_pix / noise must match the run that produced the chains - see the values
     at the top of sample_lcdm.sh.
     """
     fisher, names = forecast(nside, theta_pix, noise, is_sampled,
-                             GROUND_TRUTH, spectra = "ceiling",
+                             GROUND_TRUTH, spectra = spectra,
                              l_knee = 0, beam_fwhm = 0)
     covariance = covariance_from_fisher(fisher, names)
     missing = [name for name in param_names if name not in names]

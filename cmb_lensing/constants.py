@@ -12,6 +12,7 @@ DEFAULT_MNU = 0.06
 DEFAULT_TAUREIO = 0.05
 DEFAULT_K_PIVOT = 0.05
 DEFAULT_A_LENSE = 1
+MAX_NUM_SAMPLED = 5
 
 #Bracket CAMB searches when it has to solve for H0 from cosmomc_theta. CAMB's own
 #default is (10, 100), which has no solution for theta_MC_100 above ~1.117 - that sits

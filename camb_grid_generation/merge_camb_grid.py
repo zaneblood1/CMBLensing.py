@@ -4,6 +4,7 @@ import zipfile
 import argparse
 import numpy as np
 from scipy.interpolate import make_interp_spline
+from cmb_lensing.constants import MAX_NUM_SAMPLED
 
 #Merges the per-job .npz slabs written by run_single_camb_grid.py into a single 5D cubic
 #spline over (H0, logA, ns, ombh2, omch2), and writes it to one file that
@@ -64,8 +65,8 @@ value_keys = ["log_a", "ns", "ombh2", "omch2"]
 meta_keys = ["tau", "mnu", "lmax", "k_pivot", "alens",
              "accuracy_boost", "l_sample_boost", "l_accuracy_boost"]
 
-indices = np.zeros((len(slabs), 4), dtype = int)
-values = np.zeros((len(slabs), 4))
+indices = np.zeros((len(slabs), MAX_NUM_SAMPLED - 1), dtype = int)
+values = np.zeros((len(slabs), MAX_NUM_SAMPLED - 1))
 for s, path in enumerate(slabs):
     z = np.load(path)
     indices[s] = [int(z[k]) for k in index_keys]
@@ -79,9 +80,9 @@ for s, path in enumerate(slabs):
                                f"{os.path.basename(slabs[0])} has {float(first[k])} - "
                                f"the slabs are not from one run")
 
-shape_4 = tuple(indices[:, a].max() + 1 for a in range(4))
-n_log_a, n_ns, n_ombh2, n_omch2 = shape_4
-expected = int(np.prod(shape_4))
+job_shape = tuple(indices[:, a].max() + 1 for a in range(MAX_NUM_SAMPLED - 1))
+n_log_a, n_ns, n_ombh2, n_omch2 = job_shape
+expected = int(np.prod(job_shape))
 print(f"grid shape: H0={n_h0} x logA={n_log_a} x ns={n_ns} x ombh2={n_ombh2} "
       f"x omch2={n_omch2}  ({n_h0 * expected} points, {n_ell} ells)")
 if len(slabs) != expected:
@@ -94,7 +95,7 @@ if len(slabs) != expected:
 GRID_AXES = ["H0", "logA", "ns", "ombh2", "omch2"]
 axes = {"H0": h0_grid}
 for a, name in enumerate(["logA", "ns", "ombh2", "omch2"]):
-    axis = np.full(shape_4[a], np.nan)
+    axis = np.full(job_shape[a], np.nan)
     for s in range(len(slabs)):
         i = indices[s, a]
         if np.isnan(axis[i]):
@@ -132,7 +133,7 @@ if missing_keys:
                        f"run_single_camb_grid.py. Re-run camb_grid.sh (all jobs) so every "
                        f"slab records the unlensed EE/BB and lensed TT/EE/BB spectra")
 
-grid_shape = (n_h0,) + shape_4
+grid_shape = (n_h0,) + job_shape
 bb_max = 0.0
 theta_5d = np.full(grid_shape, np.nan)
 ok = np.zeros(grid_shape, dtype = bool)
@@ -193,7 +194,7 @@ def build_coefficients_inplace(data, label):
     for start in range(0, n_ell, args.ell_chunk):
         block = data[..., start:start + args.ell_chunk].astype(np.float64)
         axis_knots = []
-        for axis in range(5):
+        for axis in range(MAX_NUM_SAMPLED):
             spline = make_interp_spline(axes[GRID_AXES[axis]],
                                         np.moveaxis(block, axis, 0), k = 3)
             block = np.moveaxis(spline.c, 0, axis)
@@ -259,6 +260,8 @@ with zipfile.ZipFile(out_path, "w", compression = zipfile.ZIP_STORED,
     for k in meta_keys:
         zip_write_array(zf, k, np.asarray(first[k]))
 
+#To reach 1 Gigabyte using the traditional binary (base-2) 
+#computer system, you must multiply by 1,024 three times
 size_gb = os.path.getsize(out_path) / 1024**3
 print(f"\nwrote {out_path} ({size_gb:.2f} GB)")
 print(f"  spectra {SPLINED_SPECTRA} + {LINEAR_SPECTRA} + zero unlensed BB, coefficients "

@@ -43,6 +43,13 @@ python validate_camb_grid.py --grid <...>/camb_grid_spline.npz -n 20
 # Launch a multi-map / multi-chain LCDM experiment on an HPC
 sbatch sample_lcdm.sh            # spawns run_single_lcdm_chain.sh per (map, chain)
 python chain_analysis.py         # post-process the *_history.txt chains into distributions
+
+# Fisher forecasts (both write to cmb_lensing/fisher_output/)
+python -m cmb_lensing.fisher_forecast --spectra ceiling      # the two BOUNDS: blocks + cls contractions
+python -m cmb_lensing.marginal_fisher --validate --nside 64  # the MARGINAL Fisher's zero test (~1 min, no grid)
+python -m cmb_lensing.marginal_fisher --nside 64 --n_maps 4 --n_draws 800 --params omch2 theta_MC_100 logA
+sbatch marginal_fisher.sh                                    # one job per map, from a filled-in sampling_chains/
+python merge_marginal_fisher.py --run_dir marginal_fisher_output
 ```
 
 No linter or formatter is configured. No CI pipeline exists.
@@ -120,13 +127,65 @@ Every predictor (grid and 1D) has the signature `f(params_batch: (M, 5)) -> (M, 
 
 ### 5D CAMB Grid Spline (`camb_grid_interp.py`)
 
-Real CAMB spectra precomputed on a full tensor-product grid over `(H0, logA, ns, ombh2, omch2)` (tau 0.05, mnu 0.06, r = 0, tensors off) and evaluated via a hand-rolled tensor-product cubic B-spline in lnCl (`_eval_bspline`: local 4-points-per-axis separable contraction over coefficients prefiltered at merge time with not-a-knot ends; scipy's cubic `RegularGridInterpolator` rebuilds splines per call and takes minutes). Out-of-box queries return NaN → rejected proposal.
+Real CAMB spectra precomputed on a full tensor-product grid over `(H0, logA, ns, ombh2, omch2)` (tau 0.05, mnu 0.06, r = 0, tensors off) and evaluated as a tensor-product cubic B-spline in lnCl over coefficients prefiltered at merge time with not-a-knot ends. Out-of-box queries return NaN → rejected proposal.
 
 - **Grid file:** `cmb_lensing/camb_splines/camb_grid_spline.npz` (~7.9 GB, gitignored). Built on the HPC by `sampling_chains_TEMPLATE/camb_grid.sh` → `run_single_camb_grid.sh/.py` (one slurm job per (logA, ns, ombh2, omch2) node doing the 81-point H0 sweep; 81×5×5×5×7 = 70 875 CAMB calls in 875 jobs; numpy + camb only, no JAX) → `merge_camb_grid.py` (streaming, one spectrum at a time, incremental zip writes; asserts no holes, uniform axes, theta independent of logA/ns, |te_rho| < 1) → `validate_camb_grid.py` (random interior points vs direct CAMB; expect ≲ CAMB's own ~1e-3 lnCl floor).
-- **`CambGrid`** opens the npz once (`load_camb_grid` singleton per path) and loads coefficient tables **lazily per spectrum** (~1.1 GB each, six of them) — T-only runs never touch the polarization/lensed tables. `bb_is_zero` flag: unlensed BB is identically zero on the r = 0 grid, so the `bb` predictor returns exact zeros (NaN out of box). A pre-polarization grid file stays loadable and raises a `KeyError` with a regeneration pointer only when a missing spectrum is requested.
+- **Evaluation is `scipy.interpolate.NdBSpline`** (`_TensorSpline`), swapped in 2026-09-07 for ~150 lines of hand-rolled B-spline machinery (`_axis_stencil`, `_axis_stencil_derivs`, `_eval_bspline`, `_eval_bspline_grads`). This works with **no regeneration of the grid file**: `merge_camb_grid.py` already writes exactly NdBSpline's input (coefficients + knots with `len(t) == n + k + 1` per axis). Agreement with the old evaluator is ~4e-14 relative on the real grid, at ~3× the speed. Two things `_TensorSpline` still owns: the `BOUNDARY_TOL` clamp (bare `NdBSpline(extrapolate = False)` NaNs the box edges the sampler's conditional scans land on) and NaN-not-raise for genuine out-of-box rows. Cost: NdBSpline casts coefficients to float64, so a spectrum costs ~2.1 GB resident instead of ~1.1 GB — `CambGrid.spline` therefore caches only the spline, never the float32 array. `RegularGridInterpolator(method = "cubic")` is **not** an equivalent shortcut despite building an NdBSpline internally since scipy 1.12: it re-solves for coefficients with an iterative Krylov solver (`gcrotmk`), ~4e-4 away in lnCl from `make_interp_spline`'s direct banded solve, at ~10 min per spectrum. The old implementation is frozen in `tests/handrolled_bspline_reference.py` and `tests/test_native_5d_interp.py` checks production against it (`tests/benchmark_native_5d_interp.py` times them).
+- **`CambGrid`** opens the npz once (`load_camb_grid` singleton per path) and builds `_TensorSpline`s **lazily per spectrum** via `CambGrid.spline(name)` (~1.1 GB read, ~2.1 GB resident, six of them) — T-only runs never touch the polarization/lensed tables. `bb_is_zero` flag: unlensed BB is identically zero on the r = 0 grid, so the `bb` predictor returns exact zeros (NaN out of box). A pre-polarization grid file stays loadable and raises a `KeyError` with a regeneration pointer only when a missing spectrum is requested.
 - **`load_camb_grid_predictors(path)`** → `GridPredictors(tt, ee, bb, pp, tt_lensed, ee_lensed, bb_lensed, te_rho)`, each `f(params_batch) -> (M, n_ell)` via `jax.pure_callback(vmap_method = "sequential")`, cached per path. `LINEAR_SPECTRA = {"te_rho"}` are splined raw (no exp). This is the **only** predictor loader now — the pure-JAX (`_jax`) and custom-VJP (`_grad`) differentiable variants were removed with the gradient-based theta samplers. `CambGrid.spline_param_grads` (analytic ∂lnCl/∂params through the theta→H0 inversion) survives unused.
 - **H0 vs theta_MC_100.** The grid is laid out in H0 because a rectangular theta box has CAMB-unsolvable corners. Every node records theta; the merge collapses it to a 3D `theta_grid(H0, ombh2, omch2)`; `CambGrid.h0_from_theta` densifies theta(H0) to 2000 points, splines it over (ombh2, omch2), and inverts by interpolation. The sampler works in theta_MC_100 throughout.
-- `tests/test_camb_grid_interp.py` (the tensor-product reference check) was deleted in the refactor; no test covers the interpolator now.
+- `tests/test_camb_grid_interp.py` (the tensor-product reference check) was deleted in the 2026-08-24 refactor; `tests/test_native_5d_interp.py` (added 2026-09-07) now covers the evaluator, though nothing still covers the merge or the theta→H0 inversion end to end.
+
+### Fisher forecasts (`fisher_forecast.py`, `marginal_fisher.py`)
+
+Three estimates of the parameter information, all writing to `cmb_lensing/fisher_output/`
+with a per-path filename suffix so they never overwrite each other.
+
+**`fisher_forecast.py` computes two BOUNDS**, both off ONE shared finite-difference stencil
+(`_stencil` -> `forecast_all`; `forecast(..., method = ...)` is the single-method wrapper). `--method`
+selects `blocks` (default; the trace formula `F = 1/2 sum_k w_k dlnC/di dlnC/dj`, and what
+`chain_analysis.py` expects) or `cls` (`F = dC . C^-1 . dC`). Suffixes `_from_blocks` / `_from_cls`.
+The `cls` path carries ONE power of `C^-1` where the trace formula carries two, so it is not the
+Gaussian Fisher of the same likelihood: it is not invariant under the theta-independent
+`1/pix_width**2` rescale, and only its SHAPE (correlations, degeneracy directions) is meaningful,
+never its absolute sigmas. `--spectra` picks `lensed` / `unlensed` / `ceiling`; parameters come out
+in `OUTPUT_PARAM_ORDER` (`omch2, ombh2, ns, theta_MC_100, logA`), matching `chain_analysis.py`'s
+`ground_truth_values` order rather than `PARAM_ORDER`.
+
+**Neither bound is what the sampler targets.** Measured against the 50-map chains at nside 128 /
+2.5' / 5 uK, the posterior sits BETWEEN ceiling and lensed in all three sigmas AND all three
+correlations. For `omch2` - `theta_MC_100` the bracket straddles zero (ceiling -0.132, chains
++0.377, lensed +0.552), so the two bounds disagree on the sign of a real degeneracy - do not read
+the sign of any ceiling entry with |r| < ~0.2.
+
+**`marginal_fisher.py` computes the real thing**, `I = -d2/dtheta2 log p(d | theta)`, via Louis's
+identity `I_obs = E[-d2 log p(d,x|theta) | d] - Cov[d log p(d,x|theta) | d]` over Gibbs draws of
+`(f, phi)` at FIXED theta. Two facts make it cheap: `log p(d | f, phi)` is exactly
+theta-independent, so only the two Gaussian priors are differentiated (no lensing, no adjoint);
+and with `u_k = |x_k|^2 / (nside^2 C_k)` the derivatives are analytic in the fields, so only the
+Cls need finite differences. Per draw only the n-vector score is kept. Suffix `_marginal`.
+Key points:
+- **Unmixed (f, phi) only.** `D` and `G` both depend on theta, so the mixed change of variables
+  has a theta-dependent Jacobian (`mixed_logpdf` subtracts `logdet(G) + logdet(D)`). The unmixed
+  parametrization is theta-independent and the Jacobian is absent.
+- **Never `jax.grad` w.r.t. theta** - besides the ~3000x error recorded below, `phi_dot_wrapper`'s
+  custom VJP (`statistics.py`) differentiates `dot(phi, Cphi)` rather than `dot(phi, Cphi^-1 phi)`,
+  so any autodiff through `phi_covariance` is silently wrong. Latent today (the only autodiff call
+  is w.r.t. `phi`), but it rules out that whole approach.
+- **Direct CAMB, never the 5D grid** (same reason `fisher_forecast` uses it), so nothing here loads
+  the ~8 GB file.
+- The first term uses the BARE priors `C_f` and `C_phi`; the `C_n` / `N_phi` that
+  `covariance_blocks` adds for `ceiling` are a heuristic. Noise enters only through which draws
+  are fed in.
+- A second estimator off the same scores: `I = Cov_d[E[score | d]]` (Fisher's identity), debiased
+  by the half-split cross-covariance. No subtraction, PSD by construction, but it needs many maps
+  where Louis needs many draws. The two cross-validate.
+- **The zero test is the validation**: on PRIOR draws Louis must return exactly zero, because both
+  terms collapse to the same bare-prior Fisher. `--validate` runs it; `tests/test_marginal_fisher.py`
+  asserts it (no juliacall needed). The residual tracks `sqrt(2/N)` down to 0.026 at N = 3200.
+- A non-PSD result here means too few effectively-independent draws (`Cov(score)` overshooting),
+  NOT a bad stencil - raise `--n_draws`. `marginal_covariance` says so; watch the printed
+  integrated autocorrelation time and `N_eff`.
 
 ### Polarization Modes
 
@@ -237,6 +296,7 @@ sample_lcdm.py ──► simulate.py (load_sim, covariance/D/G/QE builders)
 
 sampling_chains_TEMPLATE/run_single_lcdm_chain.py ──► sample_lcdm.sample_joint
 sampling_chains_TEMPLATE/{run_single_camb_grid, merge_camb_grid, validate_camb_grid}.py ──► the 5D grid
+sampling_chains_TEMPLATE/{run_single_marginal_fisher, merge_marginal_fisher}.py ──► marginal_fisher
 runtime_comparison_TEMPLATE/python_performance_test.py ──► map_joint (Julia data via juliacall)
 ```
 
@@ -244,13 +304,13 @@ runtime_comparison_TEMPLATE/python_performance_test.py ──► map_joint (Juli
 
 ### Testing Approach
 
-Tests are validation benchmarks comparing Python output against Julia (CMBLensing.jl) ground truth stored in `tests/ground_truth_data/*.npz` (regenerated with the refactor — every npz changed). They cover `load_sim`, lensing, logpdf, gradients, the Wiener filter and `map_joint`; **nothing tests the sampler or the spline interpolators**. Many tests produce comparison plots in `tests/test_generated_figures/` rather than hard assertions — visual inspection via the HTML viewer (`tests/index.html`, served with e.g. VS Code Live Server) is the primary verification method. `conftest.py` maps each `test_*` module to its `generate_*` module for `--generate`; `_preamble.py` needs `PYTHON_JULIAPKG_PROJECT` pointed at a local CMBLensing.jl checkout (currently the placeholder `/<PATH_TO>/CMBLensing.jl`). `generate_simulated_cls.py` imports `cosmopower_jax` — known to be unusable for unlensed spectra.
+Tests are validation benchmarks comparing Python output against Julia (CMBLensing.jl) ground truth stored in `tests/ground_truth_data/*.npz` (regenerated with the refactor — every npz changed). They cover `load_sim`, lensing, logpdf, gradients, the Wiener filter and `map_joint`; **nothing tests the sampler**. `tests/test_native_5d_interp.py` is the one exception to the Julia-ground-truth pattern: it checks `camb_grid_interp`'s NdBSpline evaluator against the frozen hand-rolled one in `tests/handrolled_bspline_reference.py` (add `CMB_LENSING_REAL_GRID_TESTS=1` to include the real ~7.9 GB grid). The 1D spline interpolators are still untested. Many tests produce comparison plots in `tests/test_generated_figures/` rather than hard assertions — visual inspection via the HTML viewer (`tests/index.html`, served with e.g. VS Code Live Server) is the primary verification method. `conftest.py` maps each `test_*` module to its `generate_*` module for `--generate`; `_preamble.py` needs `PYTHON_JULIAPKG_PROJECT` pointed at a local CMBLensing.jl checkout (currently the placeholder `/<PATH_TO>/CMBLensing.jl`). `generate_simulated_cls.py` imports `cosmopower_jax` — known to be unusable for unlensed spectra.
 
 ## Known issues (as of 2026-08-24 — delete entries as they are fixed)
 
 - `sampling_chains_TEMPLATE/run_single_lcdm_chain.py` hard-codes a real cluster `hpc_path` (`/resnick/groups/wugroup/...`) instead of an `ABSOLUTE_PATH_TO` placeholder, and `sampling_chains_TEMPLATE/chain_analysis.py`'s unused A_phi map-correlation helpers still read from `performance_testing/chain_maps/`.
 - `tests/generate_julia_data/_preamble.py` carries the placeholder `PYTHON_JULIAPKG_PROJECT = "/<PATH_TO>/CMBLensing.jl"`, so `pytest --generate` needs it pointed at a real checkout first.
-- Nothing tests `sample_joint`, `camb_grid_interp` or `precompute_camb_1d`. Smoke-testing the sampler locally: nside 64, `iters_per_chain = 2`, and for `pol = "IP"`/`"P"` inject stub predictors rather than loading the real grid — a real-grid "IP" run at nside 64 rebooted the 16 GB laptop even under a `systemd-run` 11 GB memory cap.
+- Nothing tests `sample_joint` or `precompute_camb_1d` (`camb_grid_interp`'s evaluator is covered by `tests/test_native_5d_interp.py`; the rest of the module is not). Smoke-testing the sampler locally: nside 64, `iters_per_chain = 2`, and for `pol = "IP"`/`"P"` inject stub predictors rather than loading the real grid — a real-grid "IP" run at nside 64 rebooted the 16 GB laptop even under a `systemd-run` 11 GB memory cap.
 
 ## Numeric Precision
 

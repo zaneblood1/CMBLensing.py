@@ -524,6 +524,38 @@ def _camb_via_callback(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         vmap_method = 'sequential'
     )
 
+#every key _extract_all_cls produces, and therefore everything load_sim may index
+EXPECTED_CL_KEYS = (tuple(f"scalar_{s}" for s in _CAMB_COLS)
+                    + tuple(f"tensor_{s}" for s in _CAMB_COLS)
+                    + tuple(f"total_{s}" for s in ("TT", "TE", "EE", "BB"))
+                    + ("phi",))
+
+
+def _validate_precomputed_cls(cls, lmax):
+    """Check a caller-supplied cls dict really is what _extract_all_cls would have built.
+
+    Passing spectra computed at a different lmax, or at a different cosmology than the
+    keyword arguments claim, would silently produce a data map inconsistent with the model
+    - the kind of mismatch that shows up much later as a biased posterior. The length check
+    catches the lmax half of that; the cosmology half cannot be checked here, so it is the
+    caller's responsibility (see the load_sim docstring).
+    """
+    missing = [key for key in EXPECTED_CL_KEYS if key not in cls]
+    if missing:
+        raise ValueError(f"precomputed_cls is missing {missing}; it must contain every "
+                         f"key _extract_all_cls produces, i.e. {list(EXPECTED_CL_KEYS)}")
+    #dl2cl interpolates onto ells 2..lmax-1, so every spectrum has length lmax - 2
+    expected = lmax - 2
+    wrong = {key: cls[key].shape for key in EXPECTED_CL_KEYS
+             if cls[key].shape != (expected,)}
+    if wrong:
+        raise ValueError(f"precomputed_cls has the wrong length for {wrong}; load_sim was "
+                         f"called with lmax = {lmax}, so every spectrum must have shape "
+                         f"({expected},) - ells 2..{lmax - 1}. Rebuild the cache at this "
+                         f"lmax.")
+    return cls
+
+
 def _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime):
     cls = {}
     for stokes, col in _CAMB_COLS.items():
@@ -743,15 +775,31 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
              ombh2 = 0.0224567, omch2 = 0.118489, cosmomc_theta = 0.0104098,
              r = 0.0, mnu = DEFAULT_MNU, tau = DEFAULT_TAUREIO, As = jnp.exp(3.043) * 1e-10,
              nt = 0, ns = 0.968602, lmax = 4000, l_knee = 100,
-             k_pivot = DEFAULT_K_PIVOT, Alens = DEFAULT_A_LENSE, nphi_fac = 2, a_phi = 1):
-    
+             k_pivot = DEFAULT_K_PIVOT, Alens = DEFAULT_A_LENSE, nphi_fac = 2, a_phi = 1,
+             precomputed_cls = None):
+    """Simulate a lensed CMB data set. See the module and CLAUDE.md for the pipeline.
+
+    `precomputed_cls` optionally supplies the CAMB spectra instead of running CAMB, for
+    callers that build many realizations at ONE cosmology and would otherwise pay for an
+    identical CAMB evaluation every time (fisher_forecast.forecast_from_logpdf does exactly
+    this). It must be a dict in _extract_all_cls's format - the output of
+    fisher_forecast.camb_cls_at_params is one, since CAMB_LMAX equals DEFAULT_MAX_ELL.
+
+    CALLER'S RESPONSIBILITY: the spectra must correspond to the SAME cosmology as the
+    keyword arguments. Nothing here can verify that - the cosmology keywords are simply
+    unused when spectra are supplied - so passing a mismatched cache silently produces a
+    data map inconsistent with its own labelled parameters. The lmax is checked.
+    """
     #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
     lmax_prime = min(lmax, DEFAULT_MAX_ELL)
-    unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
-        H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-        lmax_prime, k_pivot, Alens
-    )
-    cls = _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime)
+    if precomputed_cls is None:
+        unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
+            H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
+            lmax_prime, k_pivot, Alens
+        )
+        cls = _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime)
+    else:
+        cls = _validate_precomputed_cls(precomputed_cls, lmax)
 
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
     keys = jax.random.split(jax.random.PRNGKey(master_seed), 100)

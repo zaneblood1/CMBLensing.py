@@ -19,8 +19,9 @@ covariance, and the lensed spectra the theta-dependent quadratic-estimate (and t
 it mass-matrix / G) recompute. Unlensed scalar BB is identically zero on the r = 0
 grids (bb_is_zero flag from merge_camb_grid.py), so its predictor returns exact zeros -
 with NaN rows for out-of-box queries, like every other spectrum. Coefficient tables are
-loaded LAZILY, one spectrum at a time on first use (~1.1 GB each), so a T-only run
-never pays for the polarization or lensed tables; a pre-polarization grid file stays
+loaded LAZILY, one spectrum at a time on first use (~1.1 GB read, ~2.1 GB resident once
+NdBSpline has cast it to float64), so a T-only run never pays for the polarization or
+lensed tables; a pre-polarization grid file stays
 loadable, and only raises (with a clear message) if a spectrum it lacks is requested.
 
 theta_MC_100 vs H0
@@ -37,13 +38,26 @@ Out-of-box queries return NaN rather than extrapolating, which flows to a non-fi
 logpdf and a rejected proposal - byte for byte what the direct-CAMB path does when CAMB
 fails, and what the 1D caches do beyond their grid.
 
-Why the spline is hand-rolled
------------------------------
-scipy's RegularGridInterpolator(method="cubic") on this grid shape was measured at minutes
-per call - it rebuilds splines on every evaluation. Because merge_camb_grid.py already
-solved for the cubic B-spline coefficients, evaluation here is just a local
-4-point-per-axis separable contraction, which is both exact (it reproduces the same
-interpolating cubic spline) and fast.
+Why NdBSpline, and not RegularGridInterpolator
+---------------------------------------------
+Evaluation is scipy.interpolate.NdBSpline, which consumes precomputed tensor-product
+B-spline coefficients plus knots - precisely what merge_camb_grid.py already writes. The
+grid file needs no regeneration for this and the arithmetic is identical; see
+_TensorSpline. (This replaced a hand-rolled 4-point-per-axis separable contraction, kept
+as a regression reference in tests/handrolled_bspline_reference.py, that the production
+path is checked against in tests/test_native_5d_interp.py.)
+
+RegularGridInterpolator(method="cubic") is the wrong entry point despite building an
+NdBSpline of its own since scipy 1.12. It wants the raw sampled values, so it re-solves
+the interpolation problem merge_camb_grid.py has already solved - at a cost linear in the
+ell axis (~9 s per 64 ells at this grid shape, i.e. of order ten minutes per spectrum at
+3998 ells) - and it solves it with an ITERATIVE Krylov solver (scipy.sparse.linalg.gcrotmk,
+its hardcoded default) rather than the direct banded solve merge_camb_grid.py's per-axis
+make_interp_spline uses. The resulting coefficients differ by ~4e-4, which is the size of
+the whole lnCl error budget. scipy.ndimage's prefilter is out for the reason
+merge_camb_grid.py records: every boundary mode it offers folds the data back on itself,
+which is not exact even for a straight line and, on axes as short as 4 nodes, contaminates
+the entire axis rather than just its edges.
 """
 
 import os
@@ -80,148 +94,73 @@ BOUNDARY_TOL = 1e-9
 
 # ── Cubic B-spline evaluation ─────────────────────────────────────────────
 
-def _axis_stencil(values, knots):
-    """For each query value, the 4 coefficient indices and 4 B-spline weights that make up
-    the cubic spline there. Thin wrapper over scipy's design_matrix, which handles the
-    non-uniform knot spacing that the not-a-knot end condition introduces."""
-    from scipy.interpolate import BSpline
-    dm = BSpline.design_matrix(values, knots, 3, extrapolate = False).tocsr()
-    counts = np.diff(dm.indptr)
-    if not np.all(counts == 4):
-        raise RuntimeError(f"expected 4 nonzero basis functions per point, got {counts}")
-    indices = dm.indices.reshape(-1, 4)
-    #_eval_bspline slices the stencil rather than gathering it, which is only valid if the
-    #four nonzero basis functions really are consecutive (they are, for any B-spline)
-    if not np.all(np.diff(indices, axis = 1) == 1):
-        raise RuntimeError("B-spline stencil indices are not consecutive")
-    return indices, dm.data.reshape(-1, 4)
+class _TensorSpline:
+    """One coefficient table wrapped as an evaluable tensor-product cubic B-spline.
 
+    merge_camb_grid.py writes, per spectrum, the B-spline coefficients over the five
+    parameter axes plus the knot vectors that go with them - which is exactly
+    scipy.interpolate.NdBSpline's contract (len(knots[a]) == coeff.shape[a] + k + 1), with
+    the trailing ell axis carried through untouched. So the stored grid drives NdBSpline
+    directly, with no regeneration and no reinterpretation of the file format.
 
-def _axis_stencil_derivs(values, knots):
-    """Derivative counterpart of _axis_stencil: for each query value, the 4 derivative
-    weights dB/dx of the SAME 4 cubic basis functions _axis_stencil selects, via the
-    standard degree-lowering identity B'_{m,3}(x) = 3 * (B_{m,2}(x) / (t[m+3] - t[m])
-    - B_{m+1,2}(x) / (t[m+4] - t[m+1]))."""
-    from scipy.interpolate import BSpline
-    indices, _ = _axis_stencil(values, knots)
-    dm2 = BSpline.design_matrix(values, knots, 2, extrapolate = False).tocsr()
-    counts = np.diff(dm2.indptr)
-    if not np.all(counts == 3):
-        raise RuntimeError(f"expected 3 nonzero degree-2 basis functions per point, "
-                           f"got {counts}")
-    idx2 = dm2.indices.reshape(-1, 3)
-    if not np.all(idx2[:, 0] == indices[:, 0] + 1):
-        raise RuntimeError("degree-2 stencil misaligned with the cubic stencil")
-    #b2[:, j] = B_{m0+j, 2} for j = 0..4 with m0 the first cubic index: only j = 1..3 are
-    #nonzero at any interior point, and the j = 0 / j = 4 zeros make the identity's two
-    #terms uniform below
-    b2 = np.zeros((values.shape[0], 5))
-    b2[:, 1:4] = dm2.data.reshape(-1, 3)
-    t = np.asarray(knots, dtype = np.float64)
-    m0 = indices[:, 0]
-    dweights = np.zeros((values.shape[0], 4))
-    for j in range(4):
-        m = m0 + j
-        d1 = t[m + 3] - t[m]
-        d2 = t[m + 4] - t[m + 1]
-        #zero-width spans (repeated end knots) contribute nothing, by convention
-        term1 = np.where(d1 > 0, b2[:, j] / np.where(d1 > 0, d1, 1.0), 0.0)
-        term2 = np.where(d2 > 0, b2[:, j + 1] / np.where(d2 > 0, d2, 1.0), 0.0)
-        dweights[:, j] = 3.0 * (term1 - term2)
-    return dweights
+    What this class still owns on top of NdBSpline is the box screen. NdBSpline's
+    extrapolate = False returns NaN strictly outside the knot range with no round-off
+    slack, and the sampler needs slack: it scans each conditional on a
+    jnp.linspace(lo, hi, SEARCH_PRECISION) whose endpoints ARE the box edges, and a query
+    built by round-tripping through theta -> H0 lands a few ulp outside. Without the
+    BOUNDARY_TOL clamp every scan would silently lose its two endpoints to NaN. Queries
+    genuinely outside stay NaN, which the sampler turns into a rejected proposal - byte for
+    byte what the direct-CAMB path does when CAMB fails.
 
+    Memory: NdBSpline's constructor casts the coefficients to float64 (scipy's
+    _get_dtype), so a ~1.1 GB float32 table becomes a ~2.1 GB float64 one. CambGrid.spline
+    therefore drops its reference to the float32 array as soon as the spline is built,
+    leaving one copy resident rather than two."""
 
-def _eval_bspline_grads(coeff, knots, points):
-    """Value AND per-axis first derivative of the tensor-product cubic spline.
+    def __init__(self, coeff, knots):
+        from scipy.interpolate import NdBSpline
+        self.knots = [np.asarray(k, dtype = np.float64) for k in knots]
+        self.n_axes = len(self.knots)
+        self.trailing = tuple(coeff.shape[self.n_axes:])
+        self.spline = NdBSpline(tuple(self.knots), coeff, 3, extrapolate = False)
 
-    Same contract as _eval_bspline, returning a second array of shape
-    (M, k) + trailing with d value / d points[:, a] in slot a. NaN rows for out-of-box
-    queries in both outputs. The derivative along axis a is the same separable
-    contraction with the axis-a value weights swapped for _axis_stencil_derivs."""
-    n_axes = len(knots)
-    trailing = coeff.shape[n_axes:]
-    out = np.full((points.shape[0],) + trailing, np.nan)
-    gout = np.full((points.shape[0], n_axes) + trailing, np.nan)
+    def _screen(self, points):
+        """(valid mask, points clipped onto the closed box), with BOUNDARY_TOL of slack."""
+        clamped = np.array(points, dtype = np.float64, copy = True)
+        valid = np.all(np.isfinite(points), axis = 1)
+        for a, knot in enumerate(self.knots):
+            lo, hi = knot[3], knot[-4]
+            tol = BOUNDARY_TOL * (hi - lo)
+            valid &= (points[:, a] >= lo - tol) & (points[:, a] <= hi + tol)
+            clamped[:, a] = np.clip(clamped[:, a], lo, hi)
+        return valid, clamped
 
-    clamped = np.array(points, dtype = np.float64, copy = True)
-    valid = np.all(np.isfinite(points), axis = 1)
-    for a, knot in enumerate(knots):
-        lo, hi = knot[3], knot[-4]
-        tol = BOUNDARY_TOL * (hi - lo)
-        valid &= (points[:, a] >= lo - tol) & (points[:, a] <= hi + tol)
-        clamped[:, a] = np.clip(clamped[:, a], lo, hi)
-    where = np.flatnonzero(valid)
-    if where.size == 0:
-        return out, gout
-
-    stencils = [_axis_stencil(clamped[where, a], knots[a]) for a in range(n_axes)]
-    dstencils = [_axis_stencil_derivs(clamped[where, a], knots[a]) for a in range(n_axes)]
-    for m, target in enumerate(where):
-        block = coeff[tuple(slice(stencils[a][0][m, 0], stencils[a][0][m, 0] + 4)
-                            for a in range(n_axes))]
-        value = block
-        for a in range(n_axes):
-            value = np.tensordot(stencils[a][1][m], value, axes = ([0], [0]))
-        out[target] = value
-        for da in range(n_axes):
-            value = block
-            for a in range(n_axes):
-                wvec = dstencils[a][m] if a == da else stencils[a][1][m]
-                value = np.tensordot(wvec, value, axes = ([0], [0]))
-            gout[target, da] = value
-    return out, gout
-
-
-def _eval_bspline(coeff, knots, points):
-    """Evaluate a tensor-product cubic B-spline.
-
-    coeff  - spline coefficients, shape (n_0, ..., n_{k-1}) + (any trailing dims)
-    knots  - list of k knot vectors, one per interpolated axis (from merge_camb_grid.py)
-    points - (M, k) query points in parameter units
-
-    Returns (M,) + trailing, NaN wherever a query falls outside the box. Trailing
-    dimensions (the ell axis) are carried through untouched.
-
-    The not-a-knot end condition matters: scipy.ndimage's prefilter modes all impose a
-    folding boundary that is not exact even for a straight line, and with axes as short as
-    4 nodes that error (measured at 1.9e-4 in lnCl) contaminates the entire axis rather
-    than just its edges."""
-    n_axes = len(knots)
-    trailing = coeff.shape[n_axes:]
-    out = np.full((points.shape[0],) + trailing, np.nan)
-
-    #design_matrix raises on out-of-range input, so screen the box first. Outside queries
-    #stay NaN, which the sampler turns into a rejected proposal.
-    #
-    #The tolerance is not cosmetic: the sampler scans each conditional on a
-    #jnp.linspace(lo, hi, SEARCH_PRECISION) whose endpoints ARE the box edges, and a query
-    #built by round-tripping through theta -> H0 lands a few ulp outside. Without this,
-    #every scan would silently lose its two endpoints to NaN
-    clamped = np.array(points, dtype = np.float64, copy = True)
-    valid = np.all(np.isfinite(points), axis = 1)
-    for a, knot in enumerate(knots):
-        lo, hi = knot[3], knot[-4]
-        tol = BOUNDARY_TOL * (hi - lo)
-        valid &= (points[:, a] >= lo - tol) & (points[:, a] <= hi + tol)
-        clamped[:, a] = np.clip(clamped[:, a], lo, hi)
-    where = np.flatnonzero(valid)
-    if where.size == 0:
+    def __call__(self, points):
+        """(M, n_axes) query points in parameter units -> (M,) + trailing, NaN wherever a
+        query falls outside the box."""
+        points = np.atleast_2d(np.asarray(points, dtype = np.float64))
+        out = np.full((points.shape[0],) + self.trailing, np.nan)
+        valid, clamped = self._screen(points)
+        if valid.any():
+            out[valid] = self.spline(clamped[valid])
         return out
 
-    stencils = [_axis_stencil(clamped[where, a], knots[a]) for a in range(n_axes)]
-    for m, target in enumerate(where):
-        #The four nonzero cubic B-spline basis functions at any point are always
-        #consecutive, so the stencil is a contiguous slice rather than a fancy-index
-        #gather. That matters: np.ix_ would copy the whole 4^n_axes x n_ell block (16 MB
-        #per query at the production grid shape) before any arithmetic happened.
-        block = coeff[tuple(slice(stencils[a][0][m, 0], stencils[a][0][m, 0] + 4)
-                            for a in range(n_axes))]
-        #contract one axis at a time; separable contraction is ~4^n multiply-adds per ell
-        #instead of materializing an outer product of the weights
-        for a in range(n_axes):
-            block = np.tensordot(stencils[a][1][m], block, axes = ([0], [0]))
-        out[target] = block
-    return out
+    def value_and_grads(self, points):
+        """Value AND per-axis first derivative: ((M,) + trailing, (M, n_axes) + trailing),
+        with d value / d points[:, a] in slot a. NaN rows out of box in both outputs."""
+        points = np.atleast_2d(np.asarray(points, dtype = np.float64))
+        out = np.full((points.shape[0],) + self.trailing, np.nan)
+        gout = np.full((points.shape[0], self.n_axes) + self.trailing, np.nan)
+        valid, clamped = self._screen(points)
+        if not valid.any():
+            return out, gout
+        inside = clamped[valid]
+        out[valid] = self.spline(inside)
+        for a in range(self.n_axes):
+            nu = [0] * self.n_axes
+            nu[a] = 1
+            gout[valid, a] = self.spline(inside, nu = nu)
+        return out, gout
 
 
 # ── Grid file ─────────────────────────────────────────────────────────────
@@ -238,11 +177,11 @@ class CambGrid:
         data = np.load(path)
         self.path = path
         #coefficient tables are ~1.1 GB each and there are up to six of them, so they are
-        #NOT read here: _coeff_cache fills lazily, per spectrum, on first use. np.load on
+        #NOT read here: _spline_cache fills lazily, per spectrum, on first use. np.load on
         #an npz keeps a file handle and reads members on indexing, which is exactly the
         #laziness needed
         self._data = data
-        self._coeff_cache = {}
+        self._spline_cache = {}
         #unlensed scalar BB is identically zero on r = 0 / tensors-off grids; the merge
         #step verifies that and records this flag instead of a coefficient table
         self.bb_is_zero = bool(data["bb_is_zero"]) if "bb_is_zero" in data.files else False
@@ -257,7 +196,7 @@ class CambGrid:
         from scipy.interpolate import CubicSpline
         self.h0_dense = np.linspace(self.axes[0][0], self.axes[0][-1], N_THETA_DENSE)
         dense = CubicSpline(self.axes[0], data["theta_grid"], axis = 0)(self.h0_dense)
-        #_eval_bspline interpolates over the LEADING axes and carries the rest through as
+        #_TensorSpline interpolates over the LEADING axes and carries the rest through as
         #trailing values, so the dense H0 axis has to sit last: the two interpolated axes
         #are ombh2 and omch2, and what comes back is a whole theta(H0) curve per query
         dense = np.moveaxis(dense, 0, -1)
@@ -275,19 +214,23 @@ class CambGrid:
             theta_knots.append(spline.t)
         self.coeff_theta_dense = coeff_dense
         self.theta_knots = theta_knots
+        #this one is small (a few MB) and every query needs it, so unlike the spectra it is
+        #built eagerly
+        self.theta_spline = _TensorSpline(coeff_dense, theta_knots)
 
     def h0_from_theta(self, theta, ombh2, omch2):
         """Invert theta_MC_100 -> H0 at each (ombh2, omch2). Returns NaN where the
         requested theta is not reachable inside the grid's H0 range."""
         pts = np.stack([np.atleast_1d(ombh2), np.atleast_1d(omch2)], axis = -1)
-        curves = _eval_bspline(self.coeff_theta_dense, self.theta_knots, pts)
+        curves = self.theta_spline(pts)
         theta = np.atleast_1d(theta)
         h0 = np.full(theta.shape, np.nan)
         for m in range(theta.size):
             curve = curves[m]
             if not np.all(np.isfinite(curve)):
                 continue
-            #same round-off tolerance as _eval_bspline: a theta taken from the edge of the
+            #same round-off tolerance as _TensorSpline's box screen: a theta taken from
+            #the edge of the
             #sampler's search range must not be rejected for being one ulp past the end of
             #the curve it was derived from
             tol = BOUNDARY_TOL * (curve[-1] - curve[0])
@@ -308,9 +251,14 @@ class CambGrid:
             return True
         return f"coeff_{spectrum}" in self._data.files
 
-    def coeff(self, spectrum):
-        """Lazily load (and cache) one spectrum's coefficient table."""
-        if spectrum not in self._coeff_cache:
+    def spline(self, spectrum):
+        """Lazily load one spectrum's coefficient table and cache it as an evaluable
+        _TensorSpline.
+
+        Only the spline is cached, not the array it was built from: NdBSpline holds its own
+        float64 copy, so keeping the float32 original as well would double an already
+        ~2.1 GB per-spectrum footprint for nothing."""
+        if spectrum not in self._spline_cache:
             key = f"coeff_{spectrum}"
             if key not in self._data.files:
                 raise KeyError(
@@ -318,11 +266,11 @@ class CambGrid:
                     f"predates the polarization/lensed-Cl extension. Re-run "
                     f"sampling_chains/camb_grid.sh and "
                     f"merge_camb_grid.py to regenerate it")
-            self._coeff_cache[spectrum] = self._data[key]
-        return self._coeff_cache[spectrum]
+            self._spline_cache[spectrum] = _TensorSpline(self._data[key], self.knots)
+        return self._spline_cache[spectrum]
 
     def _points_valid(self, points):
-        """The same validity screen _eval_bspline applies: finite coordinates inside the
+        """The same validity screen _TensorSpline applies: finite coordinates inside the
         box (with the round-off tolerance). Needed to give the zero-BB spectrum the same
         NaN-outside-the-box semantics as the splined spectra."""
         valid = np.all(np.isfinite(points), axis = 1)
@@ -342,80 +290,10 @@ class CambGrid:
             out = np.zeros((points.shape[0], self.n_ell))
             out[~self._points_valid(points)] = np.nan
             return out
-        values = _eval_bspline(self.coeff(spectrum), self.knots, points)
+        values = self.spline(spectrum)(points)
         if spectrum in LINEAR_SPECTRA:
             return values
         return np.exp(values)
-
-    def cl_tt(self, params_batch):
-        return self.cl("tt", params_batch)
-
-    def cl_pp(self, params_batch):
-        return self.cl("pp", params_batch)
-
-    def cls(self, params_batch):
-        """(M, 5) in PARAM_ORDER -> (cl_tt, cl_pp), each (M, n_ell). NaN rows outside the
-        box, which the sampler turns into a rejected proposal."""
-        return self.cl_tt(params_batch), self.cl_pp(params_batch)
-
-    def spline_param_grads(self, params_batch, spectrum):
-        """d (splined quantity) / d params in PARAM_ORDER: (M, 5) -> (M, 5, n_ell), NaN
-        rows where the query is out of box or its theta_MC_100 is unreachable. The
-        splined quantity is lnCl for the log spectra and the raw value (the correlation
-        ratio) for the LINEAR_SPECTRA.
-
-        The grid is laid out in H0, so the chain rule runs through the theta -> H0
-        inversion: with g_a = d lnCl / d grid-axis a and theta(H0, ombh2, omch2) the
-        recorded background relation,
-            d/d theta = g_H0 / (d theta / d H0)
-            d/d ombh2 = g_ombh2 - g_H0 * (d theta / d ombh2) / (d theta / d H0)
-        (implicit function theorem; omch2 analogous). The dense theta(H0) curve is
-        inverted by linear interpolation, so d theta / d H0 is the containing segment's
-        slope - exactly what autodiff of the jnp.interp in the pure-JAX path uses."""
-        pb = np.atleast_2d(np.asarray(params_batch, dtype = np.float64))
-        M = pb.shape[0]
-        #the zero-BB spectrum is constant in theta, so its gradient contribution is
-        #zero everywhere (the VJP multiplies by Cl = 0 anyway)
-        if spectrum == "bb" and self.bb_is_zero:
-            return np.zeros((M, 5, self.n_ell))
-        coeff = self.coeff(spectrum)
-
-        pts2 = np.stack([pb[:, 3], pb[:, 4]], axis = -1)
-        curves, dcurves = _eval_bspline_grads(self.coeff_theta_dense, self.theta_knots,
-                                              pts2)
-        h0 = np.full(M, np.nan)
-        dh0_dtheta = np.full(M, np.nan)
-        dh0_dob = np.full(M, np.nan)
-        dh0_doc = np.full(M, np.nan)
-        for m in range(M):
-            curve = curves[m]
-            if not np.all(np.isfinite(curve)):
-                continue
-            tol = BOUNDARY_TOL * (curve[-1] - curve[0])
-            theta = pb[m, 0]
-            if not np.isfinite(theta) or theta < curve[0] - tol or theta > curve[-1] + tol:
-                continue
-            theta_c = np.clip(theta, curve[0], curve[-1])
-            h0[m] = np.interp(theta_c, curve, self.h0_dense)
-            seg = np.clip(np.searchsorted(curve, theta_c), 1, curve.size - 1)
-            slope = ((curve[seg] - curve[seg - 1])
-                     / (self.h0_dense[seg] - self.h0_dense[seg - 1]))
-            dth_dob = np.interp(h0[m], self.h0_dense, dcurves[m, 0])
-            dth_doc = np.interp(h0[m], self.h0_dense, dcurves[m, 1])
-            dh0_dtheta[m] = 1.0 / slope
-            dh0_dob[m] = -dth_dob / slope
-            dh0_doc[m] = -dth_doc / slope
-
-        grid_pts = np.stack([h0, pb[:, 1], pb[:, 2], pb[:, 3], pb[:, 4]], axis = -1)
-        _, g = _eval_bspline_grads(coeff, self.knots, grid_pts)
-
-        grads = np.full((M, 5, self.n_ell), np.nan)
-        grads[:, 0] = g[:, 0] * dh0_dtheta[:, None]
-        grads[:, 1] = g[:, 1]
-        grads[:, 2] = g[:, 2]
-        grads[:, 3] = g[:, 3] + g[:, 0] * dh0_dob[:, None]
-        grads[:, 4] = g[:, 4] + g[:, 0] * dh0_doc[:, None]
-        return grads
 
 _loaded_grids = {}
 
