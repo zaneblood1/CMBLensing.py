@@ -16,14 +16,14 @@
 #Why this is fanned out and the other forecasts are not: mixed_logpdf costs TWO lensing
 #solves per evaluation (an inverse one inside unmix, a forward one inside logpdf), and
 #nothing cancels across the stencil because D, G and the unmixed fields all move with
-#theta - so there is no fast mode of the kind fisher_forecast's unmixed logpdf path has.
+#theta - so there is no fast mode of the kind fisher_forecast_from_logpdf has.
 #Sequentially that is ~3800 lensing solves; one job per realization makes it 38 apiece.
 #MEASURED: one job is 1m41s at nside 128 / 2.5' / 3 params, so the whole 100-job forecast
 #finishes in minutes of wall clock once the jobs are scheduled, against a few hours if run
-#sequentially in fisher_forecast.forecast_from_mixed_logpdf.
+#sequentially in fisher_forecast_from_mixed_logpdf.forecast_from_mixed_logpdf.
 #
 #Collect the results with:
-#    python -m cmb_lensing.fisher_forecast --hessian_dir "$out_dir"
+#    python -m cmb_lensing.fisher_forecast_from_mixed_logpdf --hessian_dir "$out_dir"
 
 #systematics: MATCH sample_lcdm.sh so the forecast is comparable to the chains
 nside=128

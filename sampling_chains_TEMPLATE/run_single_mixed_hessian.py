@@ -3,7 +3,7 @@
 Spawned once per realization by mixed_hessian.sh. Each job draws (f, phi) at the fiducial
 cosmology, mixes them ONCE with D and G at that cosmology, then finite-differences
 statistics.mixed_logpdf in theta at that fixed mixed pair, and writes -Hessian to a single
-small npz. fisher_forecast.py --hessian_dir averages the collected files.
+small npz. fisher_forecast_from_mixed_logpdf.py --hessian_dir averages the collected files.
 
 Fanning this out matters here: mixed_logpdf costs TWO lensing solves per evaluation (an
 inverse one inside unmix, a forward one inside logpdf), and nothing cancels across the
@@ -19,7 +19,7 @@ import os
 
 import numpy as np
 
-from cmb_lensing.fisher_forecast import mixed_hessian_realization
+from cmb_lensing.fisher_forecast_from_mixed_logpdf import mixed_hessian_realization
 from cmb_lensing.precompute_camb_1d import GROUND_TRUTH, PARAM_ORDER
 
 parser = argparse.ArgumentParser()

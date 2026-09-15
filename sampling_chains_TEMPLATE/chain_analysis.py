@@ -629,6 +629,44 @@ def average_over_phi(chains, output_path, ground_truth, param_name):
     #return the list of the "phi-averaged" per-data-map PDFs
     return grid, pdfs_per_map
 
+def metropolis_acceptance_rate(raw_chains, param_name, verbose = True):
+    """Pooled Metropolis-Hastings acceptance rate for one parameter, from the UNTHINNED chains.
+
+    raw_chains is the list over maps of lists of post-burn-in chains (one 1D array per
+    chain). A rejected proposal leaves the parameter exactly where it was, so the history
+    file repeats the previous value bit for bit; an accepted one moves it. Walking every
+    chain step by step, each transition is therefore a reject (value unchanged) or an
+    accept (value changed), and the rate is
+
+        total_accepts / (total_accepts + total_rejects)
+
+    pooled over every chain of every map - i.e. the acceptance averaged over maps and
+    chains, weighted by chain length. This must run AFTER burn-in is cut (the fixed-theta
+    burn-in iterations would all count as rejects) and BEFORE prune_chains (thinning by
+    the autocorrelation stride destroys the step-by-step structure this counts).
+
+    One caveat: the sampler writes one history entry per Gibbs iteration, and with
+    metropolis_num_steps > 1 several Metropolis proposals happen inside one iteration, so a
+    "move" here means at least one of them was accepted. With one proposal per iteration
+    (the default) this is exactly the per-proposal acceptance rate.
+
+    Returns (rate, accepts, rejects).
+    """
+    accepts, rejects = 0, 0
+    for chains_per_map in raw_chains:
+        for chain in chains_per_map:
+            chain = np.asarray(chain)
+            moved = chain[1:] != chain[:-1]
+            accepts += int(np.sum(moved))
+            rejects += int(moved.size - np.sum(moved))
+    transitions = accepts + rejects
+    rate = accepts / transitions if transitions > 0 else float("nan")
+    if verbose:
+        print(f"{param_name} Metropolis-Hastings acceptance rate = {rate:.4f} "
+              f"({accepts} accepts / {transitions} transitions over "
+              f"{sum(len(c) for c in raw_chains)} chains, post burn-in, unthinned)")
+    return rate, accepts, rejects
+
 def per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, ground_truth, default_burn_in, param_name):
 
     #load the data
@@ -652,6 +690,10 @@ def per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, ground_t
     print(r_hats)
     print(f"{param_name} Average Gelman-Rubin R Statistic = {np.mean(r_hats)}")
     print(f"{param_name} Std in Gelman-Rubin R Statistic = {np.std(r_hats)}")
+
+    #metropolis-hastings acceptance rate per parameter, pooled over maps and chains. this
+    #has to see the chains after burn-in but BEFORE thinning
+    metropolis_acceptance_rate(raw_chains, param_name)
 
     #auto-correlation plots
     acfs_per_map = plot_autocorrelation_chains(raw_chains, output_path, param_name)
@@ -749,17 +791,14 @@ def plot_covariance_matrix(cov_mat, names, path):
     plt.close(figure)
 
 #Contour styling for the triangle plot. The measured posterior is the shaded one; every
-#forecast is an outline in its own colour so several can share the axes. "marginal" is
-#listed ready for merge_marginal_fisher.py's output - nothing is drawn for a label that is
-#not actually passed to triangle_plot
-MEASURED_COLOUR = "tab:red"
+#forecast is an outline in its own colour so several can share the axes. Nothing is
+#drawn for a label that is not actually passed to triangle_plot
+MEASURED_COLOUR = "tab:blue"
 FORECAST_STYLES = {
-    "ceiling": {"colour": "tab:blue", "linestyle": "--", "short": "ceil",
+    "ceiling": {"colour": "tab:red", "linestyle": "--", "short": "ceil",
                 "label": "ceiling (complete-data bound)"},
-    "lensed": {"colour": "tab:purple", "linestyle": ":", "short": "lens",
+    "lensed": {"colour": "tab:green", "linestyle": ":", "short": "lens",
                "label": "lensed (two-point bound)"},
-    "marginal": {"colour": "tab:green", "linestyle": "-.", "short": "marg",
-                 "label": "marginal (Louis)"},
 }
 DEFAULT_FORECAST_STYLE = {"colour": "tab:gray", "linestyle": "--", "short": "fisher",
                           "label": "Fisher forecast"}
@@ -770,8 +809,8 @@ def triangle_plot(measured_cov_mat, forecasts, param_names, means, sigmas = (1,)
 
     `forecasts` maps a label from FORECAST_STYLES to a covariance matrix, e.g.
     {"ceiling": ..., "lensed": ...}. The MEASURED posterior (pooled from the Gibbs chains)
-    is drawn shaded in red; each forecast is left as a coloured outline so they stay
-    legible where they overlap - blue for ceiling, purple for lensed. The diagonal carries
+    is drawn shaded in solid blue; each forecast is left as a coloured outline so they stay
+    legible where they overlap - red for ceiling, green for lensed. The diagonal carries
     each parameter's marginal Gaussian, the lower triangle each pair's joint confidence
     ellipse. sigmas lists which contours to draw (1-sigma only by default); each level k
     gives semi-axes k * sqrt(eigenvalue) of the pair's 2x2 covariance block.

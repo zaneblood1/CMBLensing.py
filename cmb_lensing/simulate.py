@@ -21,12 +21,19 @@ _CAMB_COLS = {"TT": 0, "EE": 1, "BB": 2, "TE": 3}
 
 # ── Power Spectrum Conversion ─────────────────────────────────────────────
 
-def dl2cl(dl_xx, lmax, lmax_prime, is_phi=False):
+def dl2cl(dl_xx, lmax, lmax_prime, is_phi=False, is_tphi=False):
     ell = jnp.arange(2, lmax).astype(jnp.float64)
     ell_prime = jnp.arange(2, lmax_prime).astype(jnp.float64)
 
     if is_phi:
         cl_xx = dl_xx[2:] * 2 * jnp.pi / ell_prime**4
+    elif is_tphi:
+        #CAMB's lens-potential cross columns are [L(L+1)]^(3/2) C_L^(T phi) / 2 pi
+        #(get_lens_potential_cls), inverted exactly here. NOTE the phi branch above
+        #uses ell^4 rather than [L(L+1)]^2, so TP / sqrt(TT * PP) departs from CAMB's
+        #own T-phi correlation coefficient by (1 + 1/ell), i.e. ~1.5% at the box's
+        #ell_min of 68 and less above
+        cl_xx = dl_xx[2:] * 2 * jnp.pi / (ell_prime * (ell_prime + 1))**1.5
     else:
         cl_xx = dl_xx[2:] * 2 * jnp.pi / (ell_prime * (ell_prime + 1))
 
@@ -465,9 +472,11 @@ def get_polar_qe_norm_at_position(tf2e, cf_ee, sigma_e, tf2b, cf_bb, sigma_b,
 
 # ── CAMB Interface ────────────────────────────────────────────────────────
 
-def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-              lmax_prime, k_pivot, Alens):
-    
+def camb_parameters(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
+                    lmax_prime, k_pivot, Alens):
+    """The CAMBparams every CAMB run in this codebase uses. Split out of _run_camb so a
+    caller that needs CAMB's results object itself (fisher_forecast keeps it for
+    get_partially_lensed_cls) sets up the run identically."""
     pars = camb.set_params(
         H0=H0, ombh2=ombh2, omch2=omch2, cosmomc_theta=cosmomc_theta,
         r=r, mnu=mnu, As=As, nt=nt, ns=ns, lmax=lmax_prime,
@@ -480,10 +489,19 @@ def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
     pars.WantTensors = True #DEBUG should this be set to False?
     pars.DoLensing = True
     pars.set_nonlinear_lensing(True)
+    return pars
 
+
+def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
+              lmax_prime, k_pivot, Alens):
+    pars = camb_parameters(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
+                           lmax_prime, k_pivot, Alens)
     results = camb.get_results(pars)
     power_spectra = results.get_cmb_power_spectra(pars, lmax=lmax_prime - 1, CMB_unit="muK")
-    lens_potential = jnp.asarray(results.get_lens_potential_cls(lmax=lmax_prime - 1)[:, 0])
+    #columns 0..2 are PP, PT, PE. CMB_unit only scales the two cross columns (PP is
+    #dimensionless either way), and "muK" puts PT in the same units as the TT spectra
+    lens_potential = jnp.asarray(results.get_lens_potential_cls(
+        lmax=lmax_prime - 1, CMB_unit="muK")[:, :2])
     return power_spectra, lens_potential
 
 
@@ -504,7 +522,7 @@ def _camb_callback_fn(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         unlensed_scalar = jnp.full((lmax_prime, 4), jnp.nan)
         tensor = jnp.full((lmax_prime, 4), jnp.nan)
         total = jnp.full((lmax_prime, 4), jnp.nan)
-        lens_potential = jnp.full((lmax_prime,), jnp.nan)
+        lens_potential = jnp.full((lmax_prime, 2), jnp.nan)
     return unlensed_scalar, tensor, total, lens_potential
 
 
@@ -515,7 +533,7 @@ def _camb_via_callback(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         jax.ShapeDtypeStruct((lmax_prime, 4), jnp.float64),
         jax.ShapeDtypeStruct((lmax_prime, 4), jnp.float64),
         jax.ShapeDtypeStruct((lmax_prime, 4), jnp.float64),
-        jax.ShapeDtypeStruct((lmax_prime,), jnp.float64),
+        jax.ShapeDtypeStruct((lmax_prime, 2), jnp.float64),
     )
     return jax.pure_callback(
         _camb_callback_fn, result_shapes,
@@ -528,7 +546,7 @@ def _camb_via_callback(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
 EXPECTED_CL_KEYS = (tuple(f"scalar_{s}" for s in _CAMB_COLS)
                     + tuple(f"tensor_{s}" for s in _CAMB_COLS)
                     + tuple(f"total_{s}" for s in ("TT", "TE", "EE", "BB"))
-                    + ("phi",))
+                    + ("phi", "TP"))
 
 
 def _validate_precomputed_cls(cls, lmax):
@@ -563,7 +581,9 @@ def _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_
         cls[f"tensor_{stokes}"] = dl2cl(tensor[:, col], lmax, lmax_prime)
     for stokes in ("TT", "TE", "EE", "BB"):
         cls[f"total_{stokes}"] = dl2cl(total[:, _CAMB_COLS[stokes]], lmax, lmax_prime)
-    cls["phi"] = dl2cl(lens_potential, lmax, lmax_prime, is_phi=True)
+    cls["phi"] = dl2cl(lens_potential[:, 0], lmax, lmax_prime, is_phi=True)
+    #the CAMB T-phi cross spectrum (ISW-lensing correlation), in muK like the TT spectra
+    cls["TP"] = dl2cl(lens_potential[:, 1], lmax, lmax_prime, is_tphi=True)
     return cls
 
 
@@ -781,7 +801,7 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
 
     `precomputed_cls` optionally supplies the CAMB spectra instead of running CAMB, for
     callers that build many realizations at ONE cosmology and would otherwise pay for an
-    identical CAMB evaluation every time (fisher_forecast.forecast_from_logpdf does exactly
+    identical CAMB evaluation every time (fisher_forecast_from_logpdf does exactly
     this). It must be a dict in _extract_all_cls's format - the output of
     fisher_forecast.camb_cls_at_params is one, since CAMB_LMAX equals DEFAULT_MAX_ELL.
 
