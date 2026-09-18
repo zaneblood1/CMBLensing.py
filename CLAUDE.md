@@ -340,6 +340,23 @@ independent Monte Carlo at each stencil point divides the MC noise by `2h` with 
   therefore decided by the rescaled drift against `--tolerance` (default 1e-2), with the chi-squared
   reported only as "is the motion detectable at all". With enough realizations the ratio will always
   become distinguishable from flat; that is not a reason to abandon the construction.
+- **Dropping the flatness assumption (added 2026-09-18): measured dR/dtheta.** Set
+  `derivative_params` (and `derivative_sigma`, default 0.5 sigma) in `get_delensed_spectra.sh`: it
+  runs `$out_dir/reference` plus `$out_dir/<param>_plus|_minus` on the SAME seeds, then
+  `merge_delensed_spectra.py --spectra_dir <out>/reference --shifted_dirs <out>/*_plus <out>/*_minus`
+  (`delensed_spectrum.merge_transfer_derivatives`) differences R PER REALIZATION and jackknifes it,
+  writing `transfer_derivative` (+ error, schemes, deltas, second difference) into the same
+  `transfer_function.npz`. `fisher_forecast.apply_transfer_function(..., params)` then evaluates
+  `R_0 + sum_i (theta_i - theta_0,i) dR/dtheta_i` at every stencil point (`transfer_at_params`);
+  `check_transfer_derivatives` requires R_0's cosmology == the forecast's fiducial point and warns
+  about sampled parameters with no derivative (held flat). **Convention:** shifted runs now default
+  to `--reconstruction fiducial` (`freeze_reconstruction=1`): data at the shifted theta, but
+  map_joint's C_f / C_phi / D / QE norm and the CAMB reference's Alens_L at GROUND_TRUTH
+  (`measure_delensed_spectrum(reconstruction_params = ...)`), matching the forecast's frozen
+  Alens_L; the derivative merge refuses runs whose reconstruction tracked theta, which is what
+  every pre-2026-09-18 shifted run did (files without `reconstruction_params` are read that way).
+  Measured on one nside 64 / 5' seed: per-band R scatter 12%, per-band R(+0.5 sigma omch2) - R(0)
+  median 0.15% — the common random numbers cancel ~80x.
 
 Scripts (in BOTH `sampling_chains/` and `sampling_chains_TEMPLATE/`, `.py` byte-identical):
 `get_delensed_spectra.sh` (one slurm job per seed, 100 by default) -> `get_single_delensed_spectra.sh`

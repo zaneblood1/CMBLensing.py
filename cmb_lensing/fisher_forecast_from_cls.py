@@ -69,6 +69,7 @@ from cmb_lensing.lensing_covariance import (LensingBandpowerCovariance,
 from cmb_lensing.precompute_camb_1d import GROUND_TRUTH
 from cmb_lensing.fisher_forecast import (camb_cls_at_params, covariance_stencil,
                                          cls_with_qe_response, DEFAULT_QE_RESPONSE,
+                                         camb_lmax_for_grid,
                                          frozen_reconstruction, covariance_from_fisher,
                                          step_stability, report_sigmas,
                                          report_ceiling_ratio, save_outputs,
@@ -171,7 +172,10 @@ def _lensing_bandpower_covariance(spectra, blocks_fid, nside, pix_width, ell_gri
         return None
     tt_key, pp_key = _CLS_BLOCK_KEYS[spectra]
 
-    cls_fid = cls_with_qe_response(param_ground, qe_response)
+    #the same camb_lmax covariance_stencil defaults to, so this kernel and the blocks it
+    #corrects are built from one set of CAMB spectra rather than two of different reach
+    camb_lmax = camb_lmax_for_grid(ell_grid)
+    cls_fid = cls_with_qe_response(param_ground, qe_response, camb_lmax = camb_lmax)
     ells = jnp.arange(2, 2 + cls_fid["scalar_TT"].shape[0]).astype(jnp.float64)
     phi_ells = jnp.arange(2, 2 + cls_fid["phi"].shape[0]).astype(jnp.float64)
 
@@ -188,7 +192,7 @@ def _lensing_bandpower_covariance(spectra, blocks_fid, nside, pix_width, ell_gri
                                     noise_level, l_knee, beam_fwhm, l_cutoff,
                                     iterative_delens, verbose = False,
                                     nphi_source = nphi_source, param_ground = param_ground,
-                                    qe_response = qe_response)
+                                    qe_response = qe_response, camb_lmax = camb_lmax)
     nphi = np.asarray(nphi)
 
     if spectra == "lensed":
