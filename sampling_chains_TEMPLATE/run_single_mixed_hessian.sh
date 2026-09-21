@@ -25,4 +25,7 @@ python3 ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/run_single_mixed_hessian.py
     --noise_level "$5" \
     --l_knee "$6" \
     --out_dir "$7" \
-    --params "${@:8}"
+    --louis "$8" \
+    --louis_draws "$9" \
+    --louis_burn "${10}" \
+    --params "${@:11}"

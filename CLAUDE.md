@@ -445,7 +445,37 @@ hessian_dir = ...)`, which since 2026-09-11 averages the cached `hessian_*.npz` 
 realizations and raises if the files' box / noise / l_knee / parameter set differ from the
 arguments (`hessian_directory_config` reads them; `load_hessian_directory` refuses mixed
 configurations and duplicate seeds). The CLI takes its box from the files in that mode; pass
-`--hessian_dir ""` to compute sequentially. Louis's two-term split is NOT parametrization invariant, so the
+`--hessian_dir ""` to compute sequentially. **`--louis` (added 2026-09-18)** turns `mixed` into
+the MARGINAL Fisher via Louis's identity, `I(d) = <-H>_{f°,phi°|d} - Cov_{f°,phi°|d}[score]`:
+`louis_realization` samples (f°, phi°) | d at theta_0 with the sampler's own Gibbs sweep
+(`gibbs_sample_f` + `gibbs_sample_phi`, theta fixed, fiducial D/G, MAP start;
+`posterior_mixed_draws`), runs the same 19-point stencil at every kept draw (the score comes free
+from the +/-h points, `score_from_stencil`), and also evaluates the plain Hessian at the true
+fields - by the tower property the complete term must match it on average, which the merge
+reports as "complete - truth (should be 0)". Files are method `"mixed_louis"`, suffix
+`_from_mixed_louis`, with the same `hessian` field (= the Louis information) so
+`load_hessian_directory(method = LOUIS_METHOD)` averages them; `--hessian_dir` infers louis mode
+from the files. **The chain is never thinned while it runs** (reworked 2026-09-21): every
+post-burn-in sweep is kept and differentiated, the UN-THINNED per-sweep `hessians` / `scores`
+go into the npz, and `load_hessian_directory` rebuilds each realization's information through
+`louis_information_from_terms`, which measures that realization's own stride the way
+`chain_analysis.prune_chains` does (`autocorrelation` -> `integrated_autocorrelation_time`
+Sokal windowing, or `first_zero_crossing_lag` under `LOUIS_USE_ZERO_CROSSING`) and builds the
+score covariance from the pruned chain; the complete term keeps every sweep (a mean is
+unbiased under correlation). So a file written before this rework is still merged correctly,
+and `louis_draws` is a RAW chain length - the merge prints the per-realization stride and
+pruned-sample count and warns below 10. `mixed_hessian.sh` has `louis=1` / `louis_draws` (50) /
+`louis_burn` (100) / `louis_time` / `louis_mem` (`run_single_mixed_hessian.sh` args 8-10, params
+from 11; a louis job carries the sampler stack too, MEASURED 2.5 GB peak RSS at nside 64, over
+the 2G the plain Hessian job asks for). **Draws are streamed, never accumulated:** a mixed pair
+is two `(nside, nside//2+1)` complex128 arrays (260 kB at nside 128, so thousands of sweeps
+would be GB), so `posterior_mixed_draws` takes an `on_draw` callback and `louis_realization`
+differentiates each sweep as it arrives - only the `(n, n)` Hessian and `(n,)` score survive it,
+and the npz therefore holds `hessians` / `scores`, never fields. The IAT is taken from the
+SCORE chain because the score is the functional being averaged (the field has no single IAT -
+each phi mode decorrelates at its own rate). Measured at nside 64 / 5': a stencil costs ~59
+Gibbs sweeps, so stencils dominate the job; two realizations gave score IATs of 1.9/2.9/2.2 and
+1.8/2.8/1.1, which is why the stride cannot be a per-box input. Louis's two-term split is NOT parametrization invariant, so the
 `mixed` and `logpdf` Hessians are different decompositions, not estimates of one number.
 
 **None of these is what the sampler targets.** Measured against the 50-map chains at nside 128 /

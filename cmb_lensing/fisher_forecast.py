@@ -806,7 +806,7 @@ def qe_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_f
 
     return scalar_quadratic_estimate(noise, covar(qe_response_cl(cls, qe_response)),
                                      covar(filter_tt),
-                                     mask, beam, pix_width) / 1.5 #/ NPHI_FAC
+                                     mask, beam, pix_width) #/ 1.5 #/ NPHI_FAC
 
 
 def prior_covariances(params, nside, pix_width, ell_grid):
@@ -1271,7 +1271,7 @@ def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
                              "with delensed_cls_at_params at the frozen Alens_L, as "
                              "covariance_stencil does")
         return {"f_delensed": covar(cls["delensed_TT"], ells) + noise,
-                "phi": phi_block}
+                "phi": phi_block - nphi}
 
     if spectra in ("unlensed",):
         #conditional on (f, phi) the data term carries no theta dependence at all, so the
