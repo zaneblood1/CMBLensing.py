@@ -14,7 +14,9 @@
 #its one seed (common random numbers - across the stencil the fields differ only through the
 #cosmology), reconstructs phi with map_joint at each point, inverse-lenses the noiseless
 #lensed field by that estimate, and stores |rfft2|^2 / nside^2 on the rfft grid:
-#num_realizations x (1 + 2k) covariance matrices in total.
+#num_realizations x (1 + 2k) covariance matrices in total. The same jobs also store, per
+#rfft mode and stencil point, |phi_hat|^2, Re(phi_hat phi*) and |phi|^2, from which the merge
+#builds the per-mode empirical phi noise (fisher_forecast --empirical_phi_noise).
 #
 #WHY THIS EXISTS: get_delensed_spectra.sh only corrects CAMB's delensed spectrum by a
 #transfer function R(l) (and optionally dR/dtheta); the forecast's delensed block and its
@@ -53,6 +55,14 @@ step_sigma=0.5
 #derivative in the codebase uses); "shifted" rebuilds them at each point's own cosmology
 reconstruction=fiducial
 
+#reconstruction=shifted only ("fiducial" freezes N_phi with everything else): 1 keeps
+#map_joint's QE norm N_phi at theta_0 while C_f / C_phi / D follow each point's cosmology - the
+#same frozen-N_phi convention as fisher_forecast's default phi block; 0 rebuilds it per point
+#(what every shifted run before this flag did). N_phi only preconditions map_joint's phi step,
+#so it moves phi_hat through incomplete convergence, not through the MAP optimum. Run the
+#forecast with --vary_nphi when this is 0 so both blocks share one convention
+constant_nphi=1
+
 #one slurm job per realization
 num_realizations=100
 seed_prefix=246813
@@ -67,5 +77,5 @@ for ((m=0; m<num_realizations; m++)); do
     map_seed=$((seed_prefix + m))
     sbatch run_single_delensed_covariance.sh "$m" "$map_seed" "$nside" "$theta_pix" \
         "$noise_level" "$l_knee" "$map_joint_steps" "$step_sigma" "$reconstruction" \
-        "$out_dir" $derivative_params
+        "$constant_nphi" "$out_dir" $derivative_params
 done

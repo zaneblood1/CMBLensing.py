@@ -402,6 +402,31 @@ delensed blocks reproduces the standard forecast at the same step exactly. Scrip
 100 realizations leave ~10% per mode in C_fid, but the ratio of averages dC/C cancels the
 common |white noise|^2 factor, so the log-derivative is far quieter than that.
 
+`constant_nphi` (measurement side, added 2026-09-24; job arg 10, `constant_nphi=1` in the
+driver) only matters under `reconstruction = shifted`: 1 keeps map_joint's QE norm at theta_0
+while C_f / C_phi / D move. Files predating it are read as rebuilt under `shifted`. In
+map_joint N_phi only preconditions the phi step, so it moves phi_hat only through incomplete
+convergence. The forecast warns when the file's convention differs from its own
+`constant_nphi` (not under `--empirical_phi_noise`).
+
+**Per-mode empirical phi noise (same jobs, added 2026-09-24).** Each job also stores per mode
+and stencil point `A = |phi_hat|^2`, `B = Re(phi_hat phi*)`, `D = |phi|^2` (`PHI_MOMENTS`).
+The merge forms r^2 = <B>^2/(<A><D>) per mode from realization means (`phi_r_squared`) and
+`N_eff = C_phi (1/r^2 - 1)` at every stencil point. This is phi_noise.py's estimator without the annulus average,
+which phi_noise.py's HPC jobs had already applied (their files hold only the 61 band sums, so
+per-mode values cannot be recovered from them). NOT `<|phi_hat - phi|^2>`: that is
+`(1-rho)^2 C + Var(n)` = `C N/(C+N)` for a Wiener-like MAP, the leftover lensing that sets the
+delensed block, bounded by C even for a mode with no information. Modes with `<B> <= 0` are
+unmeasured and get no phi information (forecast sets their +/- blocks = centre).
+`fisher_forecast --empirical_phi_noise` (needs `--delensed_covariance` with moments; refuses
+`--nphi_source measured`) builds the phi block per mode as `C_phi(theta) + N_k(theta_0)`
+(frozen, default) or, with `--vary_nphi`, `C_phi(theta) / r_k^2(theta)` from each stencil
+point's own per-mode measurement. `merge_delensed_covariance.py --smooth_delta_ell` (off by
+default) band-averages the moments before the ratio. Verified: injected
+`r^2 = C/(C + N_QE)` reproduces the QE-N_phi forecast to 2e-16 (frozen and varying). Output:
+`delensed_covariance_phi_noise.png`. The two `merge_delensed_covariance.py` copies differ only
+in the default `--covariance_dir`.
+
 **`fisher_forecast_full_sky.py` is the textbook forecast formula**,
 `F_ij = sum_l (2l+1)/2 f_sky Tr[C_l^-1 dC_l/di C_l^-1 dC_l/dj]`. Same likelihood and same
 two powers of `C^-1` as `blocks`; only the mode counting changes - `blocks` weights each

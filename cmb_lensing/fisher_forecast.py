@@ -1679,7 +1679,7 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                        transfer_function = None, camb_lmax = None,
                        radial_mean = DEFAULT_RADIAL_MEAN,
                        constant_nphi = DEFAULT_CONSTANT_NPHI,
-                       delensed_covariance = None):
+                       delensed_covariance = None, empirical_phi_noise = False):
     """The CAMB / covariance-block stencil the flat-sky-grid forecasts are built from.
 
     Returns (names, steps, weights, blocks_fid, blocks_plus, blocks_minus): the sampled
@@ -1707,6 +1707,11 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
     every block, since the phi block must be differenced over the same interval. CAMB's
     delensed spectrum is then computed but never contracted. Incompatible with
     `transfer_function`, which corrects the very spectrum this replaces.
+
+    `empirical_phi_noise` (needs `delensed_covariance` with phi moments) replaces the phi
+    block's N_phi by the per-mode map_joint noise measured in the same jobs - frozen at
+    theta_0 under constant_nphi, measured at every stencil point otherwise. See
+    _apply_empirical_phi_noise.
     """
     if spectra not in SPECTRA_MODES:
         raise ValueError(f"spectra must be one of {SPECTRA_MODES}, got {spectra!r}")
@@ -1756,6 +1761,14 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
         check_transfer_derivatives(transfer, param_ground, names, path = transfer_function)
 
     empirical = None
+    if empirical_phi_noise and delensed_covariance is None:
+        raise ValueError("empirical_phi_noise needs delensed_covariance: the per-mode phi "
+                         "noise is measured by the same get_delensed_covariance.sh jobs and "
+                         "lives in the same merged npz")
+    if empirical_phi_noise and nphi_source == "measured":
+        raise ValueError("empirical_phi_noise replaces N_phi with the per-mode measurement, "
+                         "so nphi_source = 'measured' (the band N_eff of merge_phi_noise.py) "
+                         "would be a second, conflicting empirical noise")
     if delensed_covariance is not None:
         if spectra != "delensed":
             raise ValueError(f"an empirical delensed covariance only applies to spectra = "
@@ -1771,6 +1784,22 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
         empirical = load_delensed_covariance(delensed_covariance)
         steps = check_delensed_covariance(empirical, nside, theta_pix, noise_level, l_knee,
                                           param_ground, names, path = delensed_covariance)
+        if empirical_phi_noise and not bool(empirical.get("has_phi_moments", False)):
+            raise ValueError(f"{delensed_covariance} carries no per-mode phi moments: its jobs "
+                             f"predate them. Re-run get_delensed_covariance.sh and "
+                             f"merge_delensed_covariance.py, or drop --empirical_phi_noise.")
+        #the empirical f block carries whatever N_phi convention its map_joint runs used;
+        #merged files from before the flag existed froze it only under "fiducial"
+        measured_constant = (bool(empirical["constant_nphi"]) if "constant_nphi" in empirical
+                             else str(empirical["reconstruction"]) == "fiducial")
+        #(irrelevant under empirical_phi_noise: the phi block's N then IS the measurement,
+        #frozen or not by constant_nphi, rather than a QE N^(0) to be matched against it)
+        if measured_constant != bool(constant_nphi) and not empirical_phi_noise:
+            print(f"  WARNING: the empirical delensed covariance was measured with N_phi "
+                  f"{'frozen at' if measured_constant else 'rebuilt away from'} theta_0, but "
+                  f"this forecast {'freezes' if constant_nphi else 'varies'} the phi block's "
+                  f"N_phi (constant_nphi = {constant_nphi}); the two blocks sit on different "
+                  f"reconstruction conventions")
 
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
     #w_k = independent real DOF per rfft entry; get_fourier_weights indexes the half-axis
@@ -1888,7 +1917,79 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                   f"realizations, reconstruction at the {empirical['reconstruction']} "
                   f"cosmology) from {delensed_covariance}")
 
+    if empirical_phi_noise:
+        _apply_empirical_phi_noise(empirical, names, steps, param_ground, blocks_fid,
+                                   blocks_plus, blocks_minus, nside, pix_width, ell_grid,
+                                   weights, camb_lmax, constant_nphi, verbose)
+
     return names, steps, weights, blocks_fid, blocks_plus, blocks_minus
+
+
+def _apply_empirical_phi_noise(empirical, names, steps, param_ground, blocks_fid, blocks_plus,
+                               blocks_minus, nside, pix_width, ell_grid, weights, camb_lmax,
+                               constant_nphi, verbose):
+    """Rebuild the "phi" block at every stencil point from the per-mode empirical noise.
+
+    The merged npz carries r_k^2 = <B>^2 / (<A><D>) per mode at theta_0 and theta_0 +/- h_i
+    (cmb_lensing/delensed_covariance.py), and C_phi + N_eff = C_phi / r^2 per mode. C_phi is
+    this forecast's own CAMB C_phi at each point, so the signal is exactly what every other
+    block uses:
+      constant_nphi = True   N_eff frozen at theta_0:  C_phi(theta) + C_phi(0) (1/r_0^2 - 1)
+      constant_nphi = False  N_eff measured at theta:  C_phi(theta) / r^2(theta), per mode
+    A mode with no measurement (mean cross power <= 0 at the centre - or, when varying, at
+    either end of that parameter's step) is given NO phi information: its +/- blocks are set
+    equal to the centre, so its log-derivative is zero. Edits the block dicts in place.
+    """
+    measured_names = [str(name) for name in empirical["names"]]
+
+    def cphi_at(params):
+        cls = camb_cls_at_params(params, camb_lmax = camb_lmax)
+        ells = jnp.arange(2, 2 + cls["phi"].shape[0]).astype(jnp.float64)
+        return covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls["phi"],
+                                     origin_value = 0)
+
+    def safe(r_squared, mask):
+        return jnp.where(mask, jnp.asarray(np.nan_to_num(r_squared, nan = 1.0)), 1.0)
+
+    mask_fid = jnp.asarray(empirical["phi_measured_fid"], dtype = bool)
+    r2_fid = safe(empirical["phi_r2_fid"], mask_fid)
+    cphi_fid = cphi_at(param_ground)
+    noise_fid = cphi_fid * (1.0 / r2_fid - 1.0)
+    #unmeasured modes keep the block they had (CAMB C_phi + the QE N_phi): with plus = minus
+    #= centre below, its value only enters through modes that carry no information anyway
+    block_fid = jnp.where(mask_fid, cphi_fid + noise_fid, blocks_fid["phi"])
+    blocks_fid["phi"] = block_fid
+
+    dropped = []
+    for i, (name, step) in enumerate(zip(names, steps)):
+        j = measured_names.index(name)
+        up, down = dict(param_ground), dict(param_ground)
+        up[name] = param_ground[name] + step
+        down[name] = param_ground[name] - step
+        if constant_nphi:
+            mask = mask_fid
+            plus = cphi_at(up) + noise_fid
+            minus = cphi_at(down) + noise_fid
+        else:
+            #each stencil point's own per-mode N_eff: C_phi(theta) / r^2(theta)
+            mask_plus = jnp.asarray(empirical["phi_measured_plus"][j], dtype = bool)
+            mask_minus = jnp.asarray(empirical["phi_measured_minus"][j], dtype = bool)
+            mask = mask_fid & mask_plus & mask_minus
+            plus = cphi_at(up) / safe(empirical["phi_r2_plus"][j], mask_plus)
+            minus = cphi_at(down) / safe(empirical["phi_r2_minus"][j], mask_minus)
+        blocks_plus[i]["phi"] = jnp.where(mask, plus, block_fid)
+        blocks_minus[i]["phi"] = jnp.where(mask, minus, block_fid)
+        dropped.append(1 - float(jnp.sum(weights * mask) / jnp.sum(weights)))
+
+    if verbose:
+        smoothing = float(empirical.get("phi_smooth_delta_ell", 0.0))
+        print(f"  phi block: EMPIRICAL per-mode N_eff"
+              + (f" (moments smoothed over |L| bands of {smoothing:g})" if smoothing > 0
+                 else "")
+              + (", frozen at theta_0" if constant_nphi
+                 else ", measured at every stencil point (theta-dependent)")
+              + "; DOF without a measurement (no phi information): "
+              + ", ".join(f"{name} {fraction:.1%}" for name, fraction in zip(names, dropped)))
 
 
 # ── The "blocks" contraction ──────────────────────────────────────────────
@@ -1930,7 +2031,8 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
              nphi_source = "covariance", qe_response = DEFAULT_QE_RESPONSE,
              phi_noise = None, transfer_function = None, camb_lmax = None,
              radial_mean = DEFAULT_RADIAL_MEAN,
-             constant_nphi = DEFAULT_CONSTANT_NPHI, delensed_covariance = None):
+             constant_nphi = DEFAULT_CONSTANT_NPHI, delensed_covariance = None,
+             empirical_phi_noise = False):
     """Gaussian Fisher matrix for the sampled LCDM parameters on an nside x nside box.
 
     Args:
@@ -1993,6 +2095,11 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
                       replace CAMB's delensed signal at every stencil point, and its h_i
                       replace FD_STEP_FRAC. See cmb_lensing/delensed_covariance.py.
                       Incompatible with transfer_function and step_fracs
+        empirical_phi_noise: with delensed_covariance (whose jobs stored the phi moments):
+                      the phi block becomes C_phi + the per-mode map_joint noise N_eff
+                      measured in the same jobs, instead of CAMB C_phi + a QE N_phi.
+                      constant_nphi = True freezes N_eff at theta_0; False uses the N_eff
+                      measured at each stencil point, so dN_eff/dtheta enters the Fisher
 
     Returns:
         (fisher, names) - the n_sampled x n_sampled matrix and the parameter names in
@@ -2004,7 +2111,7 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
         nphi_source = nphi_source, qe_response = qe_response, phi_noise = phi_noise,
         transfer_function = transfer_function, camb_lmax = camb_lmax,
         radial_mean = radial_mean, constant_nphi = constant_nphi,
-        delensed_covariance = delensed_covariance)
+        delensed_covariance = delensed_covariance, empirical_phi_noise = empirical_phi_noise)
     return _fisher_from_blocks(plus, minus, fid, steps, weights), names
 
 
@@ -2425,6 +2532,13 @@ def add_delensed_covariance_argument(parser):
                                "finite-difference steps come from that file. Rejected with "
                                "any other --spectra, with --transfer_function, with "
                                "--stability, and if it was measured on a different box")
+    parser.add_argument("--empirical_phi_noise", action = "store_true",
+                        help = "with --delensed_covariance: take the phi block's noise from "
+                               "the per-mode map_joint reconstruction noise measured by the "
+                               "same jobs (N_eff = C_phi (1/r^2 - 1) per rfft mode) instead of "
+                               "a quadratic-estimator N_phi. Frozen at the fiducial cosmology "
+                               "by default; add --vary_nphi to use the N_eff measured at each "
+                               "stencil point, i.e. a theta-dependent empirical noise")
     return parser
 
 
@@ -2466,6 +2580,7 @@ def run_config(spectra, args, names, **extra):
                 phi_noise = getattr(args, "phi_noise", None) or "",
                 transfer_function = getattr(args, "transfer_function", None) or "",
                 delensed_covariance = getattr(args, "delensed_covariance", None) or "",
+                empirical_phi_noise = bool(getattr(args, "empirical_phi_noise", False)),
                 #0 means "not pinned", i.e. camb_lmax_for_grid chose it from the box
                 camb_lmax = getattr(args, "camb_lmax", None) or 0,
                 radial_mean = getattr(args, "radial_mean", DEFAULT_RADIAL_MEAN),
@@ -2508,7 +2623,9 @@ def main():
                         radial_mean = args.radial_mean,
                         constant_nphi = not args.vary_nphi,
                         delensed_covariance = (args.delensed_covariance
-                                               if spectra == "delensed" else None))
+                                               if spectra == "delensed" else None),
+                        empirical_phi_noise = (args.empirical_phi_noise
+                                               and spectra == "delensed"))
 
     fisher, names = run()
     covariance = covariance_from_fisher(fisher, names)
