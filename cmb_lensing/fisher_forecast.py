@@ -151,6 +151,14 @@ produce curvature comparable to the signal. Only 2 * n_sampled + 1 CAMB runs are
 Always confirm the answer is step-independent - "--stability" recomputes at 2h and reports
 the fractional change in the forecast sigmas.
 
+The RECONSTRUCTION is frozen across that stencil by default (constant_nphi = True): N_phi -
+and, for "delensed", the delensing fraction Alens_L - are evaluated once at the fiducial
+cosmology, so only the signal carries theta dependence. "--vary_nphi" rebuilds both at every
+stencil point instead, which adds dN_phi/dtheta to the phi block's log-derivative. See
+DEFAULT_CONSTANT_NPHI for why frozen is the default, and for what the varying number does
+and does not mean - it is a bound on the size of that modelling choice, not a better
+forecast.
+
 Parameters with is_sampled[name] = False are held FIXED, not marginalized over; F is
 n_sampled x n_sampled.
 
@@ -158,6 +166,7 @@ Usage:
     python -m cmb_lensing.fisher_forecast                       #nside 128, T-only, 2.5 uK-arcmin
     python -m cmb_lensing.fisher_forecast --spectra lensed
     python -m cmb_lensing.fisher_forecast --spectra delensed --iterative_delens
+    python -m cmb_lensing.fisher_forecast --spectra lensed --vary_nphi
     python -m cmb_lensing.fisher_forecast --nside 64 --noise 5.0 --stability
 
 Writes into cmb_lensing/fisher_output/, tagged with this method's SUFFIX "_from_blocks":
@@ -226,6 +235,24 @@ SPECTRA_MODES = ("lensed", "unlensed", "ceiling", "delensed")
 _CAMB_CACHE = {}
 _CAMB_RESULTS_CACHE = {}
 _GRADIENT_CACHE = {}
+_GRID_CACHE = {}
+
+#where the model spectra at each stencil point come from:
+#  "camb"  (DEFAULT) a direct CAMB run per cosmology (camb_cls_at_params) - the physics
+#  "grid"  the 5D CAMB grid spline sample_lcdm evaluates at every theta proposal
+#          (grid_cls_at_params) - the model the chains actually run on. The chains' data
+#          come from load_sim's direct CAMB call while their likelihood goes through the
+#          grid, so the grid's DERIVATIVES set the posterior width; this source makes the
+#          forecast use the same ones. The grid-vs-CAMB value offset at the fiducial point
+#          biases the chains instead, which no Fisher matrix sees
+CL_SOURCES = ("camb", "grid")
+DEFAULT_CL_SOURCE = "camb"
+#sample_lcdm.CAMB_GRID_PATH, spelled out so the forecasts need not import the sampler
+CAMB_GRID_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camb_splines",
+                              "camb_grid_spline.npz")
+#grid spectrum -> the cls-dict key it stands in for (same units, same 2..3999 ells: the
+#grid jobs run simulate.dl2cl's conventions at lmax = CAMB_LMAX)
+GRID_CLS_KEYS = {"scalar_TT": "tt", "total_TT": "tt_lensed", "phi": "pp"}
 
 #where the quadratic-estimator reconstruction noise N_phi comes from - both the 2D matrix
 #the phi block C_phi + N_phi carries in EVERY spectra mode (qe_noise_grid) and, for
@@ -251,6 +278,43 @@ _GRADIENT_CACHE = {}
 #                merged npz, passed as --phi_noise / measured_phi_noise; isotropic, and put
 #                on the rfft grid the same way "hu_okamoto" is
 NPHI_SOURCES = ("covariance", "hu_okamoto", "measured")
+
+#whether the RECONSTRUCTION - N_phi, and for "delensed" the delensing fraction Alens_L - is
+#held at the fiducial cosmology across the finite-difference stencil or rebuilt at every
+#point from that point's own Cls:
+#  True   (DEFAULT) frozen. N_phi is a property of the ESTIMATOR and the experiment rather
+#         than of the model being constrained, so only the signal carries theta dependence -
+#         the same convention that makes the instrumental C_n theta-independent, and the
+#         same thing the sampler does (its QE norm stays at the param_init cosmology for the
+#         whole chain, where it is only preconditioning G and the phi mass matrix and
+#         cancels). It is also what a real quadratic-estimator analysis does:
+#         realization-dependent N0 (RDN0) computes the bias from the DATA rather than from
+#         the sampled cosmology precisely so that it stops depending on theta, and the
+#         normalization dependence that survives is handled as a linear nuisance correction
+#         rather than as constraining power
+#  False  N_phi(theta) and Alens_L(theta) are rebuilt at every stencil point, so the phi
+#         block's log-derivative picks up dN_phi/dtheta and, for "delensed", the f block is
+#         lensed with a theta-dependent residual fraction. That derivative is real - N_phi
+#         genuinely moves with the cosmology - but it is not INDEPENDENT information:
+#         N_L^(0) is a deterministic functional of the estimator's filter (C^TT + N) and its
+#         response, so dN_phi/dtheta lies entirely inside the span of dC^TT/dtheta, which
+#         the f block already counts at first order. The block-diagonal contraction in
+#         _fisher_from_blocks adds the two as though they were independent measurements -
+#         the same double counting "lensed" and "delensed" already have. Quote it as a BOUND
+#         on how much the frozen-N_phi modelling choice is worth, not as the production
+#         number
+#Expect the difference to be small wherever C_phi dominates N_phi over the modes carrying
+#the Fisher weight: the qe_response switch moves N_phi by 0.4-2.6% and the marginalized
+#sigmas by < 0.35% on nside 64 / 5' / 5 uK, and one FD step perturbs C^TT far less than
+#swapping the whole response spectrum does. It should grow on a noisier or finer box.
+#Cost: 2 * n_sampled + 1 quadratic-estimator evaluations instead of one - cheap for
+#"covariance" (FFT convolutions), the dominant cost for "hu_okamoto" (a polar quadrature at
+#every point), and with iterative_delens the whole fixed-point iteration runs per point.
+#qe_response = "gradient" additionally costs one ~5 s CAMB post-processing call per stencil
+#point instead of one for the entire run. "measured" cannot vary at all - an empirical
+#N_L^eff was measured at ONE cosmology, so there is nothing in it to differentiate, and
+#covariance_stencil rejects the combination
+DEFAULT_CONSTANT_NPHI = True
 
 #which TT spectrum the quadratic estimator's RESPONSE f(l, l') is built from - the `cf_tt`
 #argument of simulate.scalar_quadratic_estimate, and the `cl_tt_response` of
@@ -289,6 +353,27 @@ DEFAULT_QE_RESPONSE = "unlensed"
 #delensing efficiency from 0.798 to 0.875, and so Alens_L at every stencil point
 RADIAL_MEAN_TYPES = ("geometric", "arithmetic")
 DEFAULT_RADIAL_MEAN = "geometric"
+
+#how measured_phi_noise_cl continues the empirical N_L^eff OUTSIDE the |L| bands it was
+#measured in. Inside them both modes are the same log-log interpolation:
+#  "hold"         (the default HERE) clamp to the nearest measured value. N_eff falls steeply
+#                 with L, so continuing it as a power law below the lowest band inflates it
+#                 enormously by the time it reaches L = 2 and drives Alens_L -> 1 (no
+#                 delensing) across exactly the multipoles carrying most of C_phi. There is
+#                 nothing to extrapolate FROM either: the box holds no modes below its
+#                 fundamental. This is also what _radial_cl_profile effectively gives the
+#                 analytic sources, so "measured" and "covariance" then differ only where a
+#                 measurement exists
+#  "extrapolate"  continue the measured power law in log-log, the same rule
+#                 interpolate_spectrum applies to every other spectrum. Honest about the
+#                 profile's local slope and consistent with how C_phi reaches the same
+#                 multipoles, but that slope is fitted to the two end bands and the lever arm
+#                 down to L = 2 is long
+#The block forecasts keep "hold" so their numbers are unchanged; fisher_forecast_from_1st_principles
+#defaults its own --measured_extend to "extrapolate". Neither is obviously right - the values
+#below the fundamental are a CONVENTION, and the flag exists so the choice is visible
+MEASURED_EXTEND_MODES = ("hold", "extrapolate")
+DEFAULT_MEASURED_EXTEND = "hold"
 
 #resolution of the Hu & Okamoto quadrature (qe_noise_spectrum): the number of multipoles L
 #in EACH of its two sets (log-spaced for the power-law rise at low L, linear for the upturn
@@ -388,6 +473,37 @@ def camb_cls_at_params(params, camb_lmax = None):
         )
 
     _CAMB_CACHE[key] = cls
+    return cls
+
+
+def grid_cls_at_params(params, path = CAMB_GRID_PATH):
+    """A cls dict holding ONLY scalar_TT, total_TT and phi, read off the 5D CAMB grid spline
+    at an arbitrary 5-parameter point - the Cls sample_lcdm's theta step sees there.
+
+    Evaluated with CambGrid.cl_local, which memory-maps each ~1.1 GB coefficient table and
+    reads only the 4^5 spline support around the point (~16 MB), rather than building the
+    ~2.1 GB-per-spectrum NdBSpline the sampler holds. Values are identical either way. The
+    grid carries ells 2..CAMB_LMAX-1 only; callers needing more must extrapolate, as
+    covar_matrix_from_cls does for the sampler.
+
+    Raises, like camb_cls_at_params, if the point is outside the grid's box (NaN spline).
+    """
+    from cmb_lensing.camb_grid_interp import load_camb_grid
+    key = (_camb_key(params), os.path.abspath(path))
+    if key in _GRID_CACHE:
+        return _GRID_CACHE[key]
+
+    grid = load_camb_grid(path)
+    point = np.array([[float(params[name]) for name in PARAM_ORDER]])
+    cls = {name: jnp.asarray(grid.cl_local(spectrum, point)[0])
+           for name, spectrum in GRID_CLS_KEYS.items()}
+    if not all(bool(jnp.all(jnp.isfinite(cl))) for cl in cls.values()):
+        raise RuntimeError(
+            f"the CAMB grid at {path} returned non-finite Cls at "
+            f"{dict((k, float(params[k])) for k in PARAM_ORDER)} - the point is outside the "
+            f"grid's box, or its theta_MC_100 is unreachable in the grid's H0 range")
+
+    _GRID_CACHE[key] = cls
     return cls
 
 
@@ -615,6 +731,67 @@ def apply_transfer_function(cl, cl_ells, merged, params = None, verbose = False)
     return jnp.asarray(cl) * jnp.asarray(factor)
 
 
+def load_delensed_covariance(path):
+    """The empirical delensed covariance stencil written by merge_delensed_covariance.py.
+
+    Unlike the transfer function, this is not a correction to CAMB: it holds the realization
+    mean of |rfft2(L^-1(phi_hat) L(phi) f)|^2 / nside^2 - the box's own lense_flow and
+    map_joint - at theta_0 and at theta_0 +/- h_i for every parameter it was measured for,
+    on common random numbers. See cmb_lensing/delensed_covariance.py.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"no delensed covariance at {path}. Produce one by running "
+            f"sampling_chains/get_delensed_covariance.sh and then "
+            f"merge_delensed_covariance.py --covariance_dir <its out_dir>.")
+    merged = dict(np.load(path, allow_pickle = True))
+    missing = [key for key in ("delensed_fid", "delensed_plus", "delensed_minus", "names",
+                               "steps", "params") if key not in merged]
+    if missing:
+        raise ValueError(f"{path} is missing {missing}; it does not look like a "
+                         f"merge_delensed_covariance.py product")
+    return merged
+
+
+def check_delensed_covariance(merged, nside, theta_pix, noise_level, l_knee, param_ground,
+                              names, path = ""):
+    """Validate an empirical delensed covariance against the stencil it is about to replace.
+
+    The box must match (the matrices live on its rfft grid, and the reconstruction noise
+    sets them), the centre must BE the forecast's fiducial point, and every sampled
+    parameter must have been measured - there is no model to fall back on for a missing
+    direction. Returns the finite-difference steps h_i for `names`, which the forecast must
+    then use for EVERY block so the phi block is differenced over the same interval.
+    """
+    measured_box = dict(nside = int(merged["nside"]), theta_pix = float(merged["theta_pix"]),
+                        noise_level = float(merged["noise_level"]),
+                        l_knee = float(merged["l_knee"]))
+    wanted_box = dict(nside = int(nside), theta_pix = float(theta_pix),
+                      noise_level = float(noise_level), l_knee = float(l_knee))
+    if measured_box != wanted_box:
+        raise ValueError(f"the delensed covariance {path} was measured at {measured_box} but "
+                         f"this forecast runs at {wanted_box} - re-run "
+                         f"get_delensed_covariance.sh at this box.")
+    reference = {str(name): float(value)
+                 for name, value in zip(merged["param_names"], merged["params"])}
+    off = [name for name in PARAM_ORDER
+           if not np.isclose(reference[name], param_ground[name], rtol = 1e-12, atol = 0)]
+    if off:
+        raise ValueError(f"the delensed covariance {path} was measured about {reference} but "
+                         f"this forecast's fiducial point differs in {off}")
+    measured = [str(name) for name in merged["names"]]
+    missing = [name for name in names if name not in measured]
+    if missing:
+        raise ValueError(f"the delensed covariance {path} has no stencil points for sampled "
+                         f"{missing} (it has {measured}). Re-run get_delensed_covariance.sh "
+                         f"with them in derivative_params, or drop them from --params.")
+    shape = (int(nside), int(nside) // 2 + 1)
+    if tuple(np.shape(merged["delensed_fid"])) != shape:
+        raise ValueError(f"{path} holds matrices of shape {np.shape(merged['delensed_fid'])}, "
+                         f"expected {shape}")
+    return [float(merged["steps"][measured.index(name)]) for name in names]
+
+
 def load_phi_noise(path):
     """The empirical effective reconstruction noise N_L^eff written by merge_phi_noise.py.
 
@@ -658,8 +835,9 @@ def check_phi_noise(merged, nside, theta_pix, noise_level, l_knee, path = ""):
             f"this box.")
 
 
-def measured_phi_noise_cl(merged, ells, verbose = False):
-    """N_L^eff interpolated onto `ells`: log-log INSIDE the measured bands, HELD outside.
+def measured_phi_noise_cl(merged, ells, verbose = False,
+                          extend = DEFAULT_MEASURED_EXTEND):
+    """N_L^eff interpolated onto `ells`: log-log INSIDE the measured bands, `extend` outside.
 
     The measurement lives in |L| bands spanning exactly the modes the rfft grid carries (its
     fundamental to its corner mode), while `ells` is CAMB's full 2..CAMB_LMAX-1 axis, which
@@ -667,13 +845,16 @@ def measured_phi_noise_cl(merged, ells, verbose = False):
     positive spectrum and log-log interpolation is the same rule covar_matrix_from_cls applies
     to C_phi, so signal and noise reach the grid on an identical footing.
 
-    Outside them it is HELD at the nearest measured value rather than continued as a power
-    law. N_eff falls steeply with L - a factor of ~30 per decade on the boxes this is run on -
-    so extrapolating it down from the lowest band to L = 2 inflates it by nine orders of
-    magnitude and drives Alens_L to 1 (no delensing) across exactly the multipoles where
-    C_phi is largest, purely as an artifact of the lever arm. There is nothing to extrapolate
-    FROM in any case: the box holds no modes below its fundamental, so neither the
-    measurement nor the forecast has anything to say about them.
+    Outside them `extend` decides - see MEASURED_EXTEND_MODES. The default "hold" clamps to
+    the nearest measured value rather than continuing a power law. N_eff falls steeply with
+    L - a factor of ~30 per decade on the boxes this is run on - so extrapolating it down
+    from the lowest band to L = 2 inflates it by nine orders of magnitude and drives Alens_L
+    to 1 (no delensing) across exactly the multipoles where C_phi is largest, purely as an
+    artifact of the lever arm. There is nothing to extrapolate FROM in any case: the box
+    holds no modes below its fundamental, so neither the measurement nor the forecast has
+    anything to say about them. "extrapolate" takes the opposite convention, continuing the
+    measured slope the way every other spectrum here is continued; it is what
+    fisher_forecast_from_1st_principles defaults to.
 
     That makes the values below the fundamental a convention, and the one chosen here matches
     what the analytic sources already do through _radial_cl_profile, so "measured" and
@@ -683,15 +864,28 @@ def measured_phi_noise_cl(merged, ells, verbose = False):
     """
     band_ells = np.asarray(merged["band_ells"])
     n_eff = np.asarray(merged["n_eff"])
-    #np.interp clamps to the end values outside the sample points, which is the held
-    #continuation; doing it in log-log keeps the interior identical to interpolate_spectrum
-    held = np.exp(np.interp(np.log(np.asarray(ells)), np.log(band_ells), np.log(n_eff)))
+    if extend not in MEASURED_EXTEND_MODES:
+        raise ValueError(f"extend must be one of {MEASURED_EXTEND_MODES}, got {extend!r}")
+
+    if extend == "hold":
+        #np.interp clamps to the end values outside the sample points, which is the held
+        #continuation; in log-log the interior is identical to interpolate_spectrum
+        values = np.exp(np.interp(np.log(np.asarray(ells)), np.log(band_ells),
+                                  np.log(n_eff)))
+    else:
+        #the same log-log power-law continuation every other spectrum in this module gets
+        values = interpolate_spectrum(np.asarray(ells), band_ells, n_eff)
+
     if verbose:
+        outside = ((np.asarray(ells) < band_ells[0]) |
+                   (np.asarray(ells) > band_ells[-1])).sum()
         print(f"  measured N_phi: {len(band_ells)} bands over "
               f"L = {band_ells[0]:.0f}..{band_ells[-1]:.0f} "
               f"({int(merged['n_realizations'])} realizations, map_joint "
-              f"{int(merged['map_joint_steps'])} steps); held constant outside")
-    return held
+              f"{int(merged['map_joint_steps'])} steps); "
+              + ("held constant" if extend == "hold" else "log-log extrapolated")
+              + f" outside ({outside} multipoles of the requested axis)")
+    return values
 
 
 def delensed_cls_at_params(params, alens, transfer = None, camb_lmax = None):
@@ -706,10 +900,13 @@ def delensed_cls_at_params(params, alens, transfer = None, camb_lmax = None):
     Multipoles past the end of `alens` (CAMB lenses with C_L^phiphi up to Params.max_l,
     which exceeds camb_lmax by CAMB's lens margin) carry its last value.
 
-    `alens` is frozen at the fiducial cosmology and re-applied at every stencil point, which
-    is the whole construction: the reconstruction is a property of the experiment and CAMB
-    supplies the theta dependence, so the derivative this feeds the stencil is
-    d/dtheta of CAMB's partially lensed spectrum at a fixed delensing fraction.
+    `alens` is by default frozen at the fiducial cosmology and re-applied at every stencil
+    point, which is the whole construction: the reconstruction is a property of the
+    experiment and CAMB supplies the theta dependence, so the derivative this feeds the
+    stencil is d/dtheta of CAMB's partially lensed spectrum at a fixed delensing fraction.
+    Under covariance_stencil's constant_nphi = False the caller instead hands in the
+    Alens_L of the point being evaluated, and the delensing fraction carries theta too - see
+    DEFAULT_CONSTANT_NPHI.
 
     `transfer` optionally applies the empirical transfer function R(l) (load_transfer_function)
     so that the spectrum becomes the one the BOX's own lense_flow and map_joint produce rather
@@ -896,13 +1093,13 @@ def qe_noise_spectrum(ells, cl_tt_response, cl_tt_lensed, noise_tt,
         f(l, l') = C_l^grad (L . l) + C_l'^grad (L . l')      the lensing response
         Ct_l     = C_l^lensed + N_l                           the observed spectrum
 
-    `cl_tt_response` is the spectrum the response f is built from. Every caller in this
-    package passes the lensed temperature-gradient spectrum C_l^(T grad T)
-    (gradient_cls_at_params) rather than the unlensed C_l^TT that appears in Hu & Okamoto's
-    original expression: the two differ by the lensing correction to the response, and using
-    the gradient spectrum resums the N^(2) bias into the normalization (Lewis, Challinor &
-    Hanson 2011). It is a keyword only in the sense that passing the unlensed spectrum still
-    reproduces the textbook formula, which is how the pre-2026-09-15 numbers were made.
+    `cl_tt_response` is the spectrum the response f is built from, and every caller in this
+    package selects it through `qe_response` (QE_RESPONSE_SOURCES), which DEFAULTS to the
+    unlensed C_l^TT of Hu & Okamoto's original expression. Passing "gradient" instead gives
+    the lensed temperature-gradient spectrum C_l^(T grad T) (gradient_cls_at_params): the two
+    differ by the lensing correction to the response, and the gradient spectrum is the
+    correct weight, resumming the N^(2) bias into the normalization (Lewis, Challinor &
+    Hanson 2011). The unlensed default is what reproduces the pre-2026-09-15 numbers.
 
     `ells` is the multipole axis the temperature analysis uses, and the estimator is built
     from exactly those multipoles: both legs l and L - l must lie within [ells[0], ells[-1]],
@@ -1236,13 +1433,16 @@ def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
     normalization matters.
 
     `nphi` is the QE reconstruction noise from qe_noise_grid (the box matrix or the
-    Hu & Okamoto spectrum on the grid, per nphi_source), evaluated ONCE at the fiducial
-    cosmology and passed in frozen. Freezing it is deliberate: N_phi is a property
-    of the estimator and the experiment, not of the model being constrained, so only the
-    signal should carry theta dependence - the same convention that makes the instrumental
-    C_n theta-independent, and the same thing the sampler does (its QE norm stays at the
-    param_init cosmology for the whole chain). Letting it move would credit the forecast
-    with information from dN_phi/dtheta, which no C_l^phiphi likelihood actually uses.
+    Hu & Okamoto spectrum on the grid, per nphi_source). This function does not decide
+    where in the stencil it came from - covariance_stencil's `constant_nphi` does, and by
+    default it is evaluated ONCE at the fiducial cosmology and passed in frozen at every
+    point. Freezing is the default deliberately: N_phi is a property of the estimator and
+    the experiment, not of the model being constrained, so only the signal should carry
+    theta dependence - the same convention that makes the instrumental C_n
+    theta-independent, and the same thing the sampler does (its QE norm stays at the
+    param_init cosmology for the whole chain). Letting it move credits the forecast with
+    information from dN_phi/dtheta, which a real C_l^phiphi likelihood removes with a
+    realization-dependent N0; see DEFAULT_CONSTANT_NPHI.
     """
     ells = jnp.arange(2, 2 + cls["total_TT"].shape[0]).astype(jnp.float64)
     phi_ells = jnp.arange(2, 2 + cls["phi"].shape[0]).astype(jnp.float64)
@@ -1271,7 +1471,7 @@ def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
                              "with delensed_cls_at_params at the frozen Alens_L, as "
                              "covariance_stencil does")
         return {"f_delensed": covar(cls["delensed_TT"], ells) + noise,
-                "phi": phi_block - nphi}
+                "phi": phi_block}
 
     if spectra in ("unlensed",):
         #conditional on (f, phi) the data term carries no theta dependence at all, so the
@@ -1401,12 +1601,15 @@ def frozen_reconstruction(cls_fid, spectra, nside, pix_width, ell_grid, noise_le
                           qe_response = DEFAULT_QE_RESPONSE,
                           measured_phi_noise = None, camb_lmax = None,
                           radial_mean = DEFAULT_RADIAL_MEAN):
-    """(N_phi, Alens_L) at the FIDUCIAL cosmology - the reconstruction every stencil freezes.
+    """(N_phi, Alens_L) at one cosmology - the reconstruction a stencil point sees.
 
     Both are properties of the estimator and the experiment rather than of the model being
-    constrained, so they are evaluated once and held fixed across the whole
-    finite-difference stencil; covariance_blocks explains why letting them move would credit
-    the forecast with dN/dtheta information no real analysis uses.
+    constrained, so by default they are evaluated once at the fiducial point and held fixed
+    across the whole finite-difference stencil; covariance_blocks explains why letting them
+    move credits the forecast with dN/dtheta information a real analysis removes. This
+    function itself is agnostic - it builds the reconstruction implied by whatever `cls_fid`
+    / `param_ground` it is handed, and covariance_stencil's `constant_nphi` decides whether
+    that is the fiducial point alone (True, the default) or every stencil point (False).
 
     `N_phi` is the phi block's 2D noise from `nphi_source` (qe_noise_grid: the box's QE
     matrix, or the Hu & Okamoto spectrum interpolated onto the grid). `Alens_L` is None
@@ -1474,7 +1677,9 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                        iterative_delens = False, nphi_source = "covariance",
                        qe_response = DEFAULT_QE_RESPONSE, phi_noise = None,
                        transfer_function = None, camb_lmax = None,
-                       radial_mean = DEFAULT_RADIAL_MEAN):
+                       radial_mean = DEFAULT_RADIAL_MEAN,
+                       constant_nphi = DEFAULT_CONSTANT_NPHI,
+                       delensed_covariance = None):
     """The CAMB / covariance-block stencil the flat-sky-grid forecasts are built from.
 
     Returns (names, steps, weights, blocks_fid, blocks_plus, blocks_minus): the sampled
@@ -1488,9 +1693,35 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
     the box carries is interior to its spectra and nothing inside the grid comes from
     covar_matrix_from_cls's power-law continuation. Pass an explicit value (CAMB_LMAX
     reproduces the pre-2026-09-17 numbers) to pin it.
+
+    `constant_nphi` (True by default) holds the reconstruction - N_phi, and for "delensed"
+    the delensing fraction Alens_L - at the fiducial cosmology across the whole stencil.
+    False rebuilds both at every point from that point's own Cls, so the phi block's
+    log-derivative carries dN_phi/dtheta and the delensed f block is lensed with a
+    theta-dependent residual fraction. See DEFAULT_CONSTANT_NPHI for what that number means;
+    it is not compatible with nphi_source = "measured".
+
+    `delensed_covariance` (spectra = "delensed" only) is a merge_delensed_covariance.py npz.
+    Its empirical matrices REPLACE the f_delensed block's signal at the centre and at every
+    +/- h point (C_n is still added analytically), and its steps h_i replace FD_STEP_FRAC's for
+    every block, since the phi block must be differenced over the same interval. CAMB's
+    delensed spectrum is then computed but never contracted. Incompatible with
+    `transfer_function`, which corrects the very spectrum this replaces.
     """
     if spectra not in SPECTRA_MODES:
         raise ValueError(f"spectra must be one of {SPECTRA_MODES}, got {spectra!r}")
+
+    #an empirical N_L^eff is a MEASUREMENT taken at one cosmology, so there is no theta
+    #dependence in it to differentiate - varying it would silently re-apply the same
+    #spectrum at every stencil point and report a dN_phi/dtheta of exactly zero, which
+    #looks like a physical result rather than the missing input it is
+    if not constant_nphi and nphi_source == "measured":
+        raise ValueError(
+            "constant_nphi = False cannot be combined with nphi_source = 'measured'. The "
+            "empirical N_L^eff from merge_phi_noise.py was measured at a single cosmology, "
+            "so it carries no theta dependence to finite-difference and every stencil point "
+            "would see the identical spectrum. Either freeze the reconstruction, or pick a "
+            "source that is computed from the Cls ('covariance' or 'hu_okamoto').")
 
     #R corrects the DELENSED spectrum specifically - there is no such measurement for the
     #other modes, and silently ignoring it would hide a mis-specified run
@@ -1524,6 +1755,23 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
     if transfer is not None:
         check_transfer_derivatives(transfer, param_ground, names, path = transfer_function)
 
+    empirical = None
+    if delensed_covariance is not None:
+        if spectra != "delensed":
+            raise ValueError(f"an empirical delensed covariance only applies to spectra = "
+                             f"'delensed'; got {spectra!r}")
+        if transfer is not None:
+            raise ValueError("pass --delensed_covariance OR --transfer_function, not both: "
+                             "the transfer function corrects CAMB's delensed spectrum, and "
+                             "the empirical covariance replaces that spectrum outright")
+        if step_fracs is not None:
+            raise ValueError("the finite-difference steps are fixed by the empirical "
+                             "delensed covariance's stencil, so step_fracs (and "
+                             "--stability) cannot be applied")
+        empirical = load_delensed_covariance(delensed_covariance)
+        steps = check_delensed_covariance(empirical, nside, theta_pix, noise_level, l_knee,
+                                          param_ground, names, path = delensed_covariance)
+
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
     #w_k = independent real DOF per rfft entry; get_fourier_weights indexes the half-axis
     #(columns), so it broadcasts across rows
@@ -1539,25 +1787,40 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
     #the box actually carries is filled by covar_matrix_from_cls's power-law continuation
     camb_lmax = camb_lmax_for_grid(ell_grid) if camb_lmax is None else int(camb_lmax)
 
-    cls_fid = cls_with_qe_response(param_ground, qe_response, camb_lmax = camb_lmax)
-    nphi_fid, alens = frozen_reconstruction(cls_fid, spectra, nside, pix_width, ell_grid,
-                                            noise_level, l_knee, beam_fwhm, l_cutoff,
-                                            iterative_delens, verbose,
-                                            nphi_source = nphi_source,
-                                            param_ground = param_ground,
-                                            qe_response = qe_response,
-                                            measured_phi_noise = measured_phi_noise,
-                                            camb_lmax = camb_lmax,
-                                            radial_mean = radial_mean)
+    def reconstruction_at(params, loud):
+        """(N_phi, Alens_L) implied by the cosmology `params` - see DEFAULT_CONSTANT_NPHI.
+
+        cls_with_qe_response rather than camb_cls_at_params so that qe_response = "gradient"
+        finds its "gradient_TT" key at this point too; a no-op on the default "unlensed",
+        and with constant_nphi only the fiducial point ever calls this at all.
+        """
+        cls = cls_with_qe_response(params, qe_response, camb_lmax = camb_lmax)
+        return frozen_reconstruction(cls, spectra, nside, pix_width, ell_grid,
+                                     noise_level, l_knee, beam_fwhm, l_cutoff,
+                                     iterative_delens, loud,
+                                     nphi_source = nphi_source,
+                                     param_ground = params,
+                                     qe_response = qe_response,
+                                     measured_phi_noise = measured_phi_noise,
+                                     camb_lmax = camb_lmax,
+                                     radial_mean = radial_mean)
+
+    nphi_fid, alens_fid = reconstruction_at(param_ground, verbose)
 
     def blocks_at(params):
-        #the frozen per-L Alens gives every stencil point its own CAMB-delensed TT, and the
-        #frozen R rescales each of them onto the box's own lensing calculation
+        #with constant_nphi the frozen per-L Alens gives every stencil point its own
+        #CAMB-delensed TT and the frozen N_phi sets the phi block's noise floor; without it
+        #both are rebuilt from this point's own Cls, so dln(C_phi + N_phi)/dtheta picks up
+        #dN_phi/dtheta and the delensed spectrum is lensed with a theta-dependent residual
+        #fraction. The frozen R rescales the delensed spectrum onto the box's own lensing
+        #calculation either way. N_phi comes back so the caller can report how far it moved
+        nphi, alens = ((nphi_fid, alens_fid) if constant_nphi
+                       else reconstruction_at(params, False))
         cls = (camb_cls_at_params(params, camb_lmax = camb_lmax) if alens is None
                else delensed_cls_at_params(params, alens, transfer = transfer,
                                            camb_lmax = camb_lmax))
         return covariance_blocks(cls, spectra, nside, pix_width, ell_grid, noise_level,
-                                 l_knee, beam_fwhm, l_cutoff, nphi_fid)
+                                 l_knee, beam_fwhm, l_cutoff, nphi), nphi
 
     if verbose:
         ells_on_grid = ell_grid[ell_grid > 0]
@@ -1570,13 +1833,20 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
               f"{grid_max_ell(ell_grid):.0f}"
               f"{', CAMB_LMAX floor' if camb_lmax == DEFAULT_MAX_ELL else ''})")
         print(f"  sampled: {names}")
+        print(f"  reconstruction: "
+              + ("N_phi"
+                 + (" and Alens_L" if spectra == "delensed" else "")
+                 + (" frozen at the fiducial cosmology" if constant_nphi
+                    else " rebuilt at every stencil point (constant_nphi = False)")))
         if transfer is not None:
             apply_transfer_function(jnp.ones(1), jnp.ones(1), transfer, verbose = True)
         if measured_phi_noise is not None:
             measured_phi_noise_cl(measured_phi_noise, np.array([100.0]), verbose = True)
-        print(f"  running {2 * len(names) + 1} CAMB calls...")
+        print(f"  running {2 * len(names) + 1} CAMB calls"
+              + ("..." if constant_nphi
+                 else f" and {2 * len(names) + 1} quadratic-estimator evaluations..."))
 
-    blocks_fid = blocks_at(param_ground)
+    blocks_fid, _ = blocks_at(param_ground)
 
     blocks_plus, blocks_minus = [], []
     for name, step in zip(names, steps):
@@ -1584,10 +1854,39 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
         up[name] = param_ground[name] + step
         down = dict(param_ground)
         down[name] = param_ground[name] - step
-        blocks_plus.append(blocks_at(up))
-        blocks_minus.append(blocks_at(down))
+        plus, nphi_plus = blocks_at(up)
+        minus, nphi_minus = blocks_at(down)
+        blocks_plus.append(plus)
+        blocks_minus.append(minus)
         if verbose:
-            print(f"    {name}: h = {step:.6g} ({fracs[name]:g} sigma)")
+            print(f"    {name}: h = {step:.6g} ({step / PARAM_SIGMA[name]:g} sigma)")
+            if not constant_nphi:
+                #|dN_phi/dtheta * h| / N_phi, i.e. exactly the piece this flag adds to the
+                #phi block's log-derivative. Compare it against dln(C_phi + N_phi) from the
+                #signal alone: where C_phi dominates N_phi it is diluted by N/(C + N)
+                safe = jnp.where(nphi_fid > 0, nphi_fid, 1.0)
+                drift = jnp.where(nphi_fid > 0,
+                                  jnp.abs(nphi_plus - nphi_minus) / (2 * safe), 0.0)
+                mean = float(jnp.sum(weights * drift) / jnp.sum(weights))
+                print(f"      N_phi moves over +/-h: max |dN/N| {float(jnp.max(drift)):.3%}, "
+                      f"DOF-weighted mean {mean:.3%}")
+
+    if empirical is not None:
+        #the same analytic C_n covariance_blocks adds, on the same multipole axis
+        cls_fid = camb_cls_at_params(param_ground, camb_lmax = camb_lmax)
+        noise, _, _ = _instrument_matrices(nside, pix_width, ell_grid, noise_level, l_knee,
+                                           beam_fwhm, l_cutoff,
+                                           lmax_prime = 2 + cls_fid["total_TT"].shape[0])
+        measured = [str(name) for name in empirical["names"]]
+        blocks_fid["f_delensed"] = jnp.asarray(empirical["delensed_fid"]) + noise
+        for i, name in enumerate(names):
+            j = measured.index(name)
+            blocks_plus[i]["f_delensed"] = jnp.asarray(empirical["delensed_plus"][j]) + noise
+            blocks_minus[i]["f_delensed"] = jnp.asarray(empirical["delensed_minus"][j]) + noise
+        if verbose:
+            print(f"  f_delensed block: EMPIRICAL ({int(empirical['n_realizations'])} "
+                  f"realizations, reconstruction at the {empirical['reconstruction']} "
+                  f"cosmology) from {delensed_covariance}")
 
     return names, steps, weights, blocks_fid, blocks_plus, blocks_minus
 
@@ -1630,7 +1929,8 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
              l_cutoff = 10_000, verbose = True, iterative_delens = False,
              nphi_source = "covariance", qe_response = DEFAULT_QE_RESPONSE,
              phi_noise = None, transfer_function = None, camb_lmax = None,
-             radial_mean = DEFAULT_RADIAL_MEAN):
+             radial_mean = DEFAULT_RADIAL_MEAN,
+             constant_nphi = DEFAULT_CONSTANT_NPHI, delensed_covariance = None):
     """Gaussian Fisher matrix for the sampled LCDM parameters on an nside x nside box.
 
     Args:
@@ -1676,6 +1976,23 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
         radial_mean:  how _radial_cl_profile combines the 2D N_phi inside each annulus,
                       "geometric" (default) or "arithmetic" - see RADIAL_MEAN_TYPES. Applies
                       to nphi_source = "covariance", the only one that starts from a matrix
+        constant_nphi: True (default) freezes the reconstruction at the fiducial cosmology
+                      across the whole finite-difference stencil - N_phi, and for
+                      "delensed" the delensing fraction Alens_L - so that only the signal
+                      carries theta dependence. False rebuilds both at every stencil point,
+                      so dln(C_phi + N_phi)/dtheta gains dN_phi/dtheta and the delensed f
+                      block is lensed with a theta-dependent residual fraction. The varying
+                      number bounds how much the freezing choice is worth; it is not a
+                      better forecast, because dN_phi/dtheta lies in the span of
+                      dC^TT/dtheta that the f block already counts, and a real QE analysis
+                      removes it with a realization-dependent N0. See DEFAULT_CONSTANT_NPHI.
+                      Incompatible with nphi_source = "measured"
+        delensed_covariance: "delensed" only: path to a merge_delensed_covariance.py npz.
+                      Its empirical per-mode delensed covariances (the box's own lense_flow
+                      and map_joint, on common random numbers at theta_0 and theta_0 +/- h)
+                      replace CAMB's delensed signal at every stencil point, and its h_i
+                      replace FD_STEP_FRAC. See cmb_lensing/delensed_covariance.py.
+                      Incompatible with transfer_function and step_fracs
 
     Returns:
         (fisher, names) - the n_sampled x n_sampled matrix and the parameter names in
@@ -1686,7 +2003,8 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
         l_knee, beam_fwhm, l_cutoff, verbose, iterative_delens = iterative_delens,
         nphi_source = nphi_source, qe_response = qe_response, phi_noise = phi_noise,
         transfer_function = transfer_function, camb_lmax = camb_lmax,
-        radial_mean = radial_mean)
+        radial_mean = radial_mean, constant_nphi = constant_nphi,
+        delensed_covariance = delensed_covariance)
     return _fisher_from_blocks(plus, minus, fid, steps, weights), names
 
 
@@ -1990,6 +2308,30 @@ def add_spectra_arguments(parser):
     return parser
 
 
+def add_constant_nphi_argument(parser):
+    """--vary_nphi: let the reconstruction move with the cosmology across the stencil.
+
+    Its own helper rather than a line in add_spectra_arguments because only the modules that
+    actually thread it through to covariance_stencil should advertise it - a flag that parses
+    and is then ignored is worse than no flag. fisher_forecast's main() calls this; a sibling
+    adopting it needs the same call plus one pass-through into covariance_stencil.
+    """
+    parser.add_argument("--vary_nphi", action = "store_true",
+                        help = "rebuild the quadratic-estimator noise N_phi - and, for "
+                               "--spectra delensed, the delensing fraction Alens_L - at "
+                               "every finite-difference point instead of freezing both at "
+                               "the fiducial cosmology (constant_nphi = False). The phi "
+                               "block's log-derivative then carries dN_phi/dtheta. That "
+                               "derivative is real, but it is not independent information: "
+                               "N^(0) is a deterministic functional of the estimator's TT "
+                               "filter and response, so it lies in the span of "
+                               "dC^TT/dtheta, which the f block already counts - and a real "
+                               "analysis removes it with a realization-dependent N0. Use it "
+                               "to bound how much the frozen-N_phi choice is worth, not as "
+                               "the production number. Rejected with --nphi_source measured")
+    return parser
+
+
 def add_phi_noise_argument(parser):
     """--phi_noise: the empirical effective reconstruction noise, for --nphi_source measured.
 
@@ -2067,6 +2409,25 @@ def add_transfer_function_argument(parser):
     return parser
 
 
+def add_delensed_covariance_argument(parser):
+    """--delensed_covariance: the empirical delensed covariance stencil, for --spectra delensed.
+
+    Its own helper for the same reason --transfer_function is: only the modules that thread
+    it into covariance_stencil should advertise it.
+    """
+    parser.add_argument("--delensed_covariance", type = str, default = None,
+                        help = "path to a merge_delensed_covariance.py "
+                               "delensed_covariance.npz. With --spectra delensed, the f "
+                               "block's signal at theta_0 and theta_0 +/- h is the "
+                               "EMPIRICAL per-mode covariance of the map_joint-delensed "
+                               "noiseless field (common random numbers across the stencil) "
+                               "rather than CAMB's partially lensed spectrum, and the "
+                               "finite-difference steps come from that file. Rejected with "
+                               "any other --spectra, with --transfer_function, with "
+                               "--stability, and if it was measured on a different box")
+    return parser
+
+
 def sampled_from_args(parser, args):
     """{param: bool} from --params, rejecting unknown names through the parser."""
     is_sampled = {name: (args.params is None or name in args.params)
@@ -2080,22 +2441,35 @@ def sampled_from_args(parser, args):
 
 def box_subtitle(spectra, args):
     """The first line of every figure subtitle: the spectra mode and the box."""
+    #only marked when it is NOT the default, so every figure produced so far is unchanged
+    varying = "  |  N_phi(theta)" if getattr(args, "vary_nphi", False) else ""
     return (f"{spectra}  |  nside {args.nside}, {args.theta_pix:g}', "
-            f"{args.noise:g} uK-arcmin")
+            f"{args.noise:g} uK-arcmin{varying}")
 
 
 def run_config(spectra, args, names, **extra):
     """The run configuration stored in every fisher<suffix>.npz."""
+    step_fracs = np.array([FD_STEP_FRAC[name] for name in names])
+    #an empirical delensed covariance fixes the steps to the ones it was measured at
+    if getattr(args, "delensed_covariance", None) and spectra == "delensed":
+        merged = load_delensed_covariance(args.delensed_covariance)
+        measured = [str(name) for name in merged["names"]]
+        step_fracs = np.array([float(merged["steps"][measured.index(name)]) /
+                               PARAM_SIGMA[name] for name in names])
     return dict(spectra = spectra, nside = args.nside, theta_pix = args.theta_pix,
                 noise_level = args.noise, l_knee = args.l_knee, beam_fwhm = args.beam_fwhm,
                 qe_response = getattr(args, "qe_response", DEFAULT_QE_RESPONSE),
+                #True for a module that does not offer --vary_nphi, which is what the
+                #siblings' frozen reconstruction actually is
+                constant_nphi = not getattr(args, "vary_nphi", False),
                 #np.savez cannot store None, so "no empirical measurement" is the empty string
                 phi_noise = getattr(args, "phi_noise", None) or "",
                 transfer_function = getattr(args, "transfer_function", None) or "",
+                delensed_covariance = getattr(args, "delensed_covariance", None) or "",
                 #0 means "not pinned", i.e. camb_lmax_for_grid chose it from the box
                 camb_lmax = getattr(args, "camb_lmax", None) or 0,
                 radial_mean = getattr(args, "radial_mean", DEFAULT_RADIAL_MEAN),
-                step_fracs = np.array([FD_STEP_FRAC[name] for name in names]), **extra)
+                step_fracs = step_fracs, **extra)
 
 
 def main():
@@ -2104,12 +2478,18 @@ def main():
                       "sample_lcdm.py flat-sky box - the covariance-block trace formula")
     add_box_arguments(parser)
     add_spectra_arguments(parser)
+    add_constant_nphi_argument(parser)
     add_phi_noise_argument(parser)
     add_transfer_function_argument(parser)
+    add_delensed_covariance_argument(parser)
     add_camb_lmax_argument(parser)
     add_radial_mean_argument(parser)
     args = parser.parse_args()
     is_sampled = sampled_from_args(parser, args)
+    if args.delensed_covariance and args.stability:
+        parser.error("--stability cannot be combined with --delensed_covariance: the step is "
+                     "fixed by the measured stencil. Re-run get_delensed_covariance.sh at a "
+                     "second step_sigma and compare the two forecasts instead")
 
     def run(step_fracs = None, spectra = args.spectra, verbose = True):
         #the measured N_phi applies in every spectra mode, so it passes through to the
@@ -2125,7 +2505,10 @@ def main():
                         transfer_function = (args.transfer_function
                                              if spectra == "delensed" else None),
                         camb_lmax = args.camb_lmax,
-                        radial_mean = args.radial_mean)
+                        radial_mean = args.radial_mean,
+                        constant_nphi = not args.vary_nphi,
+                        delensed_covariance = (args.delensed_covariance
+                                               if spectra == "delensed" else None))
 
     fisher, names = run()
     covariance = covariance_from_fisher(fisher, names)

@@ -35,26 +35,33 @@ map_prefix=987654
 #the parameters to forecast. must match the was_sampled entries in chain_analysis.py
 params="omch2 theta_MC_100 logA"
 
-#one slurm job per realization
+#one slurm job per realization (per sub-chain of each realization when louis=1)
 num_realizations=100
 
 #1 = Louis's observed information (the MARGINAL Fisher of p(d | theta)): each job samples
-#(f, phi) | d at theta_0 with the sampler's Gibbs sweep, runs the stencil at every kept draw
-#and subtracts the posterior covariance of the score. 0 = the plain complete-data Hessian.
-#Louis jobs take hours, not minutes - (1 + louis_draws) stencils plus
-#louis_burn + louis_draws Gibbs sweeps - so they get louis_time instead of the 20 minutes
-#in run_single_mixed_hessian.sh, and should write to their own out_dir.
-#louis_draws is a RAW chain length: every post-burn-in sweep is kept and differentiated,
-#and the merge prunes the score chain by the stride it measures from that realization's own
-#autocorrelation. The pruned count (draws / IAT) is what the covariance is built on, so
-#raise this if the merge warns that a realization prunes down to too few samples
+#(f, phi) | d at theta_0 with the sampler's Gibbs sweep, runs the stencil at every sweep
+#and the merge subtracts the posterior covariance of the score. 0 = the plain complete-data
+#Hessian. Louis jobs take hours, not minutes - (1 + louis_draws) stencils plus louis_draws
+#Gibbs sweeps - so they get louis_time instead of the 20 minutes in
+#run_single_mixed_hessian.sh, and should write to their own out_dir.
+#louis_chains independent sub-chains run per data map (same map_seed, different MCMC
+#randomness), ONE SLURM JOB EACH, so a louis run is num_realizations * louis_chains jobs.
+#That divides the wall clock per realization by louis_chains and lets the merge measure the
+#Gelman-Rubin R-hat of every score component and Hessian entry. Ignored when louis=0 (the
+#plain Hessian has no MCMC).
+#louis_draws is the RAW length of each sub-chain, burn-in INCLUDED: every sweep from the
+#first is differentiated and saved. There is deliberately no burn-in here - it is chosen at
+#merge time (--louis_burn, LOUIS_BURN_IN in chain_analysis.py) after looking at the traces,
+#so a burn-in that turns out too short costs a re-merge, not a re-run. The merge then thins
+#each sub-chain by its max IAT over scores and Hessian entries and pools the sub-chains;
+#raise louis_draws or louis_chains if it warns that a realization prunes to too few samples
 #louis_mem overrides run_single_mixed_hessian.sh's 2G: a louis job also carries the sampler
 #stack (sample_lcdm, map_joint, the HMC), MEASURED at 2.5 GB peak RSS on nside 64. The
 #(f, phi) draws themselves are NOT what costs memory - each is differentiated and dropped
 #as the chain produces it, so louis_draws does not move this number
 louis=0
-louis_draws=50
-louis_burn=100
+louis_draws=150
+louis_chains=4
 louis_time="06:00:00"
 louis_mem="4G"
 
@@ -63,16 +70,21 @@ out_dir="ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/mixed_hessian_output"
 
 mkdir -p "$out_dir"
 
-#each job gets a distinct seed. load_hessian_directory refuses duplicate seeds, so if this
-#loop is ever changed in a way that repeats one, the averaging step fails loudly instead
-#of double counting a realization
+#each realization gets a distinct seed and each of its sub-chains a distinct index.
+#load_hessian_directory refuses duplicate seeds (duplicate (seed, sub-chain) pairs for louis
+#files), so if this loop is ever changed in a way that repeats one, the averaging step fails
+#loudly instead of double counting
 time_args=()
+num_chains=1
 if [ "$louis" = "1" ]; then
     time_args=(--time="$louis_time" --mem-per-cpu="$louis_mem")
+    num_chains=$louis_chains
 fi
 for ((m=0; m<num_realizations; m++)); do
     map_seed=$((map_prefix + m))
-    sbatch "${time_args[@]}" run_single_mixed_hessian.sh "$m" "$map_seed" "$nside" \
-        "$theta_pix" "$noise_level" "$l_knee" "$out_dir" "$louis" "$louis_draws" \
-        "$louis_burn" $params
+    for ((c=0; c<num_chains; c++)); do
+        sbatch "${time_args[@]}" run_single_mixed_hessian.sh "$m" "$map_seed" "$nside" \
+            "$theta_pix" "$noise_level" "$l_knee" "$out_dir" "$louis" "$louis_draws" \
+            "$c" $params
+    done
 done

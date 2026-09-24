@@ -163,6 +163,29 @@ class _TensorSpline:
         return out, gout
 
 
+def _local_support(coeff, knots, point, nu = None):
+    """One in-box point of the tensor-product cubic spline, touching only its support.
+
+    A cubic B-spline at x in knot span [t_j, t_{j+1}) is carried by the four coefficients
+    c[j-3 .. j] and the eight knots t[j-3 .. j+4] alone, so slicing both per axis gives a
+    spline that is EXACTLY the full one on that span. `coeff` can therefore be a read-only
+    np.memmap of the ~1.1 GB table: this reads 4^5 * n_ell float32s (~16 MB at 3998 ells)
+    instead of building the ~2.1 GB float64 NdBSpline _TensorSpline needs. `point` must
+    already be clamped onto the box. `nu` is NdBSpline's per-axis derivative order."""
+    from scipy.interpolate import NdBSpline
+    slices, sub_knots = [], []
+    for a, t in enumerate(knots):
+        n = t.size - 4
+        j = int(np.clip(np.searchsorted(t, point[a], side = "right") - 1, 3, n - 1))
+        slices.append(slice(j - 3, j + 1))
+        sub_knots.append(t[j - 3:j + 5])
+    block = np.asarray(coeff[tuple(slices)], dtype = np.float64)
+    #the point sits inside the sub-spline's single base span (right edge included), so
+    #extrapolation never actually happens; True just keeps the right edge from NaNing
+    spline = NdBSpline(tuple(sub_knots), block, 3, extrapolate = True)
+    return spline(point[None, :], nu = nu)[0]
+
+
 # ── Grid file ─────────────────────────────────────────────────────────────
 
 class CambGrid:
@@ -268,6 +291,62 @@ class CambGrid:
                     f"merge_camb_grid.py to regenerate it")
             self._spline_cache[spectrum] = _TensorSpline(self._data[key], self.knots)
         return self._spline_cache[spectrum]
+
+    def coeff_memmap(self, spectrum):
+        """A read-only np.memmap of one spectrum's float32 coefficient table, straight out
+        of the npz. merge_camb_grid.py writes every member ZIP_STORED (uncompressed), so the
+        .npy bytes sit contiguously in the file and nothing is read until it is indexed."""
+        import zipfile
+        name = f"coeff_{spectrum}.npy"
+        with zipfile.ZipFile(self.path) as archive:
+            info = archive.getinfo(name)
+        if info.compress_type != zipfile.ZIP_STORED:
+            raise ValueError(f"{name} in {self.path} is compressed and cannot be memory "
+                             f"mapped; use CambGrid.cl instead")
+        with open(self.path, "rb") as f:
+            #the local file header's name / extra lengths can differ from the central
+            #directory's (zip64 extras), so read them from the local header itself
+            f.seek(info.header_offset + 26)
+            name_len, extra_len = np.frombuffer(f.read(4), dtype = "<u2")
+            f.seek(info.header_offset + 30 + int(name_len) + int(extra_len))
+            major, _ = np.lib.format.read_magic(f)
+            read_header = (np.lib.format.read_array_header_1_0 if major == 1
+                           else np.lib.format.read_array_header_2_0)
+            shape, fortran, dtype = read_header(f)
+            offset = f.tell()
+        return np.memmap(self.path, dtype = dtype, mode = "r", offset = offset,
+                         shape = shape, order = "F" if fortran else "C")
+
+    def cl_local(self, spectrum, params_batch, grid_axis = None):
+        """CambGrid.cl for a FEW points, at a few MB of memory rather than ~2.1 GB.
+
+        Same values as cl (the same spline, restricted exactly to each point's support -
+        see _local_support), for callers that only need a handful of cosmologies, such as a
+        Fisher stencil, and must not load a whole coefficient table. With `grid_axis` set
+        (an index into GRID_AXES) it returns the analytic derivative of the SPLINED quantity
+        (lnCl, or te_rho raw) along that grid axis instead - at fixed H0, so d/dtheta and
+        the ombh2 / omch2 derivatives at fixed theta also need the H0 inversion's slope."""
+        points = self.grid_points(params_batch)
+        out = np.full((points.shape[0], self.n_ell), np.nan)
+        valid = self._points_valid(points)
+        if spectrum == "bb" and self.bb_is_zero:
+            out[valid] = 0.0
+            return out
+        if not valid.any():
+            return out
+        coeff = self.coeff_memmap(spectrum)
+        nu = None
+        if grid_axis is not None:
+            nu = np.zeros(len(GRID_AXES), dtype = int)
+            nu[grid_axis] = 1
+        for m in np.flatnonzero(valid):
+            clamped = np.array([np.clip(points[m, a], k[3], k[-4])
+                                for a, k in enumerate(self.knots)])
+            out[m] = _local_support(coeff, self.knots, clamped, nu = nu)
+        del coeff
+        if grid_axis is not None or spectrum in LINEAR_SPECTRA:
+            return out
+        return np.exp(out)
 
     def _points_valid(self, points):
         """The same validity screen _TensorSpline applies: finite coordinates inside the

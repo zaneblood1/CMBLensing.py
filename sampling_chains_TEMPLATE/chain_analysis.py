@@ -11,8 +11,22 @@ from cmb_lensing.util import precision_load
 import jax.numpy.fft as jfft
 from cmb_lensing.statistics import *
 from cmb_lensing.fisher_forecast import annotated_heatmap, forecast, covariance_from_fisher, plot_annotated_matrix, GROUND_TRUTH
+from cmb_lensing.fisher_forecast_from_mixed_logpdf import (load_louis_chains,
+                                                           louis_realization_information,
+                                                           louis_quantities,
+                                                           usable_louis_chains,
+                                                           LOUIS_R_HAT_WARN)
 
 BUFFER = 1e-4
+
+#the mixed_louis Hessian directory (mixed_hessian.sh's out_dir) whose sub-chains get the
+#ACF / IAT / R-hat / trace diagnostics; None skips them. Set it to ABSOLUTE_PATH_TO/... on your HPC
+LOUIS_HESSIAN_DIR = None
+#sweeps cut from the START of every raw louis sub-chain at merge time. The jobs save every
+#sweep, so this is chosen here, after looking at the *_trace.png plots, never in the job
+LOUIS_BURN_IN = 100
+#how many realizations get their raw sub-chains drawn in the per-quantity trace plots
+LOUIS_TRACE_REALIZATIONS = 3
 GRID_SIZE = 5_000
 
 #which stride prune_chains thins each chain by. True -> the lag just before that chain's
@@ -799,6 +813,9 @@ FORECAST_STYLES = {
                 "label": "ceiling (complete-data bound)"},
     "lensed": {"colour": "tab:green", "linestyle": ":", "short": "lens",
                "label": "lensed (two-point bound)"},
+    #not a spectra mode: Louis's marginal Fisher from the mixed-logpdf realizations
+    "mixed_louis": {"colour": "tab:brown", "linestyle": "-", "short": "louis",
+               "label": "mixed Louis (marginal Fisher)"},
 }
 DEFAULT_FORECAST_STYLE = {"colour": "tab:gray", "linestyle": "--", "short": "fisher",
                           "label": "Fisher forecast"}
@@ -1020,6 +1037,155 @@ def get_forecasted_covariance(nside, theta_pix, noise, is_sampled, param_names,
     order = [names.index(name) for name in param_names]
     return covariance[np.ix_(order, order)]
 
+def louis_file_label(label):
+    """A quantity label from louis_quantities ("H[omch2,logA]") as a file name stem."""
+    return label.replace("[", "_").replace("]", "").replace(",", "_")
+
+def louis_chain_diagnostics(hessian_dir, burn_in, output_path,
+                            num_trace_realizations = LOUIS_TRACE_REALIZATIONS):
+    """Visual convergence / mixing checks of the mixed_louis sub-chains in `hessian_dir`.
+
+    For every quantity Louis's identity averages - each score component and each Hessian
+    entry (louis_quantities) - this draws, per sub-chain of every realization and after the
+    `burn_in` the merge also cuts:
+      <q>_auto_correlation.png          the ACF of every sub-chain
+      <q>_integrated_autocorrelation_times.png
+                                        the IAT of every sub-chain, one horizontal bar each
+      <q>_trace.png                     the RAW sub-chains (burn-in included, cut marked) of
+                                        the first few realizations - what to choose the
+                                        burn-in from
+    and three summaries across quantities:
+      iat_summary.png                   IAT spread per quantity, and how often each quantity
+                                        was the slowest (= set its sub-chain's thinning stride)
+      r_hat_summary.png                 Gelman-Rubin R-hat across each realization's
+                                        sub-chains, per quantity (needs >= 2 sub-chains)
+      stride_histogram.png              the thinning stride of every sub-chain
+    Everything is computed by the same louis_information_from_chains the forecast's merge
+    runs, so the plots show exactly the strides and R-hats behind the forecast.
+    """
+    print("\n")
+    print(f"Beginning mixed_louis chain diagnostics ({hessian_dir})")
+    os.makedirs(output_path, exist_ok = True)
+    metadata, realizations = load_louis_chains(hessian_dir)
+    #jobs checkpoint every sweep, so this also works on a directory whose jobs are still
+    #running (or were killed): unfinished sub-chains are used as far as they got
+    realizations = usable_louis_chains(realizations, burn_in)
+    names = metadata["names"]
+
+    terms_per_realization = [louis_realization_information(realization, burn_in,
+                                                           keep_acfs = True, names = names)[1]
+                             for realization in realizations]
+    labels = terms_per_realization[0]["labels"]
+    #one row per sub-chain, realization by realization
+    iats = np.concatenate([terms["iats"] for terms in terms_per_realization])
+    strides = np.concatenate([terms["strides"] for terms in terms_per_realization])
+    setters = np.concatenate([terms["stride_setter"] for terms in terms_per_realization])
+    acfs = [acf for terms in terms_per_realization for acf in terms["acfs"]]
+    r_hat = np.array([terms["r_hat"] for terms in terms_per_realization])
+    job_burn = max(realization["job_burn"] for realization in realizations)
+    print(f"{len(realizations)} realizations, {len(iats)} sub-chains, parameters {names}, "
+          f"burn-in {burn_in} (+{job_burn} cut in the jobs)")
+
+    for q, label in enumerate(labels):
+        stem = louis_file_label(label)
+
+        #ACF of every sub-chain; the lag axis is cut where the slowest chains have long
+        #decorrelated, otherwise a 2500-lag axis squeezes the interesting part to a sliver
+        plt.figure()
+        max_lag = max(len(chain_acfs[q]) for chain_acfs in acfs)
+        for chain_acfs in acfs:
+            plt.plot(chain_acfs[q], lw = 0.5, alpha = 0.3)
+        plt.axhline(0, color = "black", lw = 0.8)
+        plt.xlim(0, min(max_lag, max(20, int(10 * np.percentile(iats[:, q], 95)))))
+        plt.xlabel("Lag (sweeps)"); plt.ylabel("Auto-Correlation")
+        plt.title(f"{label} Auto-Correlation ({len(acfs)} sub-chains)")
+        plt.grid(alpha = 0.2)
+        plt.savefig(output_path + f"{stem}_auto_correlation.png", dpi = 150,
+                    bbox_inches = "tight")
+        plt.close()
+
+        #IAT of every sub-chain as a horizontal bar, as plot_iat_per_chain draws the LCDM
+        #chains; sub-chains of one realization are adjacent bars
+        plt.figure()
+        plt.barh(range(len(iats)), iats[:, q])
+        plt.ylabel("Sub-Chain"); plt.xlabel("Integrated Auto-Correlation Time")
+        mean_iat = np.mean(iats[:, q])
+        plt.axvline(mean_iat, label = f"Mean IAT = {mean_iat}", color = "black")
+        plt.legend()
+        plt.title(f"{label} Integrated Auto Correlation Time per Sub-Chain\n"
+                  f"(set the stride in {np.mean(setters == q):.0%} of sub-chains)")
+        plt.savefig(output_path + f"{stem}_integrated_autocorrelation_times.png", dpi = 150,
+                    bbox_inches = "tight")
+        plt.close()
+
+        #raw traces, burn-in included, for choosing LOUIS_BURN_IN by eye
+        shown = realizations[:num_trace_realizations]
+        figure, axes = plt.subplots(len(shown), 1, figsize = (14, 2.6 * len(shown)),
+                                    squeeze = False)
+        for axis, realization, terms in zip(axes[:, 0], shown, terms_per_realization):
+            for chain in realization["sub_chains"]:
+                _, series = louis_quantities(chain["hessians"], chain["scores"])
+                axis.plot(np.arange(len(series)) + job_burn, series[:, q], lw = 0.6,
+                          label = f"sub-chain {chain['sub_chain_index']}"
+                                  + ("" if chain["finished"] else " (unfinished)"))
+            axis.axvline(job_burn + burn_in, color = "black", ls = "--",
+                         label = f"burn-in cut ({burn_in})")
+            axis.set_title(f"map_seed {realization['map_seed']}, R-hat "
+                           f"{terms['r_hat'][q]:.4f}", fontsize = 9)
+            axis.set_ylabel(label); axis.grid(alpha = 0.2)
+        axes[0, 0].legend(fontsize = 6, ncol = 6, loc = "upper right")
+        axes[-1, 0].set_xlabel("Sweep")
+        figure.tight_layout()
+        figure.savefig(output_path + f"{stem}_trace.png", dpi = 150)
+        plt.close(figure)
+
+    #IAT spread per quantity and which one sets the stride: if the Hessian entries sit above
+    #the scores here, thinning by the scores alone would under-thin the complete term
+    figure, (axis_iat, axis_set) = plt.subplots(2, 1, figsize = (max(8, 1.1 * len(labels)), 8),
+                                                sharex = True)
+    axis_iat.boxplot([iats[:, q] for q in range(len(labels))])
+    axis_iat.set_ylabel("IAT per sub-chain"); axis_iat.grid(alpha = 0.2)
+    axis_iat.set_title("Integrated auto-correlation time per quantity")
+    axis_set.bar(np.arange(1, len(labels) + 1),
+                 [np.mean(setters == q) for q in range(len(labels))])
+    axis_set.set_ylabel("fraction of sub-chains\nwhose stride it set"); axis_set.grid(alpha = 0.2)
+    axis_set.set_xticks(np.arange(1, len(labels) + 1))
+    axis_set.set_xticklabels(labels, rotation = 45, ha = "right")
+    figure.tight_layout()
+    figure.savefig(output_path + "iat_summary.png", dpi = 150)
+    plt.close(figure)
+
+    if np.any(np.isfinite(r_hat)):
+        figure, axis = plt.subplots(figsize = (max(8, 1.1 * len(labels)), 4.5))
+        axis.boxplot([r_hat[np.isfinite(r_hat[:, q]), q] for q in range(len(labels))])
+        axis.axhline(1.0, color = "black", lw = 0.8)
+        axis.axhline(LOUIS_R_HAT_WARN, color = "tab:red", ls = "--",
+                     label = f"warning threshold {LOUIS_R_HAT_WARN}")
+        axis.set_xticks(np.arange(1, len(labels) + 1))
+        axis.set_xticklabels(labels, rotation = 45, ha = "right")
+        axis.set_ylabel("Gelman-Rubin R-hat")
+        axis.set_title(f"R-hat across sub-chains, one point per realization "
+                       f"({len(realizations)})")
+        axis.legend(); axis.grid(alpha = 0.2)
+        figure.tight_layout()
+        figure.savefig(output_path + "r_hat_summary.png", dpi = 150)
+        plt.close(figure)
+        for q, label in enumerate(labels):
+            print(f"{label} Average Gelman-Rubin R Statistic = {np.nanmean(r_hat[:, q])}")
+            print(f"{label} Std in Gelman-Rubin R Statistic = {np.nanstd(r_hat[:, q])}")
+    else:
+        print("only one sub-chain per realization: no R-hat to plot")
+
+    plt.figure()
+    plt.hist(strides, bins = np.arange(0.5, np.max(strides) + 1.5, 1), edgecolor = "white")
+    plt.xlabel("Thinning stride (max IAT over scores and Hessian entries)")
+    plt.ylabel("Sub-chains")
+    plt.title(f"Stride per sub-chain, median {np.median(strides):.0f}")
+    plt.grid(alpha = 0.2)
+    plt.savefig(output_path + "stride_histogram.png", dpi = 150, bbox_inches = "tight")
+    plt.close()
+    return
+
 def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values, 
          was_sampled, default_burn_in, nside, theta_pix, noise):
 
@@ -1034,6 +1200,11 @@ def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values,
     #fisher information or other multi-param joint statistics
     if get_num_sampled(was_sampled) > 1:
         joint_param_analysis(all_chains, nside, theta_pix, noise, was_sampled)
+
+    #ACF / IAT / R-hat / trace plots of the mixed_louis sub-chains behind the louis forecast
+    if LOUIS_HESSIAN_DIR:
+        louis_chain_diagnostics(LOUIS_HESSIAN_DIR, LOUIS_BURN_IN,
+                                os.getcwd() + "/sampling_chains/lcdm_chain_plots/louis_diagnostics/")
     return
 
 def get_num_sampled(was_sampled):

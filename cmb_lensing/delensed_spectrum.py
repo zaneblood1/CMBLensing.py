@@ -516,6 +516,11 @@ def load_transfer_directory(directory, verbose = True):
                          f"get_delensed_spectra.sh.")
 
     stacked = {name: np.array(rows) for name, rows in stacked.items()}
+    #D(l) per realization: the delensed spectrum against the SAME draw's unlensed one, the
+    #CAMB-free delensing measured_delensing_ratio averages and
+    #merge_delensing_ratio_derivatives differentiates. Derived here so it is one more row set
+    #alongside the two R estimators and every consumer sees the same per-realization pairing
+    stacked["delensing_ratio"] = stacked["measured_delensed"] / stacked["measured_unlensed"]
     stacked["band_ells"] = np.asarray(band_ells)
     metadata["seeds"] = seeds
 
@@ -533,6 +538,83 @@ def load_transfer_directory(directory, verbose = True):
               f"{np.max(stacked['inverse_error']):.3e}")
 
     return stacked, metadata
+
+
+def measured_delensing_ratio(directory, shifted_dirs = None, verbose = True):
+    """D(l) = < C_l^delensed / C_l^unlensed >, the box's OWN delensing, CAMB-free.
+
+    R(l) (merge_transfer_function) is a ratio to CAMB's partially lensed spectrum at a frozen
+    Alens_L, so using it still requires CAMB's delensing algorithm and a delensing fraction.
+    D(l) instead compares the measured delensed spectrum to the measured UNLENSED one from
+    the SAME realization, so nothing CAMB computes enters and there is no Alens_L anywhere:
+
+        C_l^delensed(theta)  =  D(l) * C_l^unlensed_CAMB(theta)
+
+    Dividing per realization before averaging is the same cosmic-variance cancellation that
+    makes the "paired" R estimator affordable - both spectra come from one draw of f, so the
+    sample variance divides out and what is left is the delensing itself. The error is the
+    same delete-one jackknife over realizations.
+
+    WHAT IS ASSUMED. D is measured at ONE cosmology and then applied at every stencil point,
+    so the forecast's dC^delensed/dtheta is D * dC^unlensed/dtheta - the entire residual
+    lensing correction is frozen in theta. That is a STRONGER assumption than the transfer
+    function's: R is a ratio between two delensed spectra and is near one by construction,
+    while D carries the whole residual lensing, which tracks C_phi(theta). Nothing here tests
+    it; run two directories at separated cosmologies and compare, the way
+    compare_transfer_functions.py does for R.
+
+    Returns a dict shaped like the merged npz - band_ells, ratio, ratio_error and the
+    configuration - so it can be checked against a forecast's box the same way.
+    """
+    stacked, metadata = load_transfer_directory(directory, verbose = verbose)
+    rows = stacked["measured_delensed"] / stacked["measured_unlensed"]
+    ratio, error = jackknife_mean(rows)
+
+    if verbose:
+        print(f"  measured delensing ratio D(l) = C^delensed / C^unlensed over "
+              f"{len(stacked['band_ells'])} bands, "
+              f"l = {stacked['band_ells'][0]:.0f}..{stacked['band_ells'][-1]:.0f}")
+        print(f"    D in {np.min(ratio):.4f}..{np.max(ratio):.4f} "
+              f"({metadata['n_realizations']} realizations); D = 1 would be perfect "
+              f"delensing, D = C^lensed/C^unlensed none at all")
+
+    result = dict(band_ells = np.asarray(stacked["band_ells"]), ratio = ratio,
+                  ratio_error = error,
+                  **{key: metadata[key] for key in _CONFIG_KEYS},
+                  params = metadata["params"],
+                  reconstruction_params = metadata["reconstruction_params"],
+                  n_realizations = metadata["n_realizations"])
+
+    #dD/dtheta turns D * C^unlensed from a restatement of the unlensed forecast into a real
+    #one - see merge_delensing_ratio_derivatives for why the first term alone cancels
+    if shifted_dirs:
+        result.update(merge_delensing_ratio_derivatives(directory, shifted_dirs,
+                                                        verbose = verbose))
+    return result
+
+
+def has_ratio_derivatives(measured):
+    """Whether a measured_delensing_ratio dict carries dD/dtheta."""
+    return ("ratio_derivative" in measured and
+            len(np.asarray(measured["ratio_derivative"])) > 0)
+
+
+def ratio_at_params(measured, params = None):
+    """D(l) on its measured bands at `params`: D_0 + sum_i (theta_i - theta_0,i) dD/dtheta_i.
+
+    Mirrors fisher_forecast.transfer_at_params. Without derivatives, or with params = None,
+    this is D_0 - the frozen construction, which makes the forecast collapse onto the
+    unlensed one. Parameters with no measured derivative contribute nothing.
+    """
+    ratio = np.asarray(measured["ratio"], dtype = np.float64)
+    if params is None or not has_ratio_derivatives(measured):
+        return ratio
+    reference = measured["params"]
+    for name, derivative in zip(measured["derivative_names"],
+                                measured["ratio_derivative"]):
+        name = str(name)
+        ratio = ratio + (float(params[name]) - float(reference[name])) * np.asarray(derivative)
+    return ratio
 
 
 def merge_transfer_function(directory, estimator = "paired", verbose = True):
@@ -603,6 +685,33 @@ def _rows_by_seed(stacked, metadata, key, seeds):
     return np.asarray(stacked[key])[[position[seed] for seed in seeds]]
 
 
+def merge_delensing_ratio_derivatives(reference_dir, shifted_dirs, verbose = True):
+    """dD/dtheta_i for the empirical delensing ratio D(l) = <C^delensed / C^unlensed>.
+
+    Exactly merge_transfer_derivatives, differencing the per-realization D rows instead of
+    the per-realization R rows: same common-random-number requirement, same one-parameter-per
+    -directory rule, same frozen-reconstruction rule, same per-realization differencing and
+    jackknife. See that function for all of it.
+
+    Why this exists: without dD/dtheta the empirical delensed spectrum D * C^unlensed(theta)
+    has a derivative D * dC^unlensed/dtheta, and D then CANCELS out of the Fisher integrand
+    wherever the noise is small - measured at nside 128 / 2.5' / 5 uK the forecast came out
+    equal to --spectra unlensed to seven digits. The whole content of the delensing sits in
+    the second term of the product rule,
+
+        d(D C_u)/dtheta = D dC_u/dtheta + C_u dD/dtheta
+
+    so measuring dD/dtheta is what makes the mode a forecast rather than a restatement of the
+    unlensed one.
+
+    Returns `ratio_derivative`, `ratio_derivative_error`, `derivative_names` and the rest,
+    named like merge_transfer_derivatives' output with "transfer" -> "ratio".
+    """
+    return _merge_row_derivatives(reference_dir, shifted_dirs, key = "delensing_ratio",
+                                  prefix = "ratio", label = "dD/dtheta",
+                                  camb_key = "camb_unlensed", verbose = verbose)
+
+
 def merge_transfer_derivatives(reference_dir, shifted_dirs, estimator = "paired",
                                verbose = True):
     """dR/dtheta_i for every parameter displaced in `shifted_dirs`, relative to `reference_dir`.
@@ -628,8 +737,23 @@ def merge_transfer_derivatives(reference_dir, shifted_dirs, estimator = "paired"
     """
     if estimator not in ("paired", "naive"):
         raise ValueError(f"estimator must be 'paired' or 'naive', got {estimator!r}")
-    key = f"transfer_{estimator}"
+    return _merge_row_derivatives(reference_dir, shifted_dirs,
+                                  key = f"transfer_{estimator}", prefix = "transfer",
+                                  label = f"dR/dtheta [{estimator} estimator]",
+                                  camb_key = "camb_delensed", verbose = verbose)
 
+
+def _merge_row_derivatives(reference_dir, shifted_dirs, key, prefix, label, camb_key,
+                           verbose = True):
+    """The shared machinery behind merge_transfer_derivatives and
+    merge_delensing_ratio_derivatives.
+
+    `key` names the per-realization row set in load_transfer_directory's `stacked` to
+    differentiate, `prefix` the output field names ("transfer" -> transfer_derivative, ...),
+    `camb_key` the deterministic CAMB band spectrum the report compares the new term against
+    (C^delensed for R, since the forecast forms R * C^delensed; C^unlensed for D, since it
+    forms D * C^unlensed).
+    """
     stack_ref, meta_ref = load_transfer_directory(reference_dir, verbose = False)
     reference = meta_ref["params"]
     if not _same_cosmology(meta_ref["reconstruction_params"], reference):
@@ -680,17 +804,16 @@ def merge_transfer_derivatives(reference_dir, shifted_dirs, estimator = "paired"
     #dC_CAMB/dtheta on the same bands, for the report that says how much of the stencil's
     #derivative the new term actually is. CAMB's band spectra are deterministic, so any one
     #row of a run carries them exactly
-    camb_ref = np.asarray(stack_ref["camb_delensed"])[0]
+    camb_ref = np.asarray(stack_ref[camb_key])[0]
     transfer_ref, _ = jackknife_mean(stack_ref[key])
 
-    result = dict(derivative_names = [], transfer_derivative = [],
-                  transfer_derivative_error = [], derivative_deltas = [],
-                  derivative_schemes = [], derivative_n_realizations = [],
-                  transfer_second_difference = [], transfer_second_difference_error = [])
+    result = {"derivative_names": [], f"{prefix}_derivative": [],
+              f"{prefix}_derivative_error": [], "derivative_deltas": [],
+              "derivative_schemes": [], "derivative_n_realizations": [],
+              f"{prefix}_second_difference": [], f"{prefix}_second_difference_error": []}
 
     if verbose:
-        print(f"\ndR/dtheta from common-random-number runs [{estimator} estimator], "
-              f"reference {reference_dir}")
+        print(f"\n{label} from common-random-number runs, reference {reference_dir}")
 
     for name in names:
         plus, minus = runs.get((name, 1)), runs.get((name, -1))
@@ -720,15 +843,15 @@ def merge_transfer_derivatives(reference_dir, shifted_dirs, estimator = "paired"
             #ones through the divided difference
             curvature_rows = 2 * ((rows[1] - rows_ref) / plus[3] -
                                   (rows_ref - rows[-1]) / (-minus[3])) / (plus[3] - minus[3])
-            camb_step = (np.asarray(plus[0]["camb_delensed"])[0] -
-                         np.asarray(minus[0]["camb_delensed"])[0]) / (plus[3] - minus[3])
+            camb_step = (np.asarray(plus[0][camb_key])[0] -
+                         np.asarray(minus[0][camb_key])[0]) / (plus[3] - minus[3])
         else:
             (stack, meta, _, delta), = present
             scheme = "forward" if delta > 0 else "backward"
             deltas = (delta,)
             derivative_rows = (rows[int(np.sign(delta))] - rows_ref) / delta
             curvature_rows = None
-            camb_step = (np.asarray(stack["camb_delensed"])[0] - camb_ref) / delta
+            camb_step = (np.asarray(stack[camb_key])[0] - camb_ref) / delta
 
         derivative, error = jackknife_mean(derivative_rows)
         if curvature_rows is not None:
@@ -737,30 +860,30 @@ def merge_transfer_derivatives(reference_dir, shifted_dirs, estimator = "paired"
             curvature = curvature_error = np.full_like(derivative, np.nan)
 
         result["derivative_names"].append(name)
-        result["transfer_derivative"].append(derivative)
-        result["transfer_derivative_error"].append(error)
+        result[f"{prefix}_derivative"].append(derivative)
+        result[f"{prefix}_derivative_error"].append(error)
         result["derivative_deltas"].append(np.array(deltas + (np.nan,) * (2 - len(deltas))))
         result["derivative_schemes"].append(scheme)
         result["derivative_n_realizations"].append(len(seeds))
-        result["transfer_second_difference"].append(curvature)
-        result["transfer_second_difference_error"].append(curvature_error)
+        result[f"{prefix}_second_difference"].append(curvature)
+        result[f"{prefix}_second_difference_error"].append(curvature_error)
 
         if verbose:
             _report_derivative(name, scheme, deltas, len(seeds), stack_ref["band_ells"],
                                derivative, error, curvature, transfer_ref, camb_ref,
-                               camb_step)
+                               camb_step, symbol = "R" if prefix == "transfer" else "D")
 
     return {name: np.array(value) for name, value in result.items()}
 
 
 def _report_derivative(name, scheme, deltas, n, ells, derivative, error, curvature,
-                       transfer_ref, camb_ref, camb_step):
-    """Print one parameter's dR/dtheta and the three numbers that say whether it matters."""
+                       transfer_ref, camb_ref, camb_step, symbol = "R"):
+    """Print one parameter's dR/dtheta (or dD/dtheta) and the numbers that say if it matters."""
     sigma = PARAM_SIGMA[name]
     shifts = ", ".join(f"{delta:+.4g} ({delta / sigma:+.2f} sigma)" for delta in deltas)
     print(f"\n  {name}: {scheme} difference over {shifts}, {n} shared realizations")
-    print(f"  {'l':>8}{'dR/dtheta':>13}{'jackknife':>12}{'sigma':>8}{'C dR / R dC':>14}")
-    #the stencil's derivative is R dC_CAMB + C_CAMB dR; the last column is the second term
+    print(f"  {'l':>8}{f'd{symbol}/dtheta':>13}{'jackknife':>12}{'sigma':>8}{f'C d{symbol} / {symbol} dC':>14}")
+    #the stencil's derivative is X dC_CAMB + C_CAMB dX; the last column is the second term
     #against the first, i.e. the fractional error holding R flat would have made per band
     safe_step = np.where(camb_step != 0, camb_step, np.nan)
     relative = camb_ref * derivative / (transfer_ref * safe_step)
@@ -771,12 +894,12 @@ def _report_derivative(name, scheme, deltas, n, ells, derivative, error, curvatu
 
     good = error > 0
     chi_squared = float(np.sum((derivative[good] / error[good])**2))
-    print(f"  chi^2 against dR/dtheta = 0: {chi_squared:.1f} for {int(np.sum(good))} bands")
-    print(f"  |C dR / R dC|: max {np.nanmax(np.abs(relative)):.3e}, median "
+    print(f"  chi^2 against d{symbol}/dtheta = 0: {chi_squared:.1f} for {int(np.sum(good))} bands")
+    print(f"  |C d{symbol} / {symbol} dC|: max {np.nanmax(np.abs(relative)):.3e}, median "
           f"{np.nanmedian(np.abs(relative)):.3e} -> the fractional correction to "
-          f"dC^delensed/d{name} that holding R flat would have dropped")
+          f"dC^delensed/d{name} that holding {symbol} flat would have dropped")
     #how much R moves over one sigma, the scale the Fisher contour lives on
-    print(f"  R drift over one sigma: max {np.max(np.abs(derivative)) * sigma:.3e}")
+    print(f"  {symbol} drift over one sigma: max {np.max(np.abs(derivative)) * sigma:.3e}")
     if scheme == "central":
         #over the half-width of the measured displacement, how big the quadratic term is next
         #to the linear one. The linear model R_0 + (theta - theta_0) dR is only safe where

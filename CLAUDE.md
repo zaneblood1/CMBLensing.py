@@ -61,6 +61,11 @@ sbatch get_delensed_spectra.sh                                          # 100 jo
 python merge_delensed_spectra.py --spectra_dir delensed_spectra_output  # -> transfer_function.npz
 python compare_transfer_functions.py --reference <dir_a> --shifted <dir_b>   # is R flat in theta?
 python -m cmb_lensing.fisher_forecast --spectra delensed --transfer_function <...>/transfer_function.npz
+
+# Empirical delensed COVARIANCE stencil (replaces CAMB's delensed block outright; from a filled-in sampling_chains/)
+sbatch get_delensed_covariance.sh                                       # 100 jobs, one seed each, 1 + 2k points per job
+python merge_delensed_covariance.py --covariance_dir <scp'd out_dir>    # -> delensed_covariance.npz (+ .png)
+python -m cmb_lensing.fisher_forecast --spectra delensed --params omch2 theta_MC_100 logA --delensed_covariance <...>/delensed_covariance.npz
 ```
 
 No linter or formatter is configured. No CI pipeline exists.
@@ -144,7 +149,8 @@ Real CAMB spectra precomputed on a full tensor-product grid over `(H0, logA, ns,
 - **Grid file:** `cmb_lensing/camb_splines/camb_grid_spline.npz` (~7.9 GB, gitignored). Built on the HPC by `sampling_chains_TEMPLATE/camb_grid.sh` → `run_single_camb_grid.sh/.py` (one slurm job per (logA, ns, ombh2, omch2) node doing the 81-point H0 sweep; 81×5×5×5×7 = 70 875 CAMB calls in 875 jobs; numpy + camb only, no JAX) → `merge_camb_grid.py` (streaming, one spectrum at a time, incremental zip writes; asserts no holes, uniform axes, theta independent of logA/ns, |te_rho| < 1) → `validate_camb_grid.py` (random interior points vs direct CAMB; expect ≲ CAMB's own ~1e-3 lnCl floor).
 - **Evaluation is `scipy.interpolate.NdBSpline`** (`_TensorSpline`), swapped in 2026-09-07 for ~150 lines of hand-rolled B-spline machinery (`_axis_stencil`, `_axis_stencil_derivs`, `_eval_bspline`, `_eval_bspline_grads`). This works with **no regeneration of the grid file**: `merge_camb_grid.py` already writes exactly NdBSpline's input (coefficients + knots with `len(t) == n + k + 1` per axis). Agreement with the old evaluator is ~4e-14 relative on the real grid, at ~3× the speed. Two things `_TensorSpline` still owns: the `BOUNDARY_TOL` clamp (bare `NdBSpline(extrapolate = False)` NaNs the box edges the sampler's conditional scans land on) and NaN-not-raise for genuine out-of-box rows. Cost: NdBSpline casts coefficients to float64, so a spectrum costs ~2.1 GB resident instead of ~1.1 GB — `CambGrid.spline` therefore caches only the spline, never the float32 array. `RegularGridInterpolator(method = "cubic")` is **not** an equivalent shortcut despite building an NdBSpline internally since scipy 1.12: it re-solves for coefficients with an iterative Krylov solver (`gcrotmk`), ~4e-4 away in lnCl from `make_interp_spline`'s direct banded solve, at ~10 min per spectrum. The old implementation is frozen in `tests/handrolled_bspline_reference.py` and `tests/test_native_5d_interp.py` checks production against it (`tests/benchmark_native_5d_interp.py` times them).
 - **`CambGrid`** opens the npz once (`load_camb_grid` singleton per path) and builds `_TensorSpline`s **lazily per spectrum** via `CambGrid.spline(name)` (~1.1 GB read, ~2.1 GB resident, six of them) — T-only runs never touch the polarization/lensed tables. `bb_is_zero` flag: unlensed BB is identically zero on the r = 0 grid, so the `bb` predictor returns exact zeros (NaN out of box). A pre-polarization grid file stays loadable and raises a `KeyError` with a regeneration pointer only when a missing spectrum is requested.
-- **`load_camb_grid_predictors(path)`** → `GridPredictors(tt, ee, bb, pp, tt_lensed, ee_lensed, bb_lensed, te_rho)`, each `f(params_batch) -> (M, n_ell)` via `jax.pure_callback(vmap_method = "sequential")`, cached per path. `LINEAR_SPECTRA = {"te_rho"}` are splined raw (no exp). This is the **only** predictor loader now — the pure-JAX (`_jax`) and custom-VJP (`_grad`) differentiable variants were removed with the gradient-based theta samplers. `CambGrid.spline_param_grads` (analytic ∂lnCl/∂params through the theta→H0 inversion) survives unused.
+- **`load_camb_grid_predictors(path)`** → `GridPredictors(tt, ee, bb, pp, tt_lensed, ee_lensed, bb_lensed, te_rho)`, each `f(params_batch) -> (M, n_ell)` via `jax.pure_callback(vmap_method = "sequential")`, cached per path. `LINEAR_SPECTRA = {"te_rho"}` are splined raw (no exp). This is the **only** predictor loader now — the pure-JAX (`_jax`) and custom-VJP (`_grad`) differentiable variants were removed with the gradient-based theta samplers. (`CambGrid.spline_param_grads` no longer exists; `_TensorSpline.value_and_grads` gives per-GRID-axis partials at fixed H0.)
+- **`CambGrid.cl_local(spectrum, params_batch, grid_axis = None)`** (added 2026-09-22) evaluates a FEW points at a few MB: `coeff_memmap` memory-maps the ZIP_STORED `.npy` member and `_local_support` slices each point's 4^5 spline support (a cubic B-spline on one knot span needs only 4 coefficients + 8 knots per axis), so it never builds the ~2.1 GB NdBSpline. Bit-identical to `cl` (values, NaN pattern, box edges, and `grid_axis` analytic partials vs `value_and_grads`, checked on a synthetic grid). Use it for stencils / diagnostics on the 16 GB laptop; the sampler still uses `cl`.
 - **H0 vs theta_MC_100.** The grid is laid out in H0 because a rectangular theta box has CAMB-unsolvable corners. Every node records theta; the merge collapses it to a 3D `theta_grid(H0, ombh2, omch2)`; `CambGrid.h0_from_theta` densifies theta(H0) to 2000 points, splines it over (ombh2, omch2), and inverts by interpolation. The sampler works in theta_MC_100 throughout.
 - `tests/test_camb_grid_interp.py` (the tensor-product reference check) was deleted in the 2026-08-24 refactor; `tests/test_native_5d_interp.py` (added 2026-09-07) now covers the evaluator, though nothing still covers the merge or the theta→H0 inversion end to end.
 
@@ -203,6 +209,8 @@ spectra-mode knobs; `add_spectra_arguments` calls it so blocks / cls / full_sky 
 The kwarg threads through `qe_noise_matrix` / `qe_noise_cl` / `qe_noise_grid` /
 `iterative_delensing` / `frozen_reconstruction` / `covariance_stencil` and every `forecast*`
 entry point, and is recorded in each `fisher<suffix>.npz` by `run_config`.
+
+**`--cl_source camb|grid` (1st_principles only, added 2026-09-22; `CL_SOURCES` / `grid_cls_at_params` in the base module).** `camb` (default) runs CAMB per stencil point; `grid` reads the model spectra (fiducial + stencil; `scalar_TT`, `total_TT`, `phi` only) off the 5D grid through `CambGrid.cl_local`, i.e. the dC/dtheta the chains' likelihood actually uses. N_L / Alens_L stay direct CAMB; `--spectra delensed` with the CAMB delensed source is refused (no partially lensed Cls on the grid). `python -m cmb_lensing.compare_grid_derivatives` measured at GROUND_TRUTH (nside 128 / 2.5' / 5 uK): value offset <= 6e-4 (TT tail) / 1e-5 (phi); dlnC per-band error mostly 1e-5..6e-3, worst omch2 lensed TT 2.5% at l 1500-2500 and ombh2 phi 2.3% at L < 100 (the unlensed-TT omch2 tail's 23% is relative to a near-zero derivative); marginalized sigmas move <= 0.26% and correlations <= 0.006. So grid interpolation does NOT explain any chain-vs-forecast gap at this box.
 
 **This is isolated to the forecasts:** `simulate.scalar_quadratic_estimate` is untouched and
 `load_sim` / `map_joint` / `sample_lcdm` keep their unlensed response, where the QE norm only
@@ -369,6 +377,31 @@ script displace the fiducial point for that test; each shifted run needs its own
 MEASURED ~40 s per realization at nside 64 / 5' (load_sim + `map_joint` + 3 lensing solves), so the
 100-job set is minutes of wall clock on the cluster and well under an hour locally at that box.
 
+### The empirical delensed covariance stencil (`delensed_covariance.py`, added 2026-09-24)
+
+The transfer-function route still takes the delensed block's theta dependence from CAMB. This
+replaces the block's signal outright, value AND finite difference. Per seed (common random
+numbers) and per stencil point `{theta_0, theta_0 +/- h_i}` a job runs `load_sim(theta)` ->
+`map_joint` -> inverse-lenses the NOISELESS lensed field by phi_hat -> stores
+`F conj(F) / nside^2` on the rfft grid (covar_matrix_from_cls's C_l / pix_width^2 units, origin
+zeroed; no Fourier weight belongs in a per-mode covariance - w_k enters only the Fisher sum).
+The unlensed and lensed fields are stored too: with common random numbers the empirical
+UNLENSED dC/C must equal CAMB's per mode exactly, which the merge checks (measured 6e-13 on
+the smoke test). `h_i = step_sigma * PARAM_SIGMA` (default 0.5 sigma, wider than the forecast's
+0.05 because each point runs its own map_joint); `reconstruction = fiducial` (default) freezes
+map_joint's C_f / C_phi / D / QE norm at theta_0 at every point, `shifted` rebuilds them.
+Jobs checkpoint atomically after every point (`finished` flag; the merge sets unfinished files
+aside). `fisher_forecast --delensed_covariance <npz>` (`--spectra delensed` only; refuses
+`--transfer_function`, `--stability` / `step_fracs`, a different box, a different fiducial
+point, or sampled parameters the file lacks) swaps the averaged matrices + analytic C_n into
+`f_delensed` at the centre and every +/- point and takes its steps h_i from the file for EVERY
+block (the phi block is still CAMB C_phi + frozen N_phi). Verified: a file holding CAMB's own
+delensed blocks reproduces the standard forecast at the same step exactly. Scripts (both
+`sampling_chains*/`, `.py` byte-identical): `get_delensed_covariance.sh` ->
+`run_single_delensed_covariance.sh/.py` -> `merge_delensed_covariance.py`. Per-mode MC noise:
+100 realizations leave ~10% per mode in C_fid, but the ratio of averages dC/C cancels the
+common |white noise|^2 factor, so the log-derivative is far quieter than that.
+
 **`fisher_forecast_full_sky.py` is the textbook forecast formula**,
 `F_ij = sum_l (2l+1)/2 f_sky Tr[C_l^-1 dC_l/di C_l^-1 dC_l/dj]`. Same likelihood and same
 two powers of `C^-1` as `blocks`; only the mode counting changes - `blocks` weights each
@@ -455,27 +488,46 @@ fields - by the tower property the complete term must match it on average, which
 reports as "complete - truth (should be 0)". Files are method `"mixed_louis"`, suffix
 `_from_mixed_louis`, with the same `hessian` field (= the Louis information) so
 `load_hessian_directory(method = LOUIS_METHOD)` averages them; `--hessian_dir` infers louis mode
-from the files. **The chain is never thinned while it runs** (reworked 2026-09-21): every
-post-burn-in sweep is kept and differentiated, the UN-THINNED per-sweep `hessians` / `scores`
-go into the npz, and `load_hessian_directory` rebuilds each realization's information through
-`louis_information_from_terms`, which measures that realization's own stride the way
-`chain_analysis.prune_chains` does (`autocorrelation` -> `integrated_autocorrelation_time`
-Sokal windowing, or `first_zero_crossing_lag` under `LOUIS_USE_ZERO_CROSSING`) and builds the
-score covariance from the pruned chain; the complete term keeps every sweep (a mean is
-unbiased under correlation). So a file written before this rework is still merged correctly,
-and `louis_draws` is a RAW chain length - the merge prints the per-realization stride and
-pruned-sample count and warns below 10. `mixed_hessian.sh` has `louis=1` / `louis_draws` (50) /
-`louis_burn` (100) / `louis_time` / `louis_mem` (`run_single_mixed_hessian.sh` args 8-10, params
-from 11; a louis job carries the sampler stack too, MEASURED 2.5 GB peak RSS at nside 64, over
-the 2G the plain Hessian job asks for). **Draws are streamed, never accumulated:** a mixed pair
-is two `(nside, nside//2+1)` complex128 arrays (260 kB at nside 128, so thousands of sweeps
-would be GB), so `posterior_mixed_draws` takes an `on_draw` callback and `louis_realization`
-differentiates each sweep as it arrives - only the `(n, n)` Hessian and `(n,)` score survive it,
-and the npz therefore holds `hessians` / `scores`, never fields. The IAT is taken from the
-SCORE chain because the score is the functional being averaged (the field has no single IAT -
-each phi mode decorrelates at its own rate). Measured at nside 64 / 5': a stencil costs ~59
-Gibbs sweeps, so stencils dominate the job; two realizations gave score IATs of 1.9/2.9/2.2 and
-1.8/2.8/1.1, which is why the stride cannot be a per-box input. Louis's two-term split is NOT parametrization invariant, so the
+from the files. **Jobs store RAW sub-chains; burn-in, thinning and pooling are all merge-time
+choices** (reworked 2026-09-23). Each realization runs `louis_chains` (default 4) independent
+sub-chains, ONE SLURM JOB EACH (same `map_seed`/data, MCMC randomness from
+`chain_key(map_seed, sub_chain_index)` = `fold_in(fold_in(PRNGKey(map_seed), LOUIS_CHAIN_STREAM),
+index)`; the old `PRNGKey(map_seed)` root reused `load_sim`'s own `split(PRNGKey(seed), 100)` keys on
+sweep 1 - under partitionable threefry `split(k, n)[i]` and `fold_in(k, i)` both equal
+`split(k, 100)[i]`, so never fold in a small integer). Files are
+`hessian_<index>_chain_<sub>.npz` holding every sweep from the first (`n_burn = 0`) as per-sweep
+`hessians` / `scores` / `phi_accepts` plus `hessian_truth` and `sub_chain_index`; their `hessian`
+field is a provisional single-chain value the merge ignores. **Louis jobs checkpoint every sweep**
+(`louis_realization(on_sweep = ...)`; `run_single_mixed_hessian.py` rewrites its npz through a
+hidden `.<name>.tmp` + `os.replace`, so a file is never half written): a job killed at the wall
+clock keeps every finished sweep, and a running chain can be scp'd off and diagnosed. Files carry
+`finished` (False until the last write; absent = True for older files); `usable_louis_chains` uses
+unfinished sub-chains as the prefixes they are and sets aside any with < burn_in + 2 sweeps
+(both the merge and `louis_chain_diagnostics` call it). `load_louis_chains` groups files by
+seed (refusing duplicate (seed, sub-chain) pairs and sub-chains that disagree on the truth Hessian);
+`louis_information_from_chains(sub_chains, burn_in)` cuts `burn_in` (`--louis_burn` /
+`chain_analysis.LOUIS_BURN_IN`, default 100), takes the Gelman-Rubin R-hat of every quantity across
+sub-chains (`louis_quantities`: each score component + the upper-triangle Hessian entries), thins
+EACH sub-chain by the MAX IAT over ALL those quantities (`louis_sub_chain_stride`; or
+`first_zero_crossing_lag` under `LOUIS_USE_ZERO_CROSSING`), pools the pruned sweeps, and builds BOTH
+the complete term and the score covariance from the pool. Why the Hessian entries count: on the
+2.5 uK / 5000-sweep run H[omch2,omch2] had mean IAT 27 vs <= 16 for any score component and set
+the stride in ~55-60% of chains, so score-only thinning under-thinned. Old single-chain files
+(job-side `n_burn` = 100, no `phi_accepts`, no `sub_chain_index`) still merge, as sub-chain 0 with
+R-hat NaN, the merge burn-in added on top. `louis_draws` is now a RAW length INCLUDING burn-in
+(default 150). The merge prints per-quantity R-hat mean/std, IAT mean/max and how often each
+quantity set the stride, flags realizations with max R-hat > `LOUIS_R_HAT_WARN` (1.1), and warns
+below 10 pooled samples. `chain_analysis.louis_chain_diagnostics` (called from `main` when
+`LOUIS_HESSIAN_DIR` is set) writes per-quantity ACF / IAT / raw-trace (burn-in marked) plots and
+IAT / R-hat / stride summaries to `lcdm_chain_plots/louis_diagnostics/`. `mixed_hessian.sh` has
+`louis=1` / `louis_draws` / `louis_chains` / `louis_time` / `louis_mem`
+(`run_single_mixed_hessian.sh` args 8-10 = louis, louis_draws, sub_chain_index; params from 11; a
+louis job carries the sampler stack too, MEASURED 2.5 GB peak RSS at nside 64). The chain still
+starts at phi = 0 (`map_joint` start commented out), so the burn-in matters. **Draws are streamed,
+never accumulated:** a mixed pair is two `(nside, nside//2+1)` complex128 arrays (260 kB at nside
+128), so `posterior_mixed_draws` takes an `on_draw` callback and `louis_realization` differentiates
+each sweep as it arrives - the npz holds `hessians` / `scores`, never fields. Measured at nside 64 /
+5': a stencil costs ~59 Gibbs sweeps, so stencils dominate the job. Louis's two-term split is NOT parametrization invariant, so the
 `mixed` and `logpdf` Hessians are different decompositions, not estimates of one number.
 
 **None of these is what the sampler targets.** Measured against the 50-map chains at nside 128 /
@@ -609,6 +661,9 @@ sampling_chains_TEMPLATE/{merge_delensed_spectra, compare_transfer_functions}.py
 delensed_spectrum.py ──► simulate.load_sim, map_joint, lense_flow (INVERSE_LENSE), fisher_forecast
                          (delensed_cls_at_params / delensing_alens / qe_noise_cl)
   ▲ measures R(l); fisher_forecast.load_transfer_function + apply_transfer_function consume it
+delensed_covariance.py ──► load_sim, map_joint, delensed_spectrum (_lense, band_average), fisher_forecast
+  ▲ empirical delensed covariance stencil; fisher_forecast.load_delensed_covariance consumes it
+sampling_chains_TEMPLATE/{run_single_delensed_covariance, merge_delensed_covariance}.py ──► delensed_covariance
 sampling_chains_TEMPLATE/chain_analysis.py ──► fisher_forecast.forecast (the "blocks" bound in the triangle plot)
 runtime_comparison_TEMPLATE/python_performance_test.py ──► map_joint (Julia data via juliacall)
 
