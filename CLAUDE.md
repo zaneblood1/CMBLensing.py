@@ -382,9 +382,18 @@ MEASURED ~40 s per realization at nside 64 / 5' (load_sim + `map_joint` + 3 lens
 The transfer-function route still takes the delensed block's theta dependence from CAMB. This
 replaces the block's signal outright, value AND finite difference. Per seed (common random
 numbers) and per stencil point `{theta_0, theta_0 +/- h_i}` a job runs `load_sim(theta)` ->
-`map_joint` -> inverse-lenses the NOISELESS lensed field by phi_hat -> stores
+`map_joint` -> inverse-lenses the NOISELESS lensed field -> stores
 `F conj(F) / nside^2` on the rfft grid (covar_matrix_from_cls's C_l / pix_width^2 units, origin
 zeroed; no Fourier weight belongs in a per-mode covariance - w_k enters only the Fisher sum).
+**Delensing phi (changed 2026-09-25):** the field is delensed by the Wiener-filtered TRUE phi,
+`W phi(theta)` with `W = C_phi / (C_phi + N_phi)` per mode built once at theta_0 (CAMB C_phi on
+the grid, the box's physical QE N0 `qe_noise_matrix`, beam 0) and held for every stencil point
+(`DELENSING_PHI = "wiener_truth"`), because phi_hat's reconstruction noise wrecked the finite
+differences. map_joint still runs at every point, only for the phi moments. Job files record
+`delensing_phi`; files without it (every run before 2026-09-25, incl. the
+`delensed_covariance_output_*` dirs) are read as `"map_joint"` and the merge refuses to mix the
+two. The measured numbers quoted below for the `_shifted` / `_fiducial` runs are map_joint
+delensing.
 The unlensed and lensed fields are stored too: with common random numbers the empirical
 UNLENSED dC/C must equal CAMB's per mode exactly, which the merge checks (measured 6e-13 on
 the smoke test). `h_i = step_sigma * PARAM_SIGMA` (default 0.5 sigma, wider than the forecast's
@@ -421,7 +430,46 @@ unmeasured and get no phi information (forecast sets their +/- blocks = centre).
 `fisher_forecast --empirical_phi_noise` (needs `--delensed_covariance` with moments; refuses
 `--nphi_source measured`) builds the phi block per mode as `C_phi(theta) + N_k(theta_0)`
 (frozen, default) or, with `--vary_nphi`, `C_phi(theta) / r_k^2(theta)` from each stencil
-point's own per-mode measurement. `merge_delensed_covariance.py --smooth_delta_ell` (off by
+point's own per-mode measurement. `fisher_forecast --empirical_phi_block` (exclusive with
+`--empirical_phi_noise`; `--vary_nphi` does not apply) instead replaces the WHOLE phi block by
+the merged realization-mean `<|phi_hat|^2>` per mode (`phi_auto_fid/plus/minus`) at every
+stencil point: no truth, no C_phi + N split, the phi analog of the empirical f_delensed block.
+`--freeze_phi_noise` (with `--empirical_phi_block`) uses the truth-correlated part
+`<B>^2/<D>` (= rho^2 C_phi, merged as `phi_signal_*`) at every point plus the noise part
+`<A> - <B>^2/<D>` (`phi_hat_noise_fid`) frozen at theta_0. Under `reconstruction = shifted`
+the finite differences also carry map_joint's own prior moving with theta (for a Wiener-like
+weight dln A ~ 2 dC/C instead of dC/(C + N) in noise-dominated modes). MEASURED 2026-09-24,
+5 uK, nside 128 / 2.5', 100 realizations, 0.25 sigma, same seeds, omch2 / theta / logA
+(chains: 2.89e-3 / 3.37e-3 / 2.25e-2, r(omch2, theta) ~ +0.38):
+
+    phi block                 shifted: s(om)  s(th)   s(lA)   r(om,th)   fiducial: s(om)  s(th)   s(lA)   r(om,th)
+    QE N_phi                           2.78e-3 2.81e-3 2.17e-2 +0.056              2.90e-3 3.71e-3 2.43e-2 +0.286
+    <|phi_hat|^2>                      9.87e-4 2.46e-3 1.96e-2 -0.472              3.32e-3 3.62e-3 2.00e-2 +0.377
+    <|phi_hat|^2>, noise frozen        1.64e-3 2.71e-3 2.08e-2 -0.240              3.24e-3 3.66e-3 2.32e-2 +0.298
+
+The `shifted` convention was what drove the wrong omch2-theta correlation (the QE row moves
++0.056 -> +0.286 from the f_delensed block alone). Per-mode varying N_eff
+(`--empirical_phi_noise --vary_nphi`) gives s(omch2) ~1e-4 in both runs. Run dirs:
+`sampling_chains/delensed_covariance_output_{shifted,fiducial,0dot25_sigma,0dot5_sigma}`
+(the last two predate the phi moments).
+
+**Jackknife of the empirical forecast (added 2026-09-25).** `fisher_forecast.forecast_jackknife(
+..., delensed_covariance, covariance_dir = None, **stencil_kwargs)` returns `(fisher, names,
+leave_one_out)`: the stencil (CAMB, C_n, N_phi, non-empirical blocks) is built once, then every
+per-mode grid is re-formed from each delete-one mean by `delensed_covariance.forecast_grids`
+(the one function the merge also uses - `leave_one_out_grids` streams (total - row_i)/(n - 1),
+re-applying the merge's `phi_smooth_delta_ell`), swapped into copies of the base blocks
+(`covariance_stencil(..., return_applier = True)`) and contracted. The job directory defaults
+to the merged npz's own and must hold the same seeds. Verified on the smoke data for the QE,
+varying-N_eff, `<|phi_hat|^2>` and frozen-noise phi blocks: central = `forecast()` exactly,
+each delete-one Fisher = a genuinely re-merged n - 1 directory to <= 1e-13. `chain_analysis.py`
+(LIVE copy only - the template's `get_forecasted_covariance` has diverged and has no
+delensed-covariance call) now calls it and inverts the samples (`inverted_leave_one_out`), so
+the triangle plot / report carry the jackknife error. MEASURED on
+`delensed_covariance_output_fiducial` (QE phi block, ~2 min): sigmas 2.9029e-3 +/- 0.54%,
+3.7147e-3 +/- 0.40%, 2.4251e-2 +/- 0.24%; r(omch2, theta) +0.286 +/- 0.006.
+
+`merge_delensed_covariance.py --smooth_delta_ell` (off by
 default) band-averages the moments before the ratio. Verified: injected
 `r^2 = C/(C + N_QE)` reproduces the QE-N_phi forecast to 2e-16 (frozen and varying). Output:
 `delensed_covariance_phi_noise.png`. The two `merge_delensed_covariance.py` copies differ only

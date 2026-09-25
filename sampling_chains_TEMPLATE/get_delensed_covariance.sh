@@ -12,8 +12,10 @@
 #Driver for the EMPIRICAL delensed covariance stencil. Spawns one job per seed: each runs
 #load_sim at theta_0 and at theta_0 +/- h_i for every parameter in derivative_params, ALL at
 #its one seed (common random numbers - across the stencil the fields differ only through the
-#cosmology), reconstructs phi with map_joint at each point, inverse-lenses the noiseless
-#lensed field by that estimate, and stores |rfft2|^2 / nside^2 on the rfft grid:
+#cosmology), inverse-lenses the noiseless lensed field by the Wiener-filtered TRUE phi,
+#W phi with W = C_phi / (C_phi + N_phi) held at theta_0 (CAMB C_phi, the box's physical QE N0),
+#and stores |rfft2|^2 / nside^2 on the rfft grid (map_joint still runs at each point, for the
+#phi moments below):
 #num_realizations x (1 + 2k) covariance matrices in total. The same jobs also store, per
 #rfft mode and stencil point, |phi_hat|^2, Re(phi_hat phi*) and |phi|^2, from which the merge
 #builds the per-mode empirical phi noise (fisher_forecast --empirical_phi_noise).
@@ -21,7 +23,7 @@
 #WHY THIS EXISTS: get_delensed_spectra.sh only corrects CAMB's delensed spectrum by a
 #transfer function R(l) (and optionally dR/dtheta); the forecast's delensed block and its
 #theta dependence are still CAMB's. This replaces the delensed block outright, value AND
-#finite difference, with what this codebase's lense_flow and map_joint produce - see
+#finite difference, with what this codebase's lense_flow produces - see
 #cmb_lensing/delensed_covariance.py.
 #
 #Once every job has finished, scp out_dir to the local machine and run:

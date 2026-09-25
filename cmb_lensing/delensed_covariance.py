@@ -15,8 +15,14 @@ central-difference stencil {theta_0, theta_0 +/- h_i e_i}, i over the sampled pa
        sqrt(C(theta)), and the instrument noise from its own key, so across the stencil the
        realizations differ ONLY through the cosmology - the Monte Carlo noise cancels in
        C(theta_0 + h) - C(theta_0 - h) instead of being amplified by 1 / (2h).
-    2. phi_hat(theta) = map_joint(d(theta)).
-    3. f_delensed(theta) = lense_flow(L(phi) f [NOISELESS], phi_hat, INVERSE).
+    2. phi_hat(theta) = map_joint(d(theta)) - used for the phi moments below, NOT to delens.
+    3. f_delensed(theta) = lense_flow(L(phi) f [NOISELESS], W phi(theta), INVERSE), with the
+       per-mode Wiener weight W = C_phi / (C_phi + N_phi) built ONCE at theta_0 (CAMB's C_phi
+       and the box's physical QE N0, fisher_forecast.qe_noise_matrix - the same N_phi the
+       forecast's phi block uses) and applied to the TRUE phi at every point
+       (DELENSING_PHI = "wiener_truth"). Files written before 2026-09-25 delensed by phi_hat
+       instead ("map_joint"); the reconstruction noise in phi_hat differenced badly across
+       the stencil, and the merge refuses to mix the two.
     4. C_delensed(theta)[k] = F[k] conj(F[k]) / nside^2, F = rfft2(f_delensed), on the rfft
        grid, with the [0, 0] origin set to zero.
 
@@ -60,7 +66,10 @@ for a Wiener-like MAP is C N / (C + N) - the leftover lensing that sets the DELE
 bounded by C even for a mode the data say nothing about. Ratios are formed from realization
 MEANS, as in phi_noise.py. Modes with <B> <= 0 carry no measurement and are flagged, not
 given an N. r^2 and N_eff are stored per mode at every stencil point, so the forecast can
-hold N_eff at theta_0 or use each point's own.
+hold N_eff at theta_0 or use each point's own. The merge also stores the mean <|phi_hat|^2>
+per mode at every point: the reconstruction's own auto-power, which needs no truth and no
+signal/noise split, and which --empirical_phi_block uses as the whole phi block - the phi
+analog of the delensed T block.
 
 WHAT DELENSING MEANS HERE. As in delensed_spectrum.py: the NOISELESS lensed field is
 inverse-lensed, and the forecast adds the isotropic C_n back on - covariance_blocks's
@@ -88,7 +97,8 @@ from cmb_lensing.fisher_forecast import (camb_cls_at_params, load_sim_cosmology,
                                          qe_noise_matrix)
 from cmb_lensing.delensed_spectrum import (LENSE_STEPS, DEFAULT_DELTA_ELL, PARAM_RTOL,
                                            band_edges, band_average, jackknife_mean,
-                                           _lense, _scalar_matrix, _same_cosmology)
+                                           _lense, _scalar_matrix, _to_fourier,
+                                           _same_cosmology)
 
 
 #the displacement h_i of the stencil, in units of PARAM_SIGMA. NOT fisher_forecast's 0.05
@@ -120,6 +130,12 @@ FIELD_KINDS = ("unlensed", "lensed", "delensed")
 #and the phi block C_phi / r^2 = C_phi + N_eff - see the module docstring for why the squared
 #difference |phi_hat - phi|^2 = A - 2B + D is NOT the N_phi that block needs
 PHI_MOMENTS = ("phi_auto", "phi_cross", "phi_true")
+
+#which phi the noiseless lensed field is delensed by (recorded in every job file; the merge
+#refuses to mix): "wiener_truth" = W phi_true with W = C_phi / (C_phi + N_phi) at theta_0, the
+#current method; "map_joint" = map_joint's phi_hat, what files without the field used
+DELENSING_PHI = "wiener_truth"
+LEGACY_DELENSING_PHI = "map_joint"
 
 REALIZATION_GLOB = "delensed_covariance_*.npz"
 MERGED_NAME = "delensed_covariance.npz"
@@ -195,13 +211,27 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
     result = dict(offsets = offsets, steps = steps,
                   point_params = np.array([[point[name] for name in PARAM_ORDER]
                                            for point in points]),
-                  inverse_error = np.nan, n_done = 0,
+                  inverse_error = np.nan, n_done = 0, delensing_phi = DELENSING_PHI,
                   **{kind: np.full(shape, np.nan) for kind in FIELD_KINDS + PHI_MOMENTS})
 
     def simulate(params):
         return load_sim(nside, theta_pix, "I", map_seed, **load_sim_cosmology(params),
                         uk_arcmin_t = noise_level, r = 0, nt = 0, l_knee = l_knee,
                         precomputed_cls = camb_cls_at_params(params))
+
+    #the per-mode Wiener weight the TRUE phi is scaled by before delensing, W = C_phi /
+    #(C_phi + N_phi) at theta_0 and held there for every stencil point: CAMB's C_phi on the
+    #grid and the box's physical QE N0 (no NPHI_FAC), both in covar_matrix_from_cls units.
+    #Beam 0 and no mask cutoff, as load_sim builds the data here
+    ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
+    cls_fid = camb_cls_at_params(param_ground)
+    phi_ells = jnp.arange(2, 2 + cls_fid["phi"].shape[0]).astype(jnp.float64)
+    cphi_fid = covar_matrix_from_cls(nside, pix_width, ell_grid, phi_ells, cls_fid["phi"],
+                                     origin_value = 0)
+    nphi_fid = qe_noise_matrix(cls_fid, nside, pix_width, ell_grid, noise_level, l_knee, 0.0,
+                               10_000)
+    total = cphi_fid + nphi_fid
+    wiener = jnp.where(total > 0, cphi_fid / jnp.where(total > 0, total, 1.0), 0.0)
 
     if verbose:
         print(f"seed {map_seed}: nside {nside}, {theta_pix:g}', {noise_level:g} uK-arcmin, "
@@ -229,9 +259,12 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
             #the QE norm stays at theta_0, mirroring the forecast's constant_nphi
             data_set = data_set.replace(quadratic_estimate = fiducial_set.quadratic_estimate)
 
+        #phi_hat feeds the phi moments only; the delensing uses the Wiener-filtered truth
         _, phi_hat = map_joint(data_set, num_steps = map_joint_steps)
+        true_phi = _to_fourier(data_set.phi)
+        delensing_phi = true_phi.replace(scalar_matrix = wiener * true_phi.scalar_matrix)
         fields = dict(unlensed = data_set.unlensed_field, lensed = data_set.lensed_field,
-                      delensed = _lense(data_set.lensed_field, phi_hat, INVERSE_LENSE))
+                      delensed = _lense(data_set.lensed_field, delensing_phi, INVERSE_LENSE))
         for kind in FIELD_KINDS:
             result[kind][index] = grid_covariance(_scalar_matrix(fields[kind]), nside)
 
@@ -289,6 +322,9 @@ def _read_config(data):
     config["constant_nphi"] = effective_constant_nphi(
         config["reconstruction"],
         bool(data["constant_nphi"]) if "constant_nphi" in data.files else None)
+    #files written before the delensing phi was recorded delensed by map_joint's phi_hat
+    config["delensing_phi"] = (str(data["delensing_phi"]) if "delensing_phi" in data.files
+                               else LEGACY_DELENSING_PHI)
     return config
 
 
@@ -367,6 +403,9 @@ def load_covariance_directory(directory, verbose = True):
               f"map_joint {config['map_joint_steps']} steps, reconstruction at the "
               f"{config['reconstruction']} cosmology, N_phi "
               f"{'frozen at theta_0' if config['constant_nphi'] else 'rebuilt per point'}")
+        print(f"  delensed by: "
+              + ("the Wiener-filtered true phi, W = C_phi / (C_phi + N_phi) at theta_0"
+                 if config["delensing_phi"] == "wiener_truth" else "map_joint's phi_hat"))
         print(f"  stencil: {list(config['names'])} at +/- {config['step_sigma']:g} sigma")
         if not config["has_phi_moments"]:
             print(f"  no per-mode phi moments (files predate them): no empirical phi noise")
@@ -427,10 +466,101 @@ def phi_r_squared(auto, cross, true):
     """
     mean_a, mean_b, mean_d = (np.mean(np.asarray(rows, dtype = float), axis = 0)
                               for rows in (auto, cross, true))
+    return _r_squared_from_means(mean_a, mean_b, mean_d)
+
+
+def _r_squared_from_means(mean_a, mean_b, mean_d):
+    """phi_r_squared on already-averaged moments."""
     with np.errstate(divide = "ignore", invalid = "ignore"):
         r_squared = mean_b**2 / (mean_a * mean_d)
     measured = (mean_b > 0) & np.isfinite(r_squared) & (r_squared > 0)
     return np.where(measured, r_squared, np.nan), measured
+
+
+def _smooth_phi_rows(rows, ell_grid, weights, smooth_delta_ell):
+    """The per-realization phi moments, band-averaged in |L| annuli of `smooth_delta_ell`
+    first when it is > 0 (merge_delensed_covariance.py --smooth_delta_ell); as-is otherwise."""
+    if smooth_delta_ell <= 0:
+        return rows
+    smooth_index = _band_index(ell_grid, band_edges(ell_grid, smooth_delta_ell))
+    return {moment: np.array([[_band_smooth(point, smooth_index, weights)
+                               for point in realization] for realization in value])
+            for moment, value in rows.items()}
+
+
+def forecast_grids(means, centre, plus, minus):
+    """Every per-mode grid fisher_forecast reads, from realization-MEAN arrays.
+
+    `means` maps any of FIELD_KINDS (and PHI_MOMENTS, if present, already smoothed if
+    smoothing was asked for) to its (1 + 2k, nside, nside // 2 + 1) realization mean. Returns
+    `{key}_fid` / `{key}_plus` / `{key}_minus` for the three field kinds and, with the phi
+    moments, for phi_r2, phi_measured, phi_auto, phi_signal and phi_hat_noise.
+
+    The ONE place these grids are formed from averages: merge_delensed_covariance calls it on
+    the full means, leave_one_out_grids on each delete-one mean, so the jackknife goes through
+    exactly the computation the forecast's central value did.
+    """
+    grids = {}
+    values = {kind: means[kind] for kind in FIELD_KINDS if kind in means}
+    if all(moment in means for moment in PHI_MOMENTS):
+        mean_a, mean_b, mean_d = (means[moment] for moment in PHI_MOMENTS)
+        values["phi_r2"], values["phi_measured"] = _r_squared_from_means(mean_a, mean_b,
+                                                                         mean_d)
+        #the realization-mean auto-power of the reconstruction itself, <|phi_hat|^2> per
+        #mode (--empirical_phi_block), and its split phi_hat = rho phi + n into the
+        #truth-correlated part rho^2 C = <B>^2 / <D> and the uncorrelated part
+        #Var(n) = <A> - <B>^2 / <D>, both in phi_hat's own units (--freeze_phi_noise). The
+        #origin (D = 0) is set to zero like every other block
+        values["phi_auto"] = mean_a
+        with np.errstate(divide = "ignore", invalid = "ignore"):
+            values["phi_signal"] = np.where(mean_d > 0, mean_b**2 / mean_d, 0.0)
+        values["phi_hat_noise"] = mean_a - values["phi_signal"]
+    for key, value in values.items():
+        grids[f"{key}_fid"] = value[centre]
+        grids[f"{key}_plus"] = value[plus]
+        grids[f"{key}_minus"] = value[minus]
+    return grids
+
+
+def _stencil_indices(offsets, n_names):
+    """(centre, plus, minus) point indices; stencil_points puts the centre first."""
+    assert not np.any(offsets[0])
+    return (0, [_point_index(offsets, i, +1) for i in range(n_names)],
+            [_point_index(offsets, i, -1) for i in range(n_names)])
+
+
+def leave_one_out_grids(directory, smooth_delta_ell = 0.0, verbose = True):
+    """(seeds, generator): the forecast grids with each realization of `directory` left out.
+
+    The generator yields forecast_grids(...) of the delete-one means, one realization at a
+    time and in `seeds` order - (total - row_i) / (n - 1), so no average is recomputed from
+    scratch. `smooth_delta_ell` must be what the merged npz the forecast reads was made with,
+    so that the n + 1 forecasts differ only in which realizations entered the means.
+    """
+    stacked, metadata = load_covariance_directory(directory, verbose = verbose)
+    n_real = metadata["n_realizations"]
+    if n_real < 3:
+        raise ValueError(f"{directory} holds {n_real} finished realization(s); a delete-one "
+                         f"jackknife needs at least 3")
+    centre, plus, minus = _stencil_indices(metadata["offsets"], len(metadata["names"]))
+
+    rows = {kind: np.asarray(stacked[kind]) for kind in FIELD_KINDS}
+    if metadata["has_phi_moments"]:
+        nside = metadata["nside"]
+        ell_grid, _ = gen_ell_grid(nside, metadata["theta_pix"])
+        weights = np.asarray(jnp.broadcast_to(
+            jnp.real(get_fourier_weights((nside, nside // 2 + 1))), (nside, nside // 2 + 1)))
+        rows.update(_smooth_phi_rows({moment: np.asarray(stacked[moment])
+                                      for moment in PHI_MOMENTS},
+                                     np.asarray(ell_grid), weights, smooth_delta_ell))
+    totals = {key: np.sum(value, axis = 0) for key, value in rows.items()}
+
+    def generate():
+        for drop in range(n_real):
+            means = {key: (totals[key] - rows[key][drop]) / (n_real - 1) for key in rows}
+            yield forecast_grids(means, centre, plus, minus)
+
+    return list(metadata["seeds"]), generate()
 
 
 def _merge_phi(stacked, metadata, merged, camb, centre, plus, minus, steps, band,
@@ -440,8 +570,11 @@ def _merge_phi(stacked, metadata, merged, camb, centre, plus, minus, steps, band
     Per mode and per stencil point: r^2 (phi_r_squared) from the realization means of the
     moments (optionally smoothed in |L| annuli first) and N_eff = C_phi (1/r^2 - 1), with
     C_phi CAMB's at that point. The forecast reads `phi_r2_*` / `phi_measured_*` at the centre
-    (frozen N_eff) or at every stencil point (theta-dependent N_eff). The band quantities
-    below are printed / plotted diagnostics only.
+    (frozen N_eff) or at every stencil point (theta-dependent N_eff) for
+    --empirical_phi_noise, `phi_auto_*` (the mean <|phi_hat|^2> per mode) for
+    --empirical_phi_block, and `phi_signal_*` = <B>^2/<D> with `phi_hat_noise_*` =
+    <A> - <B>^2/<D> for --empirical_phi_block --freeze_phi_noise. The band quantities below
+    are printed / plotted diagnostics only.
     """
     nside = metadata["nside"]
     n_real = len(stacked["phi_auto"])
@@ -458,23 +591,20 @@ def _merge_phi(stacked, metadata, merged, camb, centre, plus, minus, steps, band
                         max(float(np.max(np.abs(model))), np.finfo(float).tiny))
     merged["phi_crn_error"] = crn_error
 
-    rows = {moment: np.asarray(stacked[moment]) for moment in PHI_MOMENTS}
-    if smooth_delta_ell > 0:
-        smooth_index = _band_index(ell_grid, band_edges(ell_grid, smooth_delta_ell))
-        rows = {moment: np.array([[_band_smooth(point, smooth_index, weights)
-                                   for point in realization] for realization in value])
-                for moment, value in rows.items()}
+    rows = _smooth_phi_rows({moment: np.asarray(stacked[moment]) for moment in PHI_MOMENTS},
+                            np.asarray(ell_grid), np.asarray(weights), smooth_delta_ell)
+    means = {moment: np.mean(value, axis = 0) for moment, value in rows.items()}
+    #the phi grids the forecast reads - through forecast_grids, as the jackknife does
+    merged.update(forecast_grids(means, centre, plus, minus))
 
-    r_squared, measured = phi_r_squared(rows["phi_auto"], rows["phi_cross"],
-                                        rows["phi_true"])
+    #N_eff = C_phi (1/r^2 - 1) with CAMB's C_phi at each point - a diagnostic for the report
+    #and plots; the forecast rebuilds it from phi_r2 with its own C_phi
+    r_squared, measured = _r_squared_from_means(*(means[moment] for moment in PHI_MOMENTS))
     with np.errstate(invalid = "ignore", divide = "ignore"):
         noise = np.where(measured, camb["phi"] * (1.0 / r_squared - 1.0), np.nan)
-
-    for key, value in (("phi_r2", r_squared), ("phi_measured", measured),
-                       ("phi_noise", noise)):
-        merged[f"{key}_fid"] = value[centre]
-        merged[f"{key}_plus"] = value[plus]
-        merged[f"{key}_minus"] = value[minus]
+    merged["phi_noise_fid"] = noise[centre]
+    merged["phi_noise_plus"] = noise[plus]
+    merged["phi_noise_minus"] = noise[minus]
     merged["phi_smooth_delta_ell"] = float(smooth_delta_ell)
     merged["has_phi_moments"] = True
 
@@ -587,10 +717,7 @@ def merge_delensed_covariance(directory, delta_ell = DEFAULT_DELTA_ELL, smooth_d
 
     band_ells, _ = band(stacked["unlensed"][0, 0])
     #stencil_points puts the centre first
-    centre = 0
-    assert not np.any(offsets[centre])
-    plus = [_point_index(offsets, i, +1) for i in range(len(names))]
-    minus = [_point_index(offsets, i, -1) for i in range(len(names))]
+    centre, plus, minus = _stencil_indices(offsets, len(names))
 
     merged = dict(names = np.array(names), steps = steps, offsets = offsets,
                   point_params = point_params, param_names = np.array(PARAM_ORDER),
@@ -599,15 +726,17 @@ def merge_delensed_covariance(directory, delta_ell = DEFAULT_DELTA_ELL, smooth_d
                   worst_inverse_error = float(np.max(stacked["inverse_error"])),
                   band_ells = band_ells, delta_ell = delta_ell,
                   constant_nphi = metadata["constant_nphi"],
+                  delensing_phi = metadata["delensing_phi"],
                   **{key: metadata[key] for key in _CONFIG_KEYS})
 
     camb = _camb_grid_covariances(point_params, nside, pix_width, ell_grid)
 
+    #the field grids the forecast reads - through forecast_grids, as the jackknife does
+    merged.update(forecast_grids({kind: np.mean(stacked[kind], axis = 0)
+                                  for kind in FIELD_KINDS}, centre, plus, minus))
+
     for kind in FIELD_KINDS:
         mean = np.mean(stacked[kind], axis = 0)
-        merged[f"{kind}_fid"] = mean[centre]
-        merged[f"{kind}_plus"] = mean[plus]
-        merged[f"{kind}_minus"] = mean[minus]
 
         #band-level per-realization log-derivatives, jackknifed
         derivative, error, curvature = [], [], []

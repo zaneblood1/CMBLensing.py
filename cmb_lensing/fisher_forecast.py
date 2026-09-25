@@ -1679,7 +1679,9 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                        transfer_function = None, camb_lmax = None,
                        radial_mean = DEFAULT_RADIAL_MEAN,
                        constant_nphi = DEFAULT_CONSTANT_NPHI,
-                       delensed_covariance = None, empirical_phi_noise = False):
+                       delensed_covariance = None, empirical_phi_noise = False,
+                       empirical_phi_block = False, freeze_phi_noise = False,
+                       return_applier = False):
     """The CAMB / covariance-block stencil the flat-sky-grid forecasts are built from.
 
     Returns (names, steps, weights, blocks_fid, blocks_plus, blocks_minus): the sampled
@@ -1712,6 +1714,21 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
     block's N_phi by the per-mode map_joint noise measured in the same jobs - frozen at
     theta_0 under constant_nphi, measured at every stencil point otherwise. See
     _apply_empirical_phi_noise.
+
+    `empirical_phi_block` (needs `delensed_covariance` with the merged `phi_auto_*` grids)
+    replaces the WHOLE phi block by the realization-mean auto-power of the reconstruction,
+    <|phi_hat|^2> per mode, at the centre and every +/- point - no truth, no C_phi + N split,
+    the phi analog of the empirical f_delensed block. `constant_nphi` does not apply to it:
+    each point's measured auto-power is used as it is. Exclusive with `empirical_phi_noise`.
+
+    `freeze_phi_noise` (with `empirical_phi_block` only) splits that auto-power into its
+    truth-correlated part <B>^2/<D> = rho^2 C_phi and its noise part <A> - <B>^2/<D> =
+    Var(n), and uses the signal part at every stencil point plus the noise part at theta_0:
+    the reconstruction's own noise, in its own units, held fixed in theta.
+
+    `return_applier` (needs `delensed_covariance`) also returns the function that swaps a set
+    of per-mode grids into copies of this stencil's base blocks, which forecast_jackknife
+    calls once per leave-one-out set.
     """
     if spectra not in SPECTRA_MODES:
         raise ValueError(f"spectra must be one of {SPECTRA_MODES}, got {spectra!r}")
@@ -1761,6 +1778,17 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
         check_transfer_derivatives(transfer, param_ground, names, path = transfer_function)
 
     empirical = None
+    if empirical_phi_block and empirical_phi_noise:
+        raise ValueError("pass empirical_phi_block OR empirical_phi_noise, not both: the "
+                         "first replaces the whole phi block by <|phi_hat|^2>, the second "
+                         "only its noise term")
+    if freeze_phi_noise and not empirical_phi_block:
+        raise ValueError("freeze_phi_noise only applies to empirical_phi_block: it freezes "
+                         "the noise part of the measured <|phi_hat|^2>")
+    if empirical_phi_block and delensed_covariance is None:
+        raise ValueError("empirical_phi_block needs delensed_covariance: <|phi_hat|^2> is "
+                         "measured by the get_delensed_covariance.sh jobs and lives in the "
+                         "same merged npz")
     if empirical_phi_noise and delensed_covariance is None:
         raise ValueError("empirical_phi_noise needs delensed_covariance: the per-mode phi "
                          "noise is measured by the same get_delensed_covariance.sh jobs and "
@@ -1788,13 +1816,22 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
             raise ValueError(f"{delensed_covariance} carries no per-mode phi moments: its jobs "
                              f"predate them. Re-run get_delensed_covariance.sh and "
                              f"merge_delensed_covariance.py, or drop --empirical_phi_noise.")
+        if freeze_phi_noise and "phi_signal_fid" not in empirical:
+            raise ValueError(f"{delensed_covariance} carries no phi_signal / phi_hat_noise "
+                             f"grids. If its job files have the phi moments, re-run "
+                             f"merge_delensed_covariance.py to add them.")
+        if empirical_phi_block and "phi_auto_fid" not in empirical:
+            raise ValueError(f"{delensed_covariance} carries no phi_auto grids. If its job "
+                             f"files have the phi moments, re-run merge_delensed_covariance.py "
+                             f"to add them; otherwise re-run get_delensed_covariance.sh.")
         #the empirical f block carries whatever N_phi convention its map_joint runs used;
         #merged files from before the flag existed froze it only under "fiducial"
         measured_constant = (bool(empirical["constant_nphi"]) if "constant_nphi" in empirical
                              else str(empirical["reconstruction"]) == "fiducial")
         #(irrelevant under empirical_phi_noise: the phi block's N then IS the measurement,
         #frozen or not by constant_nphi, rather than a QE N^(0) to be matched against it)
-        if measured_constant != bool(constant_nphi) and not empirical_phi_noise:
+        if (measured_constant != bool(constant_nphi) and not empirical_phi_noise
+                and not empirical_phi_block):
             print(f"  WARNING: the empirical delensed covariance was measured with N_phi "
                   f"{'frozen at' if measured_constant else 'rebuilt away from'} theta_0, but "
                   f"this forecast {'freezes' if constant_nphi else 'varies'} the phi block's "
@@ -1900,34 +1937,88 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                 print(f"      N_phi moves over +/-h: max |dN/N| {float(jnp.max(drift)):.3%}, "
                       f"DOF-weighted mean {mean:.3%}")
 
+    def apply_empirical(grids, loud):
+        """The stencil's blocks with the empirical ones swapped in from `grids` - the merged
+        npz, or one leave-one-out set of the same per-mode grids
+        (delensed_covariance.leave_one_out_grids). Works on COPIES of the base blocks, so it
+        can be called once per jackknife sample; the configuration (names, realization count,
+        smoothing) is always read from the merged npz."""
+        fid = dict(blocks_fid)
+        plus = [dict(block) for block in blocks_plus]
+        minus = [dict(block) for block in blocks_minus]
+        measured_names = [str(name) for name in empirical["names"]]
+
+        fid["f_delensed"] = jnp.asarray(grids["delensed_fid"]) + noise
+        for i, name in enumerate(names):
+            j = measured_names.index(name)
+            plus[i]["f_delensed"] = jnp.asarray(grids["delensed_plus"][j]) + noise
+            minus[i]["f_delensed"] = jnp.asarray(grids["delensed_minus"][j]) + noise
+        if loud:
+            delensed_by = str(empirical.get("delensing_phi", "map_joint"))
+            print(f"  f_delensed block: EMPIRICAL ({int(empirical['n_realizations'])} "
+                  f"realizations, reconstruction at the {empirical['reconstruction']} "
+                  f"cosmology, delensed by "
+                  + ("the Wiener-filtered true phi" if delensed_by == "wiener_truth"
+                     else "map_joint's phi_hat")
+                  + f") from {delensed_covariance}")
+
+        if empirical_phi_block:
+            if freeze_phi_noise:
+                #signal part rho^2 C_phi at each point + the noise part Var(n) at theta_0; at
+                #the centre the sum is exactly <|phi_hat|^2>(theta_0)
+                frozen_noise = jnp.asarray(grids["phi_hat_noise_fid"])
+                fid["phi"] = jnp.asarray(grids["phi_signal_fid"]) + frozen_noise
+                for i, name in enumerate(names):
+                    j = measured_names.index(name)
+                    plus[i]["phi"] = jnp.asarray(grids["phi_signal_plus"][j]) + frozen_noise
+                    minus[i]["phi"] = jnp.asarray(grids["phi_signal_minus"][j]) + frozen_noise
+            else:
+                fid["phi"] = jnp.asarray(grids["phi_auto_fid"])
+                for i, name in enumerate(names):
+                    j = measured_names.index(name)
+                    plus[i]["phi"] = jnp.asarray(grids["phi_auto_plus"][j])
+                    minus[i]["phi"] = jnp.asarray(grids["phi_auto_minus"][j])
+            if loud:
+                smoothing = float(empirical.get("phi_smooth_delta_ell", 0.0))
+                print(f"  phi block: EMPIRICAL <|phi_hat|^2> per mode"
+                      + (" (signal part <B>^2/<D> at every stencil point, noise part frozen "
+                         "at theta_0)" if freeze_phi_noise else " at every stencil point")
+                      + " "
+                      f"({int(empirical['n_realizations'])} realizations, reconstruction at "
+                      f"the {empirical['reconstruction']} cosmology"
+                      + (f", smoothed over |L| bands of {smoothing:g}" if smoothing > 0
+                         else "")
+                      + "); constant_nphi does not apply")
+
+        if empirical_phi_noise:
+            _apply_empirical_phi_noise(grids, names, steps, param_ground, fid, plus, minus,
+                                       nside, pix_width, ell_grid, weights, camb_lmax,
+                                       constant_nphi, loud, measured_names = measured_names,
+                                       smoothing = float(empirical.get("phi_smooth_delta_ell",
+                                                                       0.0)))
+        return fid, plus, minus
+
     if empirical is not None:
         #the same analytic C_n covariance_blocks adds, on the same multipole axis
         cls_fid = camb_cls_at_params(param_ground, camb_lmax = camb_lmax)
         noise, _, _ = _instrument_matrices(nside, pix_width, ell_grid, noise_level, l_knee,
                                            beam_fwhm, l_cutoff,
                                            lmax_prime = 2 + cls_fid["total_TT"].shape[0])
-        measured = [str(name) for name in empirical["names"]]
-        blocks_fid["f_delensed"] = jnp.asarray(empirical["delensed_fid"]) + noise
-        for i, name in enumerate(names):
-            j = measured.index(name)
-            blocks_plus[i]["f_delensed"] = jnp.asarray(empirical["delensed_plus"][j]) + noise
-            blocks_minus[i]["f_delensed"] = jnp.asarray(empirical["delensed_minus"][j]) + noise
-        if verbose:
-            print(f"  f_delensed block: EMPIRICAL ({int(empirical['n_realizations'])} "
-                  f"realizations, reconstruction at the {empirical['reconstruction']} "
-                  f"cosmology) from {delensed_covariance}")
-
-    if empirical_phi_noise:
-        _apply_empirical_phi_noise(empirical, names, steps, param_ground, blocks_fid,
-                                   blocks_plus, blocks_minus, nside, pix_width, ell_grid,
-                                   weights, camb_lmax, constant_nphi, verbose)
+        result = apply_empirical(empirical, verbose)
+        if return_applier:
+            return (names, steps, weights) + result + (apply_empirical,)
+        return (names, steps, weights) + result
+    if return_applier:
+        raise ValueError("return_applier needs delensed_covariance: there is no empirical "
+                         "block to resample otherwise")
 
     return names, steps, weights, blocks_fid, blocks_plus, blocks_minus
 
 
 def _apply_empirical_phi_noise(empirical, names, steps, param_ground, blocks_fid, blocks_plus,
                                blocks_minus, nside, pix_width, ell_grid, weights, camb_lmax,
-                               constant_nphi, verbose):
+                               constant_nphi, verbose, measured_names = None,
+                               smoothing = None):
     """Rebuild the "phi" block at every stencil point from the per-mode empirical noise.
 
     The merged npz carries r_k^2 = <B>^2 / (<A><D>) per mode at theta_0 and theta_0 +/- h_i
@@ -1940,7 +2031,12 @@ def _apply_empirical_phi_noise(empirical, names, steps, param_ground, blocks_fid
     either end of that parameter's step) is given NO phi information: its +/- blocks are set
     equal to the centre, so its log-derivative is zero. Edits the block dicts in place.
     """
-    measured_names = [str(name) for name in empirical["names"]]
+    #the configuration comes separately when `empirical` is a leave-one-out grid set, which
+    #carries only the grids
+    if measured_names is None:
+        measured_names = [str(name) for name in empirical["names"]]
+    if smoothing is None:
+        smoothing = float(empirical.get("phi_smooth_delta_ell", 0.0))
 
     def cphi_at(params):
         cls = camb_cls_at_params(params, camb_lmax = camb_lmax)
@@ -1982,7 +2078,6 @@ def _apply_empirical_phi_noise(empirical, names, steps, param_ground, blocks_fid
         dropped.append(1 - float(jnp.sum(weights * mask) / jnp.sum(weights)))
 
     if verbose:
-        smoothing = float(empirical.get("phi_smooth_delta_ell", 0.0))
         print(f"  phi block: EMPIRICAL per-mode N_eff"
               + (f" (moments smoothed over |L| bands of {smoothing:g})" if smoothing > 0
                  else "")
@@ -2032,7 +2127,8 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
              phi_noise = None, transfer_function = None, camb_lmax = None,
              radial_mean = DEFAULT_RADIAL_MEAN,
              constant_nphi = DEFAULT_CONSTANT_NPHI, delensed_covariance = None,
-             empirical_phi_noise = False):
+             empirical_phi_noise = False, empirical_phi_block = False,
+             freeze_phi_noise = False):
     """Gaussian Fisher matrix for the sampled LCDM parameters on an nside x nside box.
 
     Args:
@@ -2100,6 +2196,13 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
                       measured in the same jobs, instead of CAMB C_phi + a QE N_phi.
                       constant_nphi = True freezes N_eff at theta_0; False uses the N_eff
                       measured at each stencil point, so dN_eff/dtheta enters the Fisher
+        empirical_phi_block: with delensed_covariance: the whole phi block becomes the
+                      measured <|phi_hat|^2> per mode at every stencil point (no truth, no
+                      C_phi + N split). Exclusive with empirical_phi_noise; constant_nphi
+                      does not apply
+        freeze_phi_noise: with empirical_phi_block: the block becomes the truth-correlated
+                      part <B>^2/<D> of <|phi_hat|^2> at each stencil point plus its noise
+                      part <A> - <B>^2/<D> at theta_0
 
     Returns:
         (fisher, names) - the n_sampled x n_sampled matrix and the parameter names in
@@ -2111,8 +2214,63 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
         nphi_source = nphi_source, qe_response = qe_response, phi_noise = phi_noise,
         transfer_function = transfer_function, camb_lmax = camb_lmax,
         radial_mean = radial_mean, constant_nphi = constant_nphi,
-        delensed_covariance = delensed_covariance, empirical_phi_noise = empirical_phi_noise)
+        delensed_covariance = delensed_covariance, empirical_phi_noise = empirical_phi_noise,
+        empirical_phi_block = empirical_phi_block, freeze_phi_noise = freeze_phi_noise)
     return _fisher_from_blocks(plus, minus, fid, steps, weights), names
+
+
+def forecast_jackknife(nside, theta_pix, noise_level, is_sampled, param_ground,
+                       delensed_covariance, covariance_dir = None, spectra = "delensed",
+                       l_knee = 0, beam_fwhm = 0, l_cutoff = 10_000, verbose = True,
+                       **stencil_kwargs):
+    """forecast(..., delensed_covariance = ...) plus its delete-one jackknife samples.
+
+    The empirical blocks are realization means, so the forecast built from them carries Monte
+    Carlo error. This recomputes the WHOLE forecast with each realization left out: the
+    per-mode grids are re-formed from the delete-one means by the same
+    delensed_covariance.forecast_grids the merge used, swapped into the same stencil (CAMB,
+    C_n, N_phi and every non-empirical block are built once), and contracted. The caller
+    inverts each sample and jackknifes whatever it needs - sigmas, correlations, angles -
+    through the full nonlinearity of inversion and marginalization.
+
+    `covariance_dir` is the directory of per-realization job files the merged npz was made
+    from; by default the npz's own directory (where merge_delensed_covariance.py writes it).
+    The two must hold the same realizations (checked by seed). Any smoothing the merge applied
+    (`phi_smooth_delta_ell`) is re-applied to every delete-one set. `stencil_kwargs` are
+    covariance_stencil's keyword arguments (nphi_source, camb_lmax, constant_nphi,
+    empirical_phi_block, freeze_phi_noise, empirical_phi_noise, ...).
+
+    Returns (fisher, names, leave_one_out) with `leave_one_out` an
+    (n_realizations, n_sampled, n_sampled) stack of delete-one Fisher matrices.
+    """
+    from cmb_lensing.delensed_covariance import leave_one_out_grids
+
+    if covariance_dir is None:
+        covariance_dir = os.path.dirname(os.path.abspath(delensed_covariance))
+    names, steps, weights, fid, plus, minus, apply_empirical = covariance_stencil(
+        nside, theta_pix, noise_level, is_sampled, param_ground, spectra, None, l_knee,
+        beam_fwhm, l_cutoff, verbose, delensed_covariance = delensed_covariance,
+        return_applier = True, **stencil_kwargs)
+    fisher = _fisher_from_blocks(plus, minus, fid, steps, weights)
+
+    merged = load_delensed_covariance(delensed_covariance)
+    seeds, samples = leave_one_out_grids(
+        covariance_dir, smooth_delta_ell = float(merged.get("phi_smooth_delta_ell", 0.0)),
+        verbose = False)
+    merged_seeds = [int(seed) for seed in merged["seeds"]]
+    if seeds != merged_seeds:
+        raise ValueError(f"{covariance_dir} holds realizations (seeds) different from those "
+                         f"{delensed_covariance} was merged from ({len(seeds)} vs "
+                         f"{len(merged_seeds)}); re-run merge_delensed_covariance.py on that "
+                         f"directory so the jackknife resamples the same set")
+
+    leave_one_out = []
+    for grids in samples:
+        loo_fid, loo_plus, loo_minus = apply_empirical(grids, False)
+        leave_one_out.append(_fisher_from_blocks(loo_plus, loo_minus, loo_fid, steps, weights))
+    if verbose:
+        print(f"  jackknife: {len(leave_one_out)} delete-one forecasts from {covariance_dir}")
+    return fisher, names, np.array(leave_one_out)
 
 
 # ── Shared post-processing ────────────────────────────────────────────────
@@ -2539,6 +2697,19 @@ def add_delensed_covariance_argument(parser):
                                "a quadratic-estimator N_phi. Frozen at the fiducial cosmology "
                                "by default; add --vary_nphi to use the N_eff measured at each "
                                "stencil point, i.e. a theta-dependent empirical noise")
+    parser.add_argument("--empirical_phi_block", action = "store_true",
+                        help = "with --delensed_covariance: replace the WHOLE phi block by the "
+                               "measured auto-power of map_joint's reconstruction, "
+                               "<|phi_hat|^2> per rfft mode, at the centre and every +/- "
+                               "stencil point (no ground truth, no C_phi + N split). "
+                               "Exclusive with --empirical_phi_noise; --vary_nphi does not "
+                               "apply to it")
+    parser.add_argument("--freeze_phi_noise", action = "store_true",
+                        help = "with --empirical_phi_block: split <|phi_hat|^2> into its "
+                               "truth-correlated part <B>^2/<D> (B = Re phi_hat phi*, "
+                               "D = |phi|^2) and its noise part <A> - <B>^2/<D>, and use the "
+                               "signal part at every stencil point plus the noise part at "
+                               "the fiducial cosmology")
     return parser
 
 
@@ -2581,6 +2752,8 @@ def run_config(spectra, args, names, **extra):
                 transfer_function = getattr(args, "transfer_function", None) or "",
                 delensed_covariance = getattr(args, "delensed_covariance", None) or "",
                 empirical_phi_noise = bool(getattr(args, "empirical_phi_noise", False)),
+                empirical_phi_block = bool(getattr(args, "empirical_phi_block", False)),
+                freeze_phi_noise = bool(getattr(args, "freeze_phi_noise", False)),
                 #0 means "not pinned", i.e. camb_lmax_for_grid chose it from the box
                 camb_lmax = getattr(args, "camb_lmax", None) or 0,
                 radial_mean = getattr(args, "radial_mean", DEFAULT_RADIAL_MEAN),
@@ -2624,6 +2797,10 @@ def main():
                         constant_nphi = not args.vary_nphi,
                         delensed_covariance = (args.delensed_covariance
                                                if spectra == "delensed" else None),
+                        empirical_phi_block = (args.empirical_phi_block
+                                               and spectra == "delensed"),
+                        freeze_phi_noise = (args.freeze_phi_noise
+                                            and spectra == "delensed"),
                         empirical_phi_noise = (args.empirical_phi_noise
                                                and spectra == "delensed"))
 

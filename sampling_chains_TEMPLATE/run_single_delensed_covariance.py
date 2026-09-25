@@ -3,8 +3,10 @@
 Spawned once per seed by get_delensed_covariance.sh. For its seed (one set of common random
 numbers) the job runs, at theta_0 and at theta_0 +/- h_i for every --params entry,
 
-    load_sim(theta) -> map_joint -> inverse-lense the NOISELESS lensed field by phi_hat
+    load_sim(theta) -> inverse-lense the NOISELESS lensed field by the Wiener-filtered TRUE
+                       phi, W phi with W = C_phi / (C_phi + N_phi) at theta_0
                     -> F conj(F) / nside^2 on the rfft grid
+    (map_joint still runs at every point, for the phi moments)
 
 and saves the 1 + 2k per-mode covariances (plus the unlensed and lensed ones, which validate
 the common random numbers), and the per-mode moments |phi_hat|^2, Re(phi_hat phi*), |phi|^2
@@ -86,6 +88,7 @@ def write(result, finished):
                  steps = result["steps"],
                  point_params = result["point_params"],
                  inverse_error = result["inverse_error"],
+                 delensing_phi = result["delensing_phi"],
                  n_done = result["n_done"],
                  finished = finished,
                  **{kind: result[kind] for kind in FIELD_KINDS + PHI_MOMENTS})

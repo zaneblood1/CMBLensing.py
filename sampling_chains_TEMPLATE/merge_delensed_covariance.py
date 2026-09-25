@@ -166,7 +166,8 @@ def main():
           f"--noise {merged['noise_level']:g} --l_knee {merged['l_knee']:g} "
           f"--params {' '.join(str(name) for name in merged['names'])} "
           f"--delensed_covariance {out_path}"
-          + (" [--empirical_phi_noise [--vary_nphi]]" if merged["has_phi_moments"] else ""))
+          + (" [--empirical_phi_noise [--vary_nphi] | --empirical_phi_block]"
+             if merged["has_phi_moments"] else ""))
 
 
 if __name__ == "__main__":
