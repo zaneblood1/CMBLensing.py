@@ -30,7 +30,9 @@ from cmb_lensing.delensed_covariance import (measure_delensed_covariance,
                                              realization_file_name, DEFAULT_STEP_SIGMA,
                                              RECONSTRUCTIONS, DEFAULT_RECONSTRUCTION,
                                              DEFAULT_CONSTANT_NPHI, FIELD_KINDS,
-                                             PHI_MOMENTS, effective_constant_nphi)
+                                             PHI_MOMENTS, effective_constant_nphi,
+                                             DEFAULT_ITERATIVE_DELENS)
+from cmb_lensing.fisher_forecast import QE_RESPONSE_SOURCES, DEFAULT_QE_RESPONSE
 from cmb_lensing.delensed_spectrum import LENSE_STEPS
 from cmb_lensing.precompute_camb_1d import GROUND_TRUTH, PARAM_ORDER
 
@@ -53,6 +55,14 @@ parser.add_argument("--constant_nphi", type = int, choices = (0, 1),
                     default = int(DEFAULT_CONSTANT_NPHI),
                     help = "--reconstruction shifted only: 1 keeps map_joint's QE norm N_phi "
                            "at theta_0 at every stencil point, 0 rebuilds it per point")
+parser.add_argument("--iterative_delens", type = int, choices = (0, 1),
+                    default = int(DEFAULT_ITERATIVE_DELENS),
+                    help = "1 iterates the delensing Wiener weight's N_phi against the "
+                           "delensed filter (fisher_forecast --iterative_delens), 0 one-shot")
+parser.add_argument("--qe_response", choices = QE_RESPONSE_SOURCES,
+                    default = DEFAULT_QE_RESPONSE,
+                    help = "the TT spectrum weighting the QE response in the delensing Wiener "
+                           "weight's N_phi (fisher_forecast --qe_response)")
 parser.add_argument("--out_dir", type = str, required = True)
 parser.add_argument("--params", nargs = "+", required = True, choices = PARAM_ORDER,
                     help = "the parameters to difference")
@@ -89,6 +99,8 @@ def write(result, finished):
                  point_params = result["point_params"],
                  inverse_error = result["inverse_error"],
                  delensing_phi = result["delensing_phi"],
+                 iterative_delens = result["iterative_delens"],
+                 qe_response = result["qe_response"],
                  n_done = result["n_done"],
                  finished = finished,
                  **{kind: result[kind] for kind in FIELD_KINDS + PHI_MOMENTS})
@@ -100,6 +112,7 @@ result = measure_delensed_covariance(
     args.params, step_sigma = args.step_sigma, l_knee = args.l_knee,
     map_joint_steps = args.map_joint_steps, reconstruction = args.reconstruction,
     constant_nphi = bool(args.constant_nphi),
+    iterative_delens = bool(args.iterative_delens), qe_response = args.qe_response,
     on_point = lambda partial: write(partial, finished = False))
 write(result, finished = True)
 

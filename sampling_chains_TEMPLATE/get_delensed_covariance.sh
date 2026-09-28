@@ -65,6 +65,18 @@ reconstruction=fiducial
 #forecast with --vary_nphi when this is 0 so both blocks share one convention
 constant_nphi=1
 
+#the N_phi inside the delensing Wiener weight W = C_phi / (C_phi + N_phi) (built once at
+#theta_0, applied to the true phi at every stencil point). Neither touches map_joint's own QE
+#norm. Run the forecast with the matching --iterative_delens / --qe_response so its phi block
+#sits on the same N_phi (it warns otherwise); the merge refuses to mix settings.
+#iterative_delens: 1 iterates N_phi against the delensed filter exactly as
+#fisher_forecast.iterative_delensing does (box QE matrix; the filter's TT goes from lensed to
+#CAMB's delensed TT at the converged Alens_L), 0 the one-shot lensed-filter N_phi
+iterative_delens=0
+#qe_response: which TT spectrum weights the QE response - "unlensed" (Hu & Okamoto) or
+#"gradient" (CAMB's lensed T-grad-T, Lewis, Challinor & Hanson 2011)
+qe_response=unlensed
+
 #one slurm job per realization
 num_realizations=100
 seed_prefix=246813
@@ -79,5 +91,5 @@ for ((m=0; m<num_realizations; m++)); do
     map_seed=$((seed_prefix + m))
     sbatch run_single_delensed_covariance.sh "$m" "$map_seed" "$nside" "$theta_pix" \
         "$noise_level" "$l_knee" "$map_joint_steps" "$step_sigma" "$reconstruction" \
-        "$constant_nphi" "$out_dir" $derivative_params
+        "$constant_nphi" "$iterative_delens" "$qe_response" "$out_dir" $derivative_params
 done

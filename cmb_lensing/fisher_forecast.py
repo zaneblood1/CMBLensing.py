@@ -1837,6 +1837,16 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                   f"this forecast {'freezes' if constant_nphi else 'varies'} the phi block's "
                   f"N_phi (constant_nphi = {constant_nphi}); the two blocks sit on different "
                   f"reconstruction conventions")
+        #the delensing Wiener weight's N_phi (files without the fields: one-shot, unlensed)
+        measured_iterative = bool(empirical.get("iterative_delens", False))
+        measured_response = str(empirical.get("qe_response", "unlensed"))
+        if ((measured_iterative, measured_response) != (bool(iterative_delens), qe_response)
+                and not empirical_phi_noise and not empirical_phi_block):
+            print(f"  WARNING: the empirical delensed covariance was delensed with an N_phi "
+                  f"built {'iteratively' if measured_iterative else 'one-shot'} with the "
+                  f"{measured_response} response, but this forecast's phi block uses "
+                  f"{'iterative' if iterative_delens else 'one-shot'} / {qe_response}; pass "
+                  f"--iterative_delens / --qe_response to match")
 
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
     #w_k = independent real DOF per rfft entry; get_fourier_weights indexes the half-axis

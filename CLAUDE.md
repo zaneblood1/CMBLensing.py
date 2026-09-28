@@ -392,7 +392,14 @@ the grid, the box's physical QE N0 `qe_noise_matrix`, beam 0) and held for every
 differences. map_joint still runs at every point, only for the phi moments. Job files record
 `delensing_phi`; files without it (every run before 2026-09-25, incl. the
 `delensed_covariance_output_*` dirs) are read as `"map_joint"` and the merge refuses to mix the
-two. The measured numbers quoted below for the `_shifted` / `_fiducial` runs are map_joint
+two. **W's N_phi flags (added 2026-09-28):** `iterative_delens=1` / `qe_response=gradient` in
+`get_delensed_covariance.sh` (job args 11-12; out_dir is now 13, params from 14) build W's
+N_phi through `fisher_forecast.frozen_reconstruction` (box QE matrix, i.e. the forecast's own
+`--iterative_delens` / `--qe_response` code); map_joint's QE norm is untouched. Both default
+off, which is bit-identical to the old W. Files record `iterative_delens` / `qe_response`
+(absent = False / "unlensed"), the merge refuses to mix them, and the forecast warns when its
+own flags differ. Measured at nside 64 / 5': iterating lowers N_phi ~1.5% (median), gradient
+raises it ~0.7%. The measured numbers quoted below for the `_shifted` / `_fiducial` runs are map_joint
 delensing.
 The unlensed and lensed fields are stored too: with common random numbers the empirical
 UNLENSED dC/C must equal CAMB's per mode exactly, which the merge checks (measured 6e-13 on

@@ -20,7 +20,10 @@ central-difference stencil {theta_0, theta_0 +/- h_i e_i}, i over the sampled pa
        per-mode Wiener weight W = C_phi / (C_phi + N_phi) built ONCE at theta_0 (CAMB's C_phi
        and the box's physical QE N0, fisher_forecast.qe_noise_matrix - the same N_phi the
        forecast's phi block uses) and applied to the TRUE phi at every point
-       (DELENSING_PHI = "wiener_truth"). Files written before 2026-09-25 delensed by phi_hat
+       (DELENSING_PHI = "wiener_truth"). That N_phi can be iterated against the delensed
+       filter and/or built with the lensed-gradient response, the forecast's
+       --iterative_delens / --qe_response (DEFAULT_ITERATIVE_DELENS; both default off, the
+       one-shot unlensed-response W). Files written before 2026-09-25 delensed by phi_hat
        instead ("map_joint"); the reconstruction noise in phi_hat differenced badly across
        the stencil, and the merge refuses to mix the two.
     4. C_delensed(theta)[k] = F[k] conj(F[k]) / nside^2, F = rfft2(f_delensed), on the rfft
@@ -94,7 +97,9 @@ from cmb_lensing.map_joint import map_joint
 from cmb_lensing.simulate import load_sim, covar_matrix_from_cls
 from cmb_lensing.precompute_camb_1d import PARAM_ORDER, PARAM_SIGMA
 from cmb_lensing.fisher_forecast import (camb_cls_at_params, load_sim_cosmology,
-                                         qe_noise_matrix)
+                                         qe_noise_matrix, cls_with_qe_response,
+                                         frozen_reconstruction, QE_RESPONSE_SOURCES,
+                                         DEFAULT_QE_RESPONSE)
 from cmb_lensing.delensed_spectrum import (LENSE_STEPS, DEFAULT_DELTA_ELL, PARAM_RTOL,
                                            band_edges, band_average, jackknife_mean,
                                            _lense, _scalar_matrix, _to_fourier,
@@ -136,6 +141,17 @@ PHI_MOMENTS = ("phi_auto", "phi_cross", "phi_true")
 #current method; "map_joint" = map_joint's phi_hat, what files without the field used
 DELENSING_PHI = "wiener_truth"
 LEGACY_DELENSING_PHI = "map_joint"
+
+#how the N_phi inside the delensing Wiener weight W = C_phi / (C_phi + N_phi) is built (both
+#recorded in every job file; the merge refuses to mix). `iterative_delens` runs
+#fisher_forecast.iterative_delensing on the box's QE matrix (nphi_source "covariance"): the
+#estimator's filter variance is iterated down from the lensed TT to CAMB's delensed TT at the
+#converged Alens_L, and N_phi is then the QE matrix with that quieter filter - exactly the
+#N_phi fisher_forecast --iterative_delens puts in its phi block. `qe_response` picks the TT
+#spectrum weighting the estimator's response (fisher_forecast.QE_RESPONSE_SOURCES; "gradient"
+#is CAMB's lensed T-grad-T). The defaults reproduce the one-shot, unlensed-response W every
+#file before these flags used, which is also how such files are read
+DEFAULT_ITERATIVE_DELENS = False
 
 REALIZATION_GLOB = "delensed_covariance_*.npz"
 MERGED_NAME = "delensed_covariance.npz"
@@ -184,13 +200,17 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
                                 map_joint_steps = 30,
                                 reconstruction = DEFAULT_RECONSTRUCTION,
                                 constant_nphi = DEFAULT_CONSTANT_NPHI,
+                                iterative_delens = DEFAULT_ITERATIVE_DELENS,
+                                qe_response = DEFAULT_QE_RESPONSE,
                                 on_point = None, verbose = True):
     """One seed through the whole stencil: simulate, reconstruct, delens, square.
 
     `names` are the parameters to differentiate (any order; stored as given). `constant_nphi`
     only matters for reconstruction = "shifted" ("fiducial" freezes N_phi along with
     everything else): True keeps map_joint's QE norm at theta_0 at every point, False rebuilds
-    it at each point's cosmology. See DEFAULT_CONSTANT_NPHI. `on_point`,
+    it at each point's cosmology. See DEFAULT_CONSTANT_NPHI. `iterative_delens` and
+    `qe_response` set how the N_phi of the delensing Wiener weight W is built (see
+    DEFAULT_ITERATIVE_DELENS); they touch only W, never map_joint's own QE norm. `on_point`,
     if given, is called with the partial result dict after every stencil point, so the job
     can checkpoint - a job killed at the wall clock keeps every finished point.
 
@@ -202,6 +222,9 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
     if reconstruction not in RECONSTRUCTIONS:
         raise ValueError(f"reconstruction must be one of {RECONSTRUCTIONS}, got "
                          f"{reconstruction!r}")
+    if qe_response not in QE_RESPONSE_SOURCES:
+        raise ValueError(f"qe_response must be one of {QE_RESPONSE_SOURCES}, got "
+                         f"{qe_response!r}")
     unknown = [name for name in names if name not in PARAM_ORDER]
     if unknown or not names:
         raise ValueError(f"names must be a non-empty subset of {PARAM_ORDER}, got {names}")
@@ -212,6 +235,7 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
                   point_params = np.array([[point[name] for name in PARAM_ORDER]
                                            for point in points]),
                   inverse_error = np.nan, n_done = 0, delensing_phi = DELENSING_PHI,
+                  iterative_delens = bool(iterative_delens), qe_response = qe_response,
                   **{kind: np.full(shape, np.nan) for kind in FIELD_KINDS + PHI_MOMENTS})
 
     def simulate(params):
@@ -222,14 +246,25 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
     #the per-mode Wiener weight the TRUE phi is scaled by before delensing, W = C_phi /
     #(C_phi + N_phi) at theta_0 and held there for every stencil point: CAMB's C_phi on the
     #grid and the box's physical QE N0 (no NPHI_FAC), both in covar_matrix_from_cls units.
-    #Beam 0 and no mask cutoff, as load_sim builds the data here
+    #Beam 0 and no mask cutoff, as load_sim builds the data here. N_phi comes from
+    #fisher_forecast.frozen_reconstruction on the box's QE matrix, so --iterative_delens and
+    #--qe_response run the forecast's own code; with both off it is exactly qe_noise_matrix
+    #with the lensed filter and the unlensed response, the W every earlier file used
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    cls_fid = camb_cls_at_params(param_ground)
+    cls_fid = cls_with_qe_response(param_ground, qe_response)
     phi_ells = jnp.arange(2, 2 + cls_fid["phi"].shape[0]).astype(jnp.float64)
     cphi_fid = covar_matrix_from_cls(nside, pix_width, ell_grid, phi_ells, cls_fid["phi"],
                                      origin_value = 0)
-    nphi_fid = qe_noise_matrix(cls_fid, nside, pix_width, ell_grid, noise_level, l_knee, 0.0,
-                               10_000)
+    if verbose:
+        print(f"delensing Wiener weight: box QE N_phi, {qe_response} response, "
+              + ("iterated against the delensed filter" if iterative_delens
+                 else "one-shot (lensed filter)"))
+    nphi_fid, _ = frozen_reconstruction(cls_fid, "delensed", nside, pix_width, ell_grid,
+                                        noise_level, l_knee, 0.0, 10_000,
+                                        bool(iterative_delens), verbose,
+                                        nphi_source = "covariance",
+                                        param_ground = param_ground,
+                                        qe_response = qe_response)
     total = cphi_fid + nphi_fid
     wiener = jnp.where(total > 0, cphi_fid / jnp.where(total > 0, total, 1.0), 0.0)
 
@@ -325,6 +360,12 @@ def _read_config(data):
     #files written before the delensing phi was recorded delensed by map_joint's phi_hat
     config["delensing_phi"] = (str(data["delensing_phi"]) if "delensing_phi" in data.files
                                else LEGACY_DELENSING_PHI)
+    #files written before the W flags existed built W one-shot with the unlensed response
+    config["iterative_delens"] = (bool(data["iterative_delens"])
+                                  if "iterative_delens" in data.files
+                                  else DEFAULT_ITERATIVE_DELENS)
+    config["qe_response"] = (str(data["qe_response"]) if "qe_response" in data.files
+                             else DEFAULT_QE_RESPONSE)
     return config
 
 
@@ -405,6 +446,8 @@ def load_covariance_directory(directory, verbose = True):
               f"{'frozen at theta_0' if config['constant_nphi'] else 'rebuilt per point'}")
         print(f"  delensed by: "
               + ("the Wiener-filtered true phi, W = C_phi / (C_phi + N_phi) at theta_0"
+                 + f" (box QE, {config['qe_response']} response, "
+                 + ("iterated" if config["iterative_delens"] else "one-shot") + ")"
                  if config["delensing_phi"] == "wiener_truth" else "map_joint's phi_hat"))
         print(f"  stencil: {list(config['names'])} at +/- {config['step_sigma']:g} sigma")
         if not config["has_phi_moments"]:
@@ -727,6 +770,8 @@ def merge_delensed_covariance(directory, delta_ell = DEFAULT_DELTA_ELL, smooth_d
                   band_ells = band_ells, delta_ell = delta_ell,
                   constant_nphi = metadata["constant_nphi"],
                   delensing_phi = metadata["delensing_phi"],
+                  iterative_delens = metadata["iterative_delens"],
+                  qe_response = metadata["qe_response"],
                   **{key: metadata[key] for key in _CONFIG_KEYS})
 
     camb = _camb_grid_covariances(point_params, nside, pix_width, ell_grid)
