@@ -19,7 +19,7 @@
 source ABSOLUTE_PATH_TO/miniconda3/etc/profile.d/conda.sh
 conda activate myenv
 
-#call the python script for a single realization; every argument from the 14th on is a
+#call the python script for a single realization; every argument from the 15th on is a
 #parameter to difference
 python3 ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/run_single_delensed_covariance.py \
     --realization_index "$1" \
@@ -34,5 +34,6 @@ python3 ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/run_single_delensed_covaria
     --constant_nphi "${10}" \
     --iterative_delens "${11}" \
     --qe_response "${12}" \
-    --out_dir "${13}" \
-    --params "${@:14}"
+    --score_noise "${13}" \
+    --out_dir "${14}" \
+    --params "${@:15}"

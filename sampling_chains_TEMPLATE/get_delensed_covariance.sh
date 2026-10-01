@@ -76,6 +76,14 @@ iterative_delens=0
 #qe_response: which TT spectrum weights the QE response - "unlensed" (Hu & Okamoto) or
 #"gradient" (CAMB's lensed T-grad-T, Lewis, Challinor & Hanson 2011)
 qe_response=unlensed
+#score_noise: path ON THE HPC to a merge_sampler_noise_estimate.py sampler_noise_estimate.npz
+#measured at THIS box (nside / theta_pix / noise_level / l_knee / cosmology). When set, W's
+#N_phi is that sampler noise bound 1/<F_phi> instead of the box QE matrix - the N_phi
+#fisher_forecast --nphi_source score --phi_noise <same npz> puts in its phi block. Requires
+#iterative_delens=0 (refused otherwise); qe_response then does not apply. Leave empty for
+#the QE matrix. The job files record the choice and a checksum of the matrix; the merge
+#refuses to mix, and the forecast warns if its --phi_noise is not the file used here
+score_noise=""
 
 #one slurm job per realization
 num_realizations=100
@@ -91,5 +99,6 @@ for ((m=0; m<num_realizations; m++)); do
     map_seed=$((seed_prefix + m))
     sbatch run_single_delensed_covariance.sh "$m" "$map_seed" "$nside" "$theta_pix" \
         "$noise_level" "$l_knee" "$map_joint_steps" "$step_sigma" "$reconstruction" \
-        "$constant_nphi" "$iterative_delens" "$qe_response" "$out_dir" $derivative_params
+        "$constant_nphi" "$iterative_delens" "$qe_response" "$score_noise" "$out_dir" \
+        $derivative_params
 done

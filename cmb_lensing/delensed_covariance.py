@@ -99,7 +99,8 @@ from cmb_lensing.precompute_camb_1d import PARAM_ORDER, PARAM_SIGMA
 from cmb_lensing.fisher_forecast import (camb_cls_at_params, load_sim_cosmology,
                                          qe_noise_matrix, cls_with_qe_response,
                                          frozen_reconstruction, QE_RESPONSE_SOURCES,
-                                         DEFAULT_QE_RESPONSE)
+                                         DEFAULT_QE_RESPONSE, load_score_noise,
+                                         check_phi_noise, nphi_checksum)
 from cmb_lensing.delensed_spectrum import (LENSE_STEPS, DEFAULT_DELTA_ELL, PARAM_RTOL,
                                            band_edges, band_average, jackknife_mean,
                                            _lense, _scalar_matrix, _to_fourier,
@@ -153,6 +154,16 @@ LEGACY_DELENSING_PHI = "map_joint"
 #file before these flags used, which is also how such files are read
 DEFAULT_ITERATIVE_DELENS = False
 
+#where W's N_phi comes from (recorded as `wiener_nphi_source`; the merge refuses to mix):
+#"covariance" = the box QE matrix built as above (iterative_delens / qe_response apply), what
+#every file before 2026-10-01 used and how files without the field are read; "score" = the
+#sampler noise bound 1/<F_phi> of a merge_sampler_noise_estimate.py npz (`score_noise` path),
+#the N_phi fisher_forecast --nphi_source score puts in its phi block. Its matrix is recorded
+#by checksum (`wiener_nphi_checksum`, fisher_forecast.nphi_checksum) so the forecast can tell
+#whether its own --phi_noise file is the one W was built from
+WIENER_NPHI_SOURCES = ("covariance", "score")
+DEFAULT_WIENER_NPHI_SOURCE = "covariance"
+
 REALIZATION_GLOB = "delensed_covariance_*.npz"
 MERGED_NAME = "delensed_covariance.npz"
 
@@ -202,8 +213,13 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
                                 constant_nphi = DEFAULT_CONSTANT_NPHI,
                                 iterative_delens = DEFAULT_ITERATIVE_DELENS,
                                 qe_response = DEFAULT_QE_RESPONSE,
+                                score_noise = None,
                                 on_point = None, verbose = True):
     """One seed through the whole stencil: simulate, reconstruct, delens, square.
+
+    `score_noise`, if given, is the path to a merge_sampler_noise_estimate.py npz: W's N_phi is
+    then its `nphi` matrix (the sampler noise bound) instead of the box QE matrix, so
+    `iterative_delens` must be off and `qe_response` does not apply (WIENER_NPHI_SOURCES).
 
     `names` are the parameters to differentiate (any order; stored as given). `constant_nphi`
     only matters for reconstruction = "shifted" ("fiducial" freezes N_phi along with
@@ -228,6 +244,20 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
     unknown = [name for name in names if name not in PARAM_ORDER]
     if unknown or not names:
         raise ValueError(f"names must be a non-empty subset of {PARAM_ORDER}, got {names}")
+    score = None
+    if score_noise:
+        if iterative_delens:
+            raise ValueError(
+                "score_noise cannot be combined with iterative_delens: the sampler noise "
+                "bound comes from the exact likelihood at the true phi, so iterating the QE "
+                "on top of it would apply the improvement twice (fisher_forecast refuses "
+                "--nphi_source score with --iterative_delens for the same reason)")
+        score = load_score_noise(score_noise)
+        check_phi_noise(score, nside, theta_pix, noise_level, l_knee, path = score_noise)
+        score_params = dict(zip(PARAM_ORDER, np.asarray(score["params"], dtype = float)))
+        if not _same_cosmology(score_params, param_ground):
+            raise ValueError(f"{score_noise} was measured at a different cosmology than "
+                             f"this stencil's theta_0")
 
     offsets, points, steps = stencil_points(param_ground, names, step_sigma)
     shape = (len(points), nside, nside // 2 + 1)
@@ -236,6 +266,9 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
                                            for point in points]),
                   inverse_error = np.nan, n_done = 0, delensing_phi = DELENSING_PHI,
                   iterative_delens = bool(iterative_delens), qe_response = qe_response,
+                  wiener_nphi_source = "score" if score is not None else "covariance",
+                  wiener_nphi_checksum = (nphi_checksum(score["nphi"]) if score is not None
+                                          else ""),
                   **{kind: np.full(shape, np.nan) for kind in FIELD_KINDS + PHI_MOMENTS})
 
     def simulate(params):
@@ -255,16 +288,24 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
     phi_ells = jnp.arange(2, 2 + cls_fid["phi"].shape[0]).astype(jnp.float64)
     cphi_fid = covar_matrix_from_cls(nside, pix_width, ell_grid, phi_ells, cls_fid["phi"],
                                      origin_value = 0)
-    if verbose:
-        print(f"delensing Wiener weight: box QE N_phi, {qe_response} response, "
-              + ("iterated against the delensed filter" if iterative_delens
-                 else "one-shot (lensed filter)"))
-    nphi_fid, _ = frozen_reconstruction(cls_fid, "delensed", nside, pix_width, ell_grid,
-                                        noise_level, l_knee, 0.0, 10_000,
-                                        bool(iterative_delens), verbose,
-                                        nphi_source = "covariance",
-                                        param_ground = param_ground,
-                                        qe_response = qe_response)
+    if score is not None:
+        #the sampler noise bound, already a full rfft-grid matrix in the same units
+        if verbose:
+            print(f"delensing Wiener weight: sampler noise bound N_phi from {score_noise} "
+                  f"({int(score['n_realizations'])} phi realizations, checksum "
+                  f"{result['wiener_nphi_checksum'][:12]})")
+        nphi_fid = jnp.asarray(score["nphi"])
+    else:
+        if verbose:
+            print(f"delensing Wiener weight: box QE N_phi, {qe_response} response, "
+                  + ("iterated against the delensed filter" if iterative_delens
+                     else "one-shot (lensed filter)"))
+        nphi_fid, _ = frozen_reconstruction(cls_fid, "delensed", nside, pix_width,
+                                            ell_grid, noise_level, l_knee, 0.0, 10_000,
+                                            bool(iterative_delens), verbose,
+                                            nphi_source = "covariance",
+                                            param_ground = param_ground,
+                                            qe_response = qe_response)
     total = cphi_fid + nphi_fid
     wiener = jnp.where(total > 0, cphi_fid / jnp.where(total > 0, total, 1.0), 0.0)
 
@@ -366,6 +407,12 @@ def _read_config(data):
                                   else DEFAULT_ITERATIVE_DELENS)
     config["qe_response"] = (str(data["qe_response"]) if "qe_response" in data.files
                              else DEFAULT_QE_RESPONSE)
+    #files written before the score option built W from the box QE matrix
+    config["wiener_nphi_source"] = (str(data["wiener_nphi_source"])
+                                    if "wiener_nphi_source" in data.files
+                                    else DEFAULT_WIENER_NPHI_SOURCE)
+    config["wiener_nphi_checksum"] = (str(data["wiener_nphi_checksum"])
+                                      if "wiener_nphi_checksum" in data.files else "")
     return config
 
 
@@ -444,10 +491,15 @@ def load_covariance_directory(directory, verbose = True):
               f"map_joint {config['map_joint_steps']} steps, reconstruction at the "
               f"{config['reconstruction']} cosmology, N_phi "
               f"{'frozen at theta_0' if config['constant_nphi'] else 'rebuilt per point'}")
+        if config["wiener_nphi_source"] == "score":
+            nphi_text = (f" (sampler noise bound N_phi, checksum "
+                         f"{config['wiener_nphi_checksum'][:12]})")
+        else:
+            nphi_text = (f" (box QE, {config['qe_response']} response, "
+                         + ("iterated" if config["iterative_delens"] else "one-shot") + ")")
         print(f"  delensed by: "
               + ("the Wiener-filtered true phi, W = C_phi / (C_phi + N_phi) at theta_0"
-                 + f" (box QE, {config['qe_response']} response, "
-                 + ("iterated" if config["iterative_delens"] else "one-shot") + ")"
+                 + nphi_text
                  if config["delensing_phi"] == "wiener_truth" else "map_joint's phi_hat"))
         print(f"  stencil: {list(config['names'])} at +/- {config['step_sigma']:g} sigma")
         if not config["has_phi_moments"]:
@@ -772,6 +824,8 @@ def merge_delensed_covariance(directory, delta_ell = DEFAULT_DELTA_ELL, smooth_d
                   delensing_phi = metadata["delensing_phi"],
                   iterative_delens = metadata["iterative_delens"],
                   qe_response = metadata["qe_response"],
+                  wiener_nphi_source = metadata["wiener_nphi_source"],
+                  wiener_nphi_checksum = metadata["wiener_nphi_checksum"],
                   **{key: metadata[key] for key in _CONFIG_KEYS})
 
     camb = _camb_grid_covariances(point_params, nside, pix_width, ell_grid)

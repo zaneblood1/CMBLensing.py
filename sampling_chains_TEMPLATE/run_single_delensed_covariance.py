@@ -63,6 +63,11 @@ parser.add_argument("--qe_response", choices = QE_RESPONSE_SOURCES,
                     default = DEFAULT_QE_RESPONSE,
                     help = "the TT spectrum weighting the QE response in the delensing Wiener "
                            "weight's N_phi (fisher_forecast --qe_response)")
+parser.add_argument("--score_noise", type = str, default = "",
+                    help = "path to a merge_sampler_noise_estimate.py sampler_noise_estimate.npz "
+                           "at this box: W's N_phi becomes that sampler noise bound instead of "
+                           "the box QE matrix (requires --iterative_delens 0; --qe_response "
+                           "then does not apply). Empty (default): the box QE matrix")
 parser.add_argument("--out_dir", type = str, required = True)
 parser.add_argument("--params", nargs = "+", required = True, choices = PARAM_ORDER,
                     help = "the parameters to difference")
@@ -101,6 +106,8 @@ def write(result, finished):
                  delensing_phi = result["delensing_phi"],
                  iterative_delens = result["iterative_delens"],
                  qe_response = result["qe_response"],
+                 wiener_nphi_source = result["wiener_nphi_source"],
+                 wiener_nphi_checksum = result["wiener_nphi_checksum"],
                  n_done = result["n_done"],
                  finished = finished,
                  **{kind: result[kind] for kind in FIELD_KINDS + PHI_MOMENTS})
@@ -113,6 +120,7 @@ result = measure_delensed_covariance(
     map_joint_steps = args.map_joint_steps, reconstruction = args.reconstruction,
     constant_nphi = bool(args.constant_nphi),
     iterative_delens = bool(args.iterative_delens), qe_response = args.qe_response,
+    score_noise = args.score_noise or None,
     on_point = lambda partial: write(partial, finished = False))
 write(result, finished = True)
 

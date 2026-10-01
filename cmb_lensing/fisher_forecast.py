@@ -870,6 +870,14 @@ def load_score_noise(path):
     return merged
 
 
+def nphi_checksum(matrix):
+    """A short fingerprint of an N_phi matrix (sha1 of its float64 bytes), so files built
+    from a score-bound N_phi can be matched to the --phi_noise file a forecast uses."""
+    import hashlib
+    return hashlib.sha1(np.ascontiguousarray(np.asarray(matrix, dtype = np.float64))
+                        .tobytes()).hexdigest()
+
+
 def check_phi_noise(merged, nside, theta_pix, noise_level, l_knee, path = ""):
     """Refuse an N_L^eff measured on a different box than the forecast is running on.
 
@@ -1937,8 +1945,23 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
         #the delensing Wiener weight's N_phi (files without the fields: one-shot, unlensed)
         measured_iterative = bool(empirical.get("iterative_delens", False))
         measured_response = str(empirical.get("qe_response", "unlensed"))
-        if ((measured_iterative, measured_response) != (bool(iterative_delens), qe_response)
-                and not empirical_phi_noise and not empirical_phi_block):
+        #W's N_phi source (files without the field: the box QE matrix)
+        measured_source = str(empirical.get("wiener_nphi_source", "covariance"))
+        if empirical_phi_noise or empirical_phi_block:
+            pass
+        elif measured_source == "score" or nphi_source == "score":
+            if measured_source != nphi_source:
+                print(f"  WARNING: the empirical delensed covariance was delensed with a "
+                      f"W built from the {measured_source!r} N_phi, but this forecast's phi "
+                      f"block uses nphi_source = {nphi_source!r}; the two blocks sit on "
+                      f"different reconstruction noises")
+            elif (nphi_checksum(measured_phi_noise["nphi"])
+                  != str(empirical.get("wiener_nphi_checksum", ""))):
+                print(f"  WARNING: the empirical delensed covariance's W was built from a "
+                      f"DIFFERENT sampler noise bound than --phi_noise {phi_noise} (checksum "
+                      f"{str(empirical.get('wiener_nphi_checksum', ''))[:12]} vs "
+                      f"{nphi_checksum(measured_phi_noise['nphi'])[:12]})")
+        elif (measured_iterative, measured_response) != (bool(iterative_delens), qe_response):
             print(f"  WARNING: the empirical delensed covariance was delensed with an N_phi "
                   f"built {'iteratively' if measured_iterative else 'one-shot'} with the "
                   f"{measured_response} response, but this forecast's phi block uses "

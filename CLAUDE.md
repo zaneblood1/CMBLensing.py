@@ -407,13 +407,20 @@ differences. map_joint still runs at every point, only for the phi moments. Job 
 `delensing_phi`; files without it (every run before 2026-09-25, incl. the
 `delensed_covariance_output_*` dirs) are read as `"map_joint"` and the merge refuses to mix the
 two. **W's N_phi flags (added 2026-09-28):** `iterative_delens=1` / `qe_response=gradient` in
-`get_delensed_covariance.sh` (job args 11-12; out_dir is now 13, params from 14) build W's
+`get_delensed_covariance.sh` (job args 11-12) build W's
 N_phi through `fisher_forecast.frozen_reconstruction` (box QE matrix, i.e. the forecast's own
 `--iterative_delens` / `--qe_response` code); map_joint's QE norm is untouched. Both default
 off, which is bit-identical to the old W. Files record `iterative_delens` / `qe_response`
 (absent = False / "unlensed"), the merge refuses to mix them, and the forecast warns when its
 own flags differ. Measured at nside 64 / 5': iterating lowers N_phi ~1.5% (median), gradient
-raises it ~0.7%. The measured numbers quoted below for the `_shifted` / `_fiducial` runs are map_joint
+raises it ~0.7%. **`score_noise` (added 2026-10-01; job arg 13, out_dir 14, params from 15):**
+an HPC path to a `sampler_noise_estimate.npz` at the same box and cosmology makes W's N_phi
+that sampler noise bound (`WIENER_NPHI_SOURCES`; refused with `iterative_delens=1`;
+`qe_response` then unused). Files record `wiener_nphi_source` ("covariance" when absent) and
+`wiener_nphi_checksum` (`fisher_forecast.nphi_checksum`, sha1 of the matrix); the merge
+refuses to mix, and the forecast warns if `--nphi_source` disagrees with the file or, under
+`score`, if its `--phi_noise` matrix's checksum differs from W's. Every run before 2026-10-01
+(incl. the `_wiener_*_iterative_delens_qe_gradient` dirs) used the QE W. The measured numbers quoted below for the `_shifted` / `_fiducial` runs are map_joint
 delensing.
 The unlensed and lensed fields are stored too: with common random numbers the empirical
 UNLENSED dC/C must equal CAMB's per mode exactly, which the merge checks (measured 6e-13 on
