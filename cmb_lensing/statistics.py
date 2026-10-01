@@ -30,10 +30,10 @@ def primal_percent_diff_2d(ground, predict):
 
 #NOTE this does not really need to be JIT compiled because it is mostly used in analysis not
 #the core gradient descent code
-def primal_cross_correlation(field_1, field_2, theta_pix):
-    ell_1, cl_1 = primal_power_spectra(field_1, theta_pix)
-    _, cl_2 = primal_power_spectra(field_2, theta_pix)
-    _, cl_cross = primal_power_spectra(field_1, theta_pix, field_2)
+def primal_cross_correlation(field_1, field_2, theta_pix, lmax = 17_000, delta_l = 50):
+    ell_1, cl_1 = primal_power_spectra(field_1, theta_pix, lmax = lmax, delta_l = delta_l)
+    _, cl_2 = primal_power_spectra(field_2, theta_pix, lmax = lmax, delta_l = delta_l)
+    _, cl_cross = primal_power_spectra(field_1, theta_pix, field_2 = field_2, lmax = lmax, delta_l = delta_l)
     rho = cl_cross / jnp.sqrt(cl_1 * cl_2)
     return ell_1, rho
 
@@ -52,8 +52,13 @@ def primal_power_spectra(field_1, theta_pix, field_2 = None, delta_l = 50, lmax 
     field_1 = real_fourier_2_full_plane(field_1)
     field_2 = real_fourier_2_full_plane(field_2)
 
-    ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    ell_grid = real_fourier_2_full_plane(ell_grid)
+    #build the full fft2 plane |l| grid directly (both axes fftfreq, matching fft2's layout) so the
+    #DC mode is exactly zero; round tripping the rfft grid through fft2(irfft2(.)) left ~1e-12 there,
+    #which slipped the lone DC mode past the ell > 0 cut into its own (always +/-1) bin
+    pix_width = math.radians(theta_pix / ARCMIN_PER_DEGREE)
+    ell_1d = 2 * jnp.pi * jnp.fft.fftfreq(nside, pix_width)
+    lx, ly = jnp.meshgrid(ell_1d, ell_1d)
+    ell_grid = jnp.sqrt(lx**2 + ly**2)
 
     scale_factor = nside**2/pix_width**2
 

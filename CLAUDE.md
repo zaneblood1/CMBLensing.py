@@ -62,6 +62,12 @@ python merge_delensed_spectra.py --spectra_dir delensed_spectra_output  # -> tra
 python compare_transfer_functions.py --reference <dir_a> --shifted <dir_b>   # is R flat in theta?
 python -m cmb_lensing.fisher_forecast --spectra delensed --transfer_function <...>/transfer_function.npz
 
+# Sampler phi-noise bound N_bound = 1/<F_phi> (from a filled-in sampling_chains/)
+sbatch get_sampler_noise_estimate.sh                                    # one job per phi realization (+1 phi = 0 calibration)
+python merge_sampler_noise_estimate.py --noise_dir <scp'd out_dir> --map_joint_noise <delensed_covariance.npz>
+python -m cmb_lensing.fisher_forecast --nphi_source score --phi_noise <...>/sampler_noise_estimate.npz
+python -m cmb_lensing.sampler_noise_estimate --nside 64 --theta_pix 5 --n_phi 5 --n_draws 100 --out_dir <dir>   # local
+
 # Empirical delensed COVARIANCE stencil (replaces CAMB's delensed block outright; from a filled-in sampling_chains/)
 sbatch get_delensed_covariance.sh                                       # 100 jobs, one seed each, 1 + 2k points per job
 python merge_delensed_covariance.py --covariance_dir <scp'd out_dir>    # -> delensed_covariance.npz (+ .png)
@@ -272,6 +278,14 @@ continued past the cap with the same warning `_radial_cl_profile` prints for the
 At 2.5' the corner clears CAMB's range and the result is bit-for-bit unchanged; at 5' the cap raises
 `N_phi` by 1.6x at L = 100, 2.5x at L = 1000 and 10x at L = 3000, dropping the mean delensing
 efficiency from 0.99 to 0.68 - so any pre-2026-09-14 `hu_okamoto` number at 5' or coarser is stale.
+**`--iterative_delens` iterates the response too (2026-09-30):** under `qe_response = gradient`
+every step after the first builds the QE response from the DELENSED T-grad-T at the current
+Alens_L (`delensed_gradient_cls_at_params`, CAMB `get_lensed_gradient_cls(clpp = scaled)`;
+Alens = 1 reproduces `gradient_cls_at_params` to 3e-10), and the final N_phi uses it;
+`iterative_delensing` now returns `response_cls` as well. `unlensed` has nothing to iterate.
+Measured at nside 128 / 2.5': N_phi -2..-4% at L < 300, +1..+4% at L 300-2000, median
+unchanged. `fisher_forecast_from_1st_principles.py`'s own iteration loop still iterates only
+the filter, and `delensed_covariance` files written before this date built W the old way.
 `fisher_forecast_from_1st_principles.py` is deliberately NOT capped: it calls `qe_noise_spectrum`
 directly on its own `--ell_min` / `--ell_max` axis, whose whole point is to count modes past CAMB's
 range out to the Nyquist and the corner. `Alens_L` is frozen at the fiducial
@@ -481,6 +495,34 @@ default) band-averages the moments before the ratio. Verified: injected
 `r^2 = C/(C + N_QE)` reproduces the QE-N_phi forecast to 2e-16 (frozen and varying). Output:
 `delensed_covariance_phi_noise.png`. The two `merge_delensed_covariance.py` copies differ only
 in the default `--covariance_dir`.
+
+### The sampler phi-noise bound (`sampler_noise_estimate.py`, added 2026-10-01)
+
+N_bound(k) = 1 / <F_phi(k)>_phi, the Fisher information of the exact lensed likelihood
+p(d | phi) on the box, is a per-mode floor on the sampler's posterior-mean reconstruction noise
+(van Trees). diag F_phi = the per-mode variance, over data drawn at a FIXED phi, of
+`grad_phi_logpdf(f_WF(d, phi), phi)` (Fisher identity; the "mean field" -1/2 Tr[Sigma^-1 dSigma]
+is the draws' mean and drops out of the variance - Carron & Lewis 2017 eqs. 2.7-2.14). Use the
+UNMIXED logpdf. Normalization N_k = a_k^2 nside^2 / Var(score_k), a_k read off the prior's
+gradient (measures 1 to 1e-16). Calibration: at phi = 0 the bound must equal the QE N0 with the
+UNLENSED filter and response - 0.99-1.03 over L 500-2900 at nside 64 / 5', but 1.07 at L 225
+and 1.2-1.3 at L 75 (unexplained). Self-conjugate columns are excluded and filled in the merged
+matrix as N_QE x the band ratio. Wiener CG tol 1e-8 (map_joint's 1e-1 puts 4e-3 rms on the
+score). MEASURED nside 64 / 5' (5 phi x 100 draws): N_bound / N_QE-iterated (gradient response)
+0.90-0.94 at L 500-1100, ~0.8 at L 2500, at 2.5 / 5 / 10 uK alike - the physical origin of the
+0.9 N_phi factor that matched the chains. Cost ~0.4 s / draw at nside 64, ~1 s at nside 128,
+1.2 GB peak. Jobs store running score sums and checkpoint atomically every 5 draws; files
+`sampler_noise_NNNN.npz` + `sampler_noise_calibration.npz`, merged to
+`sampler_noise_estimate.npz` (`nphi` = the full matrix, plus `nphi_raw`, per-mode jackknife,
+bands, `nphi_qe` = load_sim's quadratic_estimate x NPHI_FAC, verified identical) and
+`_matrix.png` / `_spectra.png` against map_joint's N_eff (`--map_joint_noise`: a
+merge_delensed_covariance or merge_phi_noise npz). `fisher_forecast --nphi_source score
+--phi_noise <npz>` uses it in the phi block and (radially averaged) for Alens; refused with
+`--iterative_delens`, `--vary_nphi`, `--empirical_phi_noise`. It is a LOWER bound, so that
+forecast is slightly optimistic. Note the forecast's own "covariance" N_phi uses CAMB to
+camb_lmax_for_grid (6111 at 2.5'), which differs from load_sim's lmax-4000 QE by 0.2% median.
+Scripts (both `sampling_chains*/`, `.py` byte-identical): `get_sampler_noise_estimate.sh` ->
+`get_sampler_noise_estimate_1_phi_realization.sh/.py` -> `merge_sampler_noise_estimate.py`.
 
 **`fisher_forecast_full_sky.py` is the textbook forecast formula**,
 `F_ij = sum_l (2l+1)/2 f_sky Tr[C_l^-1 dC_l/di C_l^-1 dC_l/dj]`. Same likelihood and same

@@ -277,7 +277,14 @@ GRID_CLS_KEYS = {"scalar_TT": "tt", "total_TT": "tt_lensed", "phi": "pp"}
 #                source that matches the reconstruction this codebase performs. It needs a
 #                merged npz, passed as --phi_noise / measured_phi_noise; isotropic, and put
 #                on the rfft grid the same way "hu_okamoto" is
-NPHI_SOURCES = ("covariance", "hu_okamoto", "measured")
+#  "score"       the SAMPLER noise bound written by merge_sampler_noise_estimate.py: the
+#                per-mode N_bound = 1 / <F_phi> from the Fisher information of the exact
+#                lensed likelihood p(d | phi) on this box (cmb_lensing/sampler_noise_estimate.py),
+#                the floor the sampler's posterior-mean reconstruction cannot beat. A full 2D
+#                matrix, passed as --phi_noise; the phi block takes it as it is, and the 1D N_L
+#                behind Alens_L is its azimuthal average (as for "covariance"). It is a LOWER
+#                bound, so a forecast on it is slightly optimistic by construction
+NPHI_SOURCES = ("covariance", "hu_okamoto", "measured", "score")
 
 #whether the RECONSTRUCTION - N_phi, and for "delensed" the delensing fraction Alens_L - is
 #held at the fiducial cosmology across the finite-difference stencil or rebuilt at every
@@ -334,6 +341,12 @@ DEFAULT_CONSTANT_NPHI = True
 #peaks are not smoothed). The marginalized sigmas move < 0.35% (blocks) and < 0.03%
 #(1st_principles), because C_phi dominates N_phi over the modes carrying the Fisher weight
 #on this box; expect more on a noisier or finer box where N_phi is not subdominant
+#Under iterative_delens (added 2026-09-30) "gradient" is iterated too: every step after the
+#first builds the response from the DELENSED T-grad-T spectrum at the current Alens_L
+#(delensed_gradient_cls_at_params), since an iterated estimator reconstructs the residual
+#lensing of a partially delensed map, whose response is that map's own gradient spectrum
+#(Smith et al. 2012). "unlensed" is left alone: it is the leading-order response, which does
+#not depend on the lensing level at all, so there is nothing in it to iterate
 QE_RESPONSE_SOURCES = ("unlensed", "gradient")
 DEFAULT_QE_RESPONSE = "unlensed"
 
@@ -551,6 +564,33 @@ def gradient_cls_at_params(params, camb_lmax = None):
             f"CAMB and that DoLensing is on.")
 
     _GRADIENT_CACHE[key] = spectrum
+    return spectrum
+
+
+def delensed_gradient_cls_at_params(params, alens, camb_lmax = None):
+    """C_l^(T grad T) of the partially DELENSED map: gradient_cls_at_params with C_L^phiphi
+    scaled per multipole by `alens` (zero-based in L, multipoles past its end carrying its
+    last value, exactly as delensed_cls_at_params scales it for the delensed TT).
+
+    The response an iterated quadratic estimator needs: after delensing, the estimator
+    reconstructs the residual lensing of a map that still carries Alens_L of the lensing
+    power, so its response is the gradient spectrum of THAT map. Alens = 1 everywhere
+    reproduces gradient_cls_at_params; Alens = 0 gives CAMB's unlensed T-grad-T. ~5 s per
+    call and not memoized (alens changes at every iteration step).
+    """
+    camb_lmax = CAMB_LMAX if camb_lmax is None else int(camb_lmax)
+    pars, results = camb_results_at_params(params, camb_lmax = camb_lmax)
+    scaling = np.full(pars.max_l + 1, float(alens[-1]))
+    scaling[:len(alens)] = alens
+    #[L(L+1)]^2 C_L^phiphi / 2pi, zero-based to Params.max_l - the convention CAMB's clpp
+    #argument takes, and what get_partially_lensed_cls scales the same way
+    clpp = results.get_lens_potential_cls(lmax = pars.max_l)[:, 0] * scaling
+    gradient = results.get_lensed_gradient_cls(lmax = camb_lmax - 1, CMB_unit = "muK",
+                                               clpp = clpp)
+    spectrum = dl2cl(jnp.asarray(gradient[:, 0]), camb_lmax, camb_lmax)
+    if not bool(jnp.all(jnp.isfinite(spectrum))) or bool(jnp.any(spectrum <= 0)):
+        raise RuntimeError("CAMB returned a non-positive or non-finite delensed T-grad-T "
+                           "spectrum; the iterated response needs it positive everywhere")
     return spectrum
 
 
@@ -811,6 +851,22 @@ def load_phi_noise(path):
     if missing:
         raise ValueError(f"{path} is missing {missing}; it does not look like a "
                          f"merge_phi_noise.py product")
+    return merged
+
+
+def load_score_noise(path):
+    """The sampler noise bound N_bound = 1 / <F_phi> written by merge_sampler_noise_estimate.py
+    (nphi_source = "score"). Returns the whole npz as a dict; `nphi` is the rfft-grid matrix
+    the phi block uses and the rest is the configuration it was measured at."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"no sampler noise estimate at {path}. Produce one by running "
+            f"sampling_chains/get_sampler_noise_estimate.sh and then "
+            f"merge_sampler_noise_estimate.py --noise_dir <its out_dir>.")
+    merged = dict(np.load(path, allow_pickle = True))
+    if "nphi" not in merged or np.asarray(merged["nphi"]).ndim != 2:
+        raise ValueError(f"{path} has no 2D `nphi`; it does not look like a "
+                         f"merge_sampler_noise_estimate.py product")
     return merged
 
 
@@ -1274,14 +1330,18 @@ def qe_noise_cl(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
                 "still take their N_phi from the two analytic sources.")
         return measured_phi_noise_cl(measured_phi_noise, ells)
 
-    if nphi_source == "covariance":
-        matrix = qe_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee,
-                                 beam_fwhm, l_cutoff, filter_tt = filter_tt,
-                                 qe_response = qe_response)
+    if nphi_source in ("covariance", "score"):
+        if nphi_source == "score":
+            #a measured matrix, like "measured" it ignores filter_tt and qe_response
+            matrix = _score_matrix(measured_phi_noise)
+        else:
+            matrix = qe_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee,
+                                     beam_fwhm, l_cutoff, filter_tt = filter_tt,
+                                     qe_response = qe_response)
         weights = jnp.broadcast_to(jnp.real(get_fourier_weights((nside, nside // 2 + 1))),
                                    (nside, nside // 2 + 1))
         return _radial_cl_profile(matrix, ell_grid, weights, pix_width, ells,
-                                  label = "N_phi (covariance source)",
+                                  label = f"N_phi ({nphi_source} source)",
                                   radial_mean = radial_mean)
 
     #the noise shares the cls' axis, whatever camb_lmax built them on
@@ -1321,6 +1381,14 @@ def qe_noise_cl(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
     return interpolate_spectrum(ells, analysis_ells, nphi)
 
 
+def _score_matrix(score_noise):
+    """The "score" source's 2D N_phi (load_score_noise dict), as a jnp array."""
+    if score_noise is None:
+        raise ValueError("nphi_source = 'score' needs the merge_sampler_noise_estimate.py npz. "
+                         "Pass it as --phi_noise <path> (fisher_forecast).")
+    return jnp.asarray(score_noise["nphi"])
+
+
 def qe_noise_grid(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm, l_cutoff,
                   nphi_source, filter_tt = None, qe_response = DEFAULT_QE_RESPONSE,
                   measured_phi_noise = None, radial_mean = DEFAULT_RADIAL_MEAN):
@@ -1337,6 +1405,8 @@ def qe_noise_grid(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwh
         return qe_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee,
                                beam_fwhm, l_cutoff, filter_tt = filter_tt,
                                qe_response = qe_response)
+    if nphi_source == "score":
+        return _score_matrix(measured_phi_noise)
     nphi_cl = qe_noise_cl(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
                           l_cutoff, nphi_source, filter_tt = filter_tt,
                           qe_response = qe_response,
@@ -1380,18 +1450,26 @@ def iterative_delensing(param_ground, cls, nside, pix_width, ell_grid, noise_lev
     actually performs.
 
         Alens_0        = 1                          (no delensing: the filter sees the lensed map)
-        N_n            = QE noise with the delensed TT_n as the filter variance
+        N_n            = QE noise with the delensed TT_n as the filter variance and, for
+                         qe_response = "gradient", the delensed T-grad-T_n as the response
         Alens_{n+1}    = N_n / (C_phi + N_n)
         TT_{n+1}       = CAMB partially lensed at Alens_{n+1}   (delensed_cls_at_params)
+        TgradT_{n+1}   = CAMB T-grad-T at Alens_{n+1}   (delensed_gradient_cls_at_params)
 
-    The first iteration reproduces the one-shot answer exactly, so this can only improve on
-    it. Returns (alens, nphi_cl, delensed_tt, converged, iterations).
+    The response is iterated alongside the filter because the iterated estimator
+    reconstructs the residual lensing of the partially delensed map, whose response is that
+    map's own gradient spectrum. "unlensed" is the leading-order response and does not
+    depend on the lensing level, so it stays fixed. The first iteration reproduces the
+    one-shot answer exactly. Returns (alens, nphi_cl, delensed_tt, response_cls, converged,
+    iterations), where response_cls is `cls` carrying the final step's response (pass it
+    to qe_noise_* to rebuild N_phi with the converged estimator).
     """
     alens = np.ones(2 + cls["phi"].shape[0])
     filter_tt = cls["total_TT"]
+    response_cls = cls
     converged = False
     for iteration in range(1, max_iterations + 1):
-        nphi_cl = qe_noise_cl(cls, nside, pix_width, ell_grid, noise_level, l_knee,
+        nphi_cl = qe_noise_cl(response_cls, nside, pix_width, ell_grid, noise_level, l_knee,
                               beam_fwhm, l_cutoff, nphi_source, filter_tt = filter_tt,
                               qe_response = qe_response, radial_mean = radial_mean)
         updated = delensing_alens(cls, nphi_cl)
@@ -1399,6 +1477,9 @@ def iterative_delensing(param_ground, cls, nside, pix_width, ell_grid, noise_lev
         alens = updated
         filter_tt = delensed_cls_at_params(param_ground, alens,
                                            camb_lmax = camb_lmax)["delensed_TT"]
+        if qe_response == "gradient":
+            response_cls = dict(cls, gradient_TT = delensed_gradient_cls_at_params(
+                param_ground, alens, camb_lmax = camb_lmax))
         if verbose:
             print(f"    iteration {iteration}: mean efficiency "
                   f"{delensing_efficiency(cls['phi'], nphi_cl):.5f} (max Alens shift "
@@ -1411,7 +1492,7 @@ def iterative_delensing(param_ground, cls, nside, pix_width, ell_grid, noise_lev
         print(f"    WARNING: delensing iteration did not converge in {max_iterations} "
               f"steps (last shift {shift:.2e}); the reported Alens_L is the last iterate")
 
-    return alens, nphi_cl, filter_tt, converged, iteration
+    return alens, nphi_cl, filter_tt, response_cls, converged, iteration
 
 
 def _covar_linear(nside, pix_width, ell_grid, ells, cls):
@@ -1424,7 +1505,7 @@ def _covar_linear(nside, pix_width, ell_grid, ells, cls):
 
 
 def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
-                      noise_level, l_knee, beam_fwhm, l_cutoff, nphi):
+                      noise_level, l_knee, beam_fwhm, l_cutoff, nphi, cphi_fid):
     """The theta-dependent covariance block(s) whose Fisher information we are counting.
 
     Every block is built through the same covar_matrix_from_cls the sampler uses, so the
@@ -1457,7 +1538,8 @@ def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
 
     #C_phi + N_phi: a QE lensing reconstruction, i.e. phi measured to within the
     #quadratic estimator's noise rather than known exactly
-    phi_block = covar(cls["phi"], phi_ells) + nphi
+    #wiener = 1 #cphi_fid / (cphi_fid + nphi)
+    phi_block = (covar(cls["phi"], phi_ells) + nphi)
 
     if spectra == "delensed":
         #the complete-data f block, but paying for imperfect delensing: CAMB's own lensing
@@ -1628,6 +1710,12 @@ def frozen_reconstruction(cls_fid, spectra, nside, pix_width, ell_grid, noise_le
             "iteration exists to guess what a MAP reconstruction would achieve by quieting a "
             "quadratic estimator's filter; a measured N_eff already IS what the MAP achieved, "
             "so iterating it would re-apply the correction on top of the measurement.")
+    if iterative_delens and nphi_source == "score":
+        raise ValueError(
+            "iterative delensing cannot be combined with nphi_source = 'score'. The "
+            "iteration approximates what a likelihood reconstruction achieves by quieting a "
+            "quadratic estimator's filter; the score bound is computed from the exact "
+            "likelihood at the true phi, so iterating would apply the improvement twice.")
     if nphi_source not in NPHI_SOURCES:
         raise ValueError(f"nphi_source must be one of {NPHI_SOURCES}, got {nphi_source!r}")
     _check_qe_response(qe_response)
@@ -1646,13 +1734,14 @@ def frozen_reconstruction(cls_fid, spectra, nside, pix_width, ell_grid, noise_le
         if verbose:
             print(f"  iterating per-L delensing fraction against the {nphi_source} "
                   f"reconstruction noise:")
-        alens, nphi_cl, delensed_tt, converged, iterations = iterative_delensing(
-            param_ground, cls_fid, nside, pix_width, ell_grid, noise_level, l_knee,
-            beam_fwhm, l_cutoff, nphi_source, verbose = verbose,
-            qe_response = qe_response, camb_lmax = camb_lmax,
-            radial_mean = radial_mean)
-        #the iteration quiets BOTH the delensing and the phi block's estimator
-        nphi = qe_noise_grid(cls_fid, nside, pix_width, ell_grid, noise_level, l_knee,
+        alens, nphi_cl, delensed_tt, response_cls, converged, iterations = (
+            iterative_delensing(param_ground, cls_fid, nside, pix_width, ell_grid,
+                                noise_level, l_knee, beam_fwhm, l_cutoff, nphi_source,
+                                verbose = verbose, qe_response = qe_response,
+                                camb_lmax = camb_lmax, radial_mean = radial_mean))
+        #the iteration quiets BOTH the delensing and the phi block's estimator, with the
+        #final step's filter AND response
+        nphi = qe_noise_grid(response_cls, nside, pix_width, ell_grid, noise_level, l_knee,
                              beam_fwhm, l_cutoff, nphi_source, filter_tt = delensed_tt,
                              qe_response = qe_response, radial_mean = radial_mean)
         if verbose:
@@ -1737,10 +1826,11 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
     #dependence in it to differentiate - varying it would silently re-apply the same
     #spectrum at every stencil point and report a dN_phi/dtheta of exactly zero, which
     #looks like a physical result rather than the missing input it is
-    if not constant_nphi and nphi_source == "measured":
+    if not constant_nphi and nphi_source in ("measured", "score"):
         raise ValueError(
-            "constant_nphi = False cannot be combined with nphi_source = 'measured'. The "
-            "empirical N_L^eff from merge_phi_noise.py was measured at a single cosmology, "
+            f"constant_nphi = False cannot be combined with nphi_source = {nphi_source!r}. The "
+            "empirical N_phi (merge_phi_noise.py / merge_sampler_noise_estimate.py) was "
+            "measured at a single cosmology, "
             "so it carries no theta dependence to finite-difference and every stencil point "
             "would see the identical spectrum. Either freeze the reconstruction, or pick a "
             "source that is computed from the Cls ('covariance' or 'hu_okamoto').")
@@ -1763,15 +1853,22 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
     #nphi_source has played since 2026-09-14. It is independent of the transfer function
     #above: R corrects the delensed temperature spectrum, N_eff the reconstruction noise, and
     #a "delensed" run may carry either, both, or neither
+    #"score" rides the same --phi_noise slot: its file is the sampler noise bound's merged
+    #npz, carried through to qe_noise_grid / qe_noise_cl as measured_phi_noise
     measured_phi_noise = None
     if phi_noise is not None:
-        if nphi_source != "measured":
+        if nphi_source not in ("measured", "score"):
             raise ValueError(f"--phi_noise was given but nphi_source is {nphi_source!r}, so "
                              f"the measurement would be parsed and then ignored. Pass "
-                             f"--nphi_source measured to use it.")
-        measured_phi_noise = load_phi_noise(phi_noise)
+                             f"--nphi_source measured (merge_phi_noise.py) or score "
+                             f"(merge_sampler_noise_estimate.py) to use it.")
+        measured_phi_noise = (load_score_noise(phi_noise) if nphi_source == "score"
+                              else load_phi_noise(phi_noise))
         check_phi_noise(measured_phi_noise, nside, theta_pix, noise_level, l_knee,
                         path = phi_noise)
+    elif nphi_source == "score":
+        raise ValueError("nphi_source = 'score' needs --phi_noise <sampler_noise_estimate.npz> "
+                         "(merge_sampler_noise_estimate.py)")
 
     names, steps, fracs = sampled_names_and_steps(is_sampled, param_ground, step_fracs)
     if transfer is not None:
@@ -1793,10 +1890,10 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
         raise ValueError("empirical_phi_noise needs delensed_covariance: the per-mode phi "
                          "noise is measured by the same get_delensed_covariance.sh jobs and "
                          "lives in the same merged npz")
-    if empirical_phi_noise and nphi_source == "measured":
-        raise ValueError("empirical_phi_noise replaces N_phi with the per-mode measurement, "
-                         "so nphi_source = 'measured' (the band N_eff of merge_phi_noise.py) "
-                         "would be a second, conflicting empirical noise")
+    if empirical_phi_noise and nphi_source in ("measured", "score"):
+        raise ValueError(f"empirical_phi_noise replaces N_phi with the per-mode measurement, "
+                         f"so nphi_source = {nphi_source!r} would be a second, conflicting "
+                         f"empirical noise")
     if delensed_covariance is not None:
         if spectra != "delensed":
             raise ValueError(f"an empirical delensed covariance only applies to spectra = "
@@ -1895,8 +1992,11 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
         cls = (camb_cls_at_params(params, camb_lmax = camb_lmax) if alens is None
                else delensed_cls_at_params(params, alens, transfer = transfer,
                                            camb_lmax = camb_lmax))
+        cl_phi_fid = camb_cls_at_params(param_ground, camb_lmax = camb_lmax)["phi"] 
+        phi_ells_fid = jnp.arange(2, 2 + cl_phi_fid.shape[0]).astype(jnp.float64)
+        cphi_fid = covar_matrix_from_cls(nside, pix_width, ell_grid, phi_ells_fid, cl_phi_fid, origin_value = 0)
         return covariance_blocks(cls, spectra, nside, pix_width, ell_grid, noise_level,
-                                 l_knee, beam_fwhm, l_cutoff, nphi), nphi
+                                 l_knee, beam_fwhm, l_cutoff, nphi, cphi_fid), nphi
 
     if verbose:
         ells_on_grid = ell_grid[ell_grid > 0]
@@ -1916,8 +2016,13 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                     else " rebuilt at every stencil point (constant_nphi = False)")))
         if transfer is not None:
             apply_transfer_function(jnp.ones(1), jnp.ones(1), transfer, verbose = True)
-        if measured_phi_noise is not None:
+        if measured_phi_noise is not None and nphi_source == "measured":
             measured_phi_noise_cl(measured_phi_noise, np.array([100.0]), verbose = True)
+        elif nphi_source == "score":
+            print(f"  N_phi: sampler noise bound 1/<F_phi> from {phi_noise} "
+                  f"({int(measured_phi_noise['n_realizations'])} phi realizations, "
+                  f"{int(measured_phi_noise['n_draws_total'])} draws) - a LOWER bound on "
+                  f"the sampler's noise")
         print(f"  running {2 * len(names) + 1} CAMB calls"
               + ("..." if constant_nphi
                  else f" and {2 * len(names) + 1} quadratic-estimator evaluations..."))
@@ -2621,8 +2726,11 @@ def add_phi_noise_argument(parser):
                                "--spectra delensed, the delensing fraction Alens_L - come "
                                "from the noise map_joint's MAP reconstruction actually "
                                "achieves rather than from a quadratic estimator's N^(0). "
-                               "Rejected with any other --nphi_source, and rejected if it "
-                               "was measured on a different box than this run")
+                               "With --nphi_source score it is instead a "
+                               "merge_sampler_noise_estimate.py sampler_noise_estimate.npz: "
+                               "the sampler noise bound 1/<F_phi> per mode. Rejected with any "
+                               "other --nphi_source, and rejected if it was measured on a "
+                               "different box than this run")
     return parser
 
 
@@ -2825,7 +2933,7 @@ def main():
     if args.stability:
         step_stability(lambda fracs: run(step_fracs = fracs, verbose = False), METHOD)
 
-    save_outputs(fisher, covariance, names, METHOD, SUFFIX, LABEL,
+    save_outputs(fisher, covariance, names, METHOD, SUFFIX + f"_{args.noise}_uk", LABEL,
                  box_subtitle(args.spectra, args),
                  run_config(args.spectra, args, names,
                             iterative_delens = args.iterative_delens,

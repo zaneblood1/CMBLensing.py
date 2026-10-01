@@ -240,7 +240,7 @@ def hmc_step(x, always_accept, nside, mass_matrix,
 def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance, 
                         phi_covariance, field_covariance, mask, beam, 
                         mixing_d, mixing_g, mass_matrix,
-                        num_steps = 10, step_size = 0.05):
+                        num_steps = 10, step_size = 0.0175):
     
     #Get the mixed phi gradient at a certain mixed_phi value with all other
     #inputs held constant
@@ -1313,7 +1313,7 @@ if __name__ == "__main__":
     theta_pix = 2.5
     pol = "I"
     master_seed = 469134
-    noise_level = 5
+    noise_level = 2.5
     data_set = load_sim(nside, theta_pix, pol, master_seed, **ground_truth_params,
                         uk_arcmin_t = noise_level, r = 0, nt = 0, l_knee = 0)
 
@@ -1338,8 +1338,8 @@ if __name__ == "__main__":
     #a 44 - 50% acceptance rate
     proposal_sigmas = {}
     proposal_sigmas["ombh2"] = 1e-4
-    proposal_sigmas["omch2"] = 8e-4
-    proposal_sigmas["theta_MC_100"] = 3e-3
+    proposal_sigmas["omch2"] = 1.5e-3
+    proposal_sigmas["theta_MC_100"] = 2e-3
     proposal_sigmas["logA"] = 2e-2
     proposal_sigmas["ns"] = 5e-3
 
@@ -1362,13 +1362,13 @@ if __name__ == "__main__":
     # rotation_matrix = jnp.array([[1,     0.68,   -0.132], 
     #                              [0.68,     1,   -0.301], 
     #                              [-0.132, -0.301,     1]])
-    reparameterize_lcdm = True
+    reparameterize_lcdm = False
     # rotated_proposal_sigmas = {}
     # rotated_proposal_sigmas["alpha"] = 1e-3
     # rotated_proposal_sigmas["beta"] = 1e-3
     # rotated_proposal_sigmas["gamma"] = 1e-3
 
-    data = np.load("/home/zane-blood/Desktop/cmb_lensing/cmb_lensing/fisher_output/fisher_from_blocks.npz")
+    data = np.load("/home/zane-blood/Desktop/cmb_lensing/cmb_lensing/fisher_output/fisher_from_blocks_2dot5_uk.npz")
     rotation, rotated_sigmas = rotation_from_covariance(data["covariance"], list(data["names"]),
                                   sampled_names = [n for n in PARAM_ORDER if should_sample[n]])
 
