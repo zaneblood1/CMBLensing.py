@@ -51,6 +51,17 @@ tol=1e-8
 num_phi_realizations=20
 seed_prefix=369258
 
+#map_joint steps run on EVERY draw (0: no map_joint, the score only). Each job then also
+#stores map_joint's phi_MAP field at every draw (num_draws complex128 rfft grids: 13 MB per
+#job at nside 128 and 100 draws), and the merge averages over the phi realizations the
+#per-mode variance of phi_MAP over each job's (f, n) draws - map_joint's reconstruction
+#noise at FIXED phi - next to N_bound. map_joint dominates the run time once it is on:
+#MEASURED ~20 s per draw at nside 128 / 2.5' (8 local cores; ~5 s at nside 64 / 5') against
+#~1 s for the score alone, so 100 draws is ~35 minutes there and more on 4 slurm cores. The
+#wall time below replaces the single-job script's own whenever map_joint_steps > 0
+map_joint_steps=30
+map_joint_time="03:00:00"
+
 #1 adds one CALIBRATION job at phi = 0, where the bound must reproduce the quadratic
 #estimator's N0 with the unlensed filter and response exactly; the merge reports the ratio
 #per band. Strongly recommended for any new box
@@ -60,14 +71,20 @@ calibration=1
 out_dir="ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/sampler_noise_estimate_output"
 
 mkdir -p "$out_dir"
+time_flag=()
+if [ "$map_joint_steps" -gt 0 ]; then
+    time_flag=(--time="$map_joint_time")
+fi
 #every job uses a distinct seed; load_score_directory refuses duplicates, so a loop change
 #that repeats one fails the merge loudly instead of double counting a phi
 for ((m=0; m<num_phi_realizations; m++)); do
     map_seed=$((seed_prefix + m))
-    sbatch get_sampler_noise_estimate_1_phi_realization.sh "$m" "$map_seed" "$nside" \
-        "$theta_pix" "$noise_level" "$l_knee" "$num_draws" "$tol" 0 "$out_dir"
+    sbatch "${time_flag[@]}" get_sampler_noise_estimate_1_phi_realization.sh "$m" "$map_seed" "$nside" \
+        "$theta_pix" "$noise_level" "$l_knee" "$num_draws" "$tol" 0 "$out_dir" \
+        "$map_joint_steps"
 done
 if [ "$calibration" -eq 1 ]; then
-    sbatch get_sampler_noise_estimate_1_phi_realization.sh 0 "$((seed_prefix - 1))" \
-        "$nside" "$theta_pix" "$noise_level" "$l_knee" "$num_draws" "$tol" 1 "$out_dir"
+    sbatch "${time_flag[@]}" get_sampler_noise_estimate_1_phi_realization.sh 0 "$((seed_prefix - 1))" \
+        "$nside" "$theta_pix" "$noise_level" "$l_knee" "$num_draws" "$tol" 1 "$out_dir" \
+        "$map_joint_steps"
 fi

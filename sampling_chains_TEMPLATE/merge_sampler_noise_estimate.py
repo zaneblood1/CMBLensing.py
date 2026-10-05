@@ -15,7 +15,11 @@ Writes into that directory:
 
 The three N_phi compared: the sampler bound 1/<F_phi> from these jobs; map_joint's empirical
 N_eff (optional, from --map_joint_noise); and the 1st-principles quadratic estimator, i.e.
-load_sim's own quadratic_estimate without the NPHI_FAC preconditioning factor. Refuses job
+load_sim's own quadratic_estimate without the NPHI_FAC preconditioning factor. If the jobs
+stored map_joint's phi_MAP fields (map_joint_steps > 0 in get_sampler_noise_estimate.sh), the
+band report and the spectra plot also carry the average over phi realizations of the per-mode
+variance of phi_MAP over each job's (f, n) draws, raw and divided by the measured response^2
+(`phi_map_variance` / `phi_map_response` / `phi_map_noise` in the npz). Refuses job
 files that disagree on the box, the noise, the CG tolerance or the cosmology, and duplicate
 seeds; see cmb_lensing/sampler_noise_estimate.py.
 

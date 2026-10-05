@@ -528,6 +528,15 @@ merge_delensed_covariance or merge_phi_noise npz). `fisher_forecast --nphi_sourc
 `--iterative_delens`, `--vary_nphi`, `--empirical_phi_noise`. It is a LOWER bound, so that
 forecast is slightly optimistic. Note the forecast's own "covariance" N_phi uses CAMB to
 camb_lmax_for_grid (6111 at 2.5'), which differs from load_sim's lmax-4000 QE by 0.2% median.
+**`map_joint_steps` (added 2026-10-05; driver variable, job arg 11, default 30 in the driver,
+0 = off in the module):** every draw is also run through map_joint and its phi_MAP field is
+STORED (`phi_map`, `(n_draws, nside, nside//2+1)` complex128, 13 MB per job at nside 128 / 100
+draws; plus `phi_true`). The merge reduces each job to moments as it loads it and writes the
+phi-average of the per-mode variance of phi_MAP over the (f, n) draws (`phi_map_variance`),
+the response rho = sum Re(<phi_MAP> phi*) / sum |phi|^2 (`phi_map_response`) and
+Var / rho^2 (`phi_map_noise`), with band values + delete-one-phi errors in the report and
+spectra plot. MEASURED ~20 s per draw at nside 128 (vs ~1 s score only), so the driver passes
+`--time=$map_joint_time`. Var / rho^2 is biased low where rho is noisy (high L, few draws).
 Scripts (both `sampling_chains*/`, `.py` byte-identical): `get_sampler_noise_estimate.sh` ->
 `get_sampler_noise_estimate_1_phi_realization.sh/.py` -> `merge_sampler_noise_estimate.py`.
 

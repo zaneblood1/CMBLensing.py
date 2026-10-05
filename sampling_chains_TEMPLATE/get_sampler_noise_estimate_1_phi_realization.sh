@@ -2,7 +2,8 @@
 
 #SBATCH --time=00:30:00 #MEASURED ~1 s per draw at nside 128 / 2.5' plus ~20 s start-up, so
 #50 draws is a few minutes; a wide margin for a slower node. The job checkpoints every 5
-#draws, so one killed at the wall clock still merges with the draws it finished
+#draws, so one killed at the wall clock still merges with the draws it finished. With
+#map_joint_steps > 0 the driver overrides this on the sbatch command line (map_joint_time)
 #SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
 #SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
 #SBATCH --mem-per-cpu=2G #MEASURED 1.2 GB peak RSS at nside 128; raise for nside 256 and above
@@ -28,4 +29,5 @@ python3 ABSOLUTE_PATH_TO/cmb_lensing/sampling_chains/get_sampler_noise_estimate_
     --num_draws "$7" \
     --tol "$8" \
     --calibration "$9" \
-    --out_dir "${10}"
+    --out_dir "${10}" \
+    --map_joint_steps "${11:-0}"

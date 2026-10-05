@@ -49,6 +49,15 @@ there times the band ratio N_bound / N_QE at their |L|.
 IT IS A BOUND. The sampler's actual posterior-mean noise sits at or above N_bound; a forecast
 built on it is slightly optimistic by construction.
 
+MAP_JOINT AT FIXED PHI (optional, `map_joint_steps` > 0). The same draws are also handed to
+map_joint, and every phi_MAP(d) is STORED (`phi_map`, one rfft-grid field per draw). The merge
+forms, per phi realization, the per-mode variance of phi_MAP over the (f, n) draws - the auto
+spectrum of phi_MAP - <phi_MAP | phi>, i.e. map_joint's reconstruction noise with the phi
+signal (and anything else that is a function of phi alone) removed - and averages it over phi.
+That raw variance is the noise of a Wiener-like estimate, phi_MAP = rho phi + n, so the merge
+also measures rho_k = <phi_MAP phi*> / <|phi|^2> from the draw means and reports
+Var / rho^2, the number comparable to N_bound and to the QE's N0.
+
 Per-job files store running SUMS (sum of scores, sum of |score|^2) so a checkpoint is always a
 valid partial measurement; the variance is formed at the merge. HPC path:
 sampling_chains/get_sampler_noise_estimate.sh -> get_sampler_noise_estimate_1_phi_realization.sh
@@ -73,6 +82,7 @@ from cmb_lensing.lense_flow import *
 from cmb_lensing.simulate import load_sim, field_from_covar_single_key, covar_matrix_from_cls
 from cmb_lensing.gradients import grad_phi_logpdf
 from cmb_lensing.wiener_filter import wiener_filter
+from cmb_lensing.map_joint import map_joint
 from cmb_lensing.util import gen_ell_grid
 from cmb_lensing.precompute_camb_1d import GROUND_TRUTH, PARAM_ORDER
 from cmb_lensing.delensed_spectrum import _to_fourier, _lense
@@ -87,6 +97,8 @@ DEFAULT_DELTA_ELL = 100.0
 #rewrite the job file every this many draws (atomically), so a job killed at the wall clock
 #keeps every finished draw
 DEFAULT_CHECKPOINT_EVERY = 5
+#map_joint steps per draw for the stored phi_MAP fields; 0 skips map_joint altogether
+DEFAULT_MAP_JOINT_STEPS = 0
 #the draws' random stream, folded into the map seed's key. A large constant keeps the draws
 #off load_sim's own split(PRNGKey(seed), 100) keys: under partitionable threefry
 #fold_in(k, i) for a small i reproduces split(k, n)[i] (see CLAUDE.md, the Louis chains)
@@ -141,6 +153,12 @@ def prior_factor(data_set, phi):
         return np.real(-g_prior * cphi / phik)
 
 
+def map_joint_phi(data_set, data, num_steps):
+    """phi_MAP of map_joint run on `data` with the data set's own operators (rfft grid)."""
+    _, phi_map = map_joint(data_set.replace(data = data), num_steps = num_steps)
+    return np.asarray(_to_fourier(phi_map).scalar_matrix)
+
+
 def draw_key(map_seed, draw_index):
     return jax.random.fold_in(jax.random.fold_in(jax.random.PRNGKey(map_seed),
                                                  SCORE_DRAW_STREAM), draw_index)
@@ -149,14 +167,17 @@ def draw_key(map_seed, draw_index):
 def measure_score_sums(nside, theta_pix, noise_level, param_ground, map_seed,
                        n_draws = DEFAULT_N_DRAWS, l_knee = 0.0, tol = DEFAULT_TOL,
                        calibration = False, on_checkpoint = None,
-                       checkpoint_every = DEFAULT_CHECKPOINT_EVERY, verbose = True):
+                       checkpoint_every = DEFAULT_CHECKPOINT_EVERY,
+                       map_joint_steps = DEFAULT_MAP_JOINT_STEPS, verbose = True):
     """One phi (load_sim's at `map_seed`, or zero for `calibration`), `n_draws` data draws at
     it, and the running per-mode sums the merge forms the score variance from.
 
     Returns a dict: `score_sum` (complex, rfft grid), `score_abs2_sum`, `n_done`,
-    `prior_factor` (a_k), `phi_power` (|phi_k|^2 of the true phi, zero for calibration) and
-    `cphi` (the phi covariance matrix the jobs ran with). `on_checkpoint(result)` is called
-    every `checkpoint_every` draws and after the last one.
+    `prior_factor` (a_k), `phi_power` (|phi_k|^2 of the true phi, zero for calibration),
+    `phi_true` (that phi itself) and `cphi` (the phi covariance matrix the jobs ran with).
+    With `map_joint_steps` > 0 it also holds `phi_map`, the `(n_draws, nside, nside//2 + 1)`
+    stack of map_joint's phi_MAP at every draw (rows past `n_done` are still zero).
+    `on_checkpoint(result)` is called every `checkpoint_every` draws and after the last one.
     """
     data_set = simulate_base(nside, theta_pix, noise_level, map_seed, param_ground,
                              l_knee = l_knee)
@@ -168,13 +189,19 @@ def measure_score_sums(nside, theta_pix, noise_level, param_ground, map_seed,
     result = dict(score_sum = np.zeros(shape, dtype = complex),
                   score_abs2_sum = np.zeros(shape), n_done = 0, prior_factor = a,
                   phi_power = np.abs(np.asarray(phi.scalar_matrix))**2,
+                  phi_true = np.asarray(phi.scalar_matrix),
                   cphi = np.asarray(data_set.phi_covariance.scalar_matrix))
+    if map_joint_steps > 0:
+        result["phi_map"] = np.zeros((n_draws,) + shape, dtype = complex)
 
     start = time.time()
     for index in range(n_draws):
-        s = score(data_set, phi, draw_data(data_set, phi, draw_key(map_seed, index)), tol)
+        data = draw_data(data_set, phi, draw_key(map_seed, index))
+        s = score(data_set, phi, data, tol)
         result["score_sum"] += s
         result["score_abs2_sum"] += np.abs(s)**2
+        if map_joint_steps > 0:
+            result["phi_map"][index] = map_joint_phi(data_set, data, map_joint_steps)
         result["n_done"] = index + 1
         if verbose and (index == 0 or (index + 1) % 10 == 0 or index + 1 == n_draws):
             print(f"  draw {index + 1}/{n_draws}: {(time.time() - start) / (index + 1):.2f} "
@@ -204,8 +231,39 @@ def _config(data):
             for key in CONFIG_KEYS}
 
 
+def phi_map_moments(data):
+    """A job's stored phi_MAP fields reduced to their moments over the (f, n) draws:
+    `phi_map_mean` (complex, field units) and `phi_map_variance`, the unbiased (n - 1)
+    per-mode variance in covar_matrix_from_cls units (E|phi_k|^2 = nside^2 C_k)."""
+    n = int(data["n_done"])
+    fields = np.asarray(data["phi_map"])[:n]
+    mean = fields.mean(axis = 0)
+    variance = np.sum(np.abs(fields - mean)**2, axis = 0) / ((n - 1) * int(data["nside"])**2)
+    return dict(phi_map_mean = mean, phi_map_variance = variance)
+
+
+def phi_map_noise(jobs):
+    """map_joint's fixed-phi reconstruction noise from jobs carrying `phi_map_variance`.
+
+    Returns (variance, response, noise): the (n - 1)-weighted average over phi of the
+    per-mode variance; rho_k = sum_phi Re(<phi_MAP> phi*) / sum_phi |phi|^2; and
+    variance / rho^2 (NaN where rho <= 0, a mode map_joint did not recover).
+    """
+    weights = np.array([int(job["n_done"]) - 1 for job in jobs], dtype = float)
+    variance = np.tensordot(weights, np.array([job["phi_map_variance"] for job in jobs]),
+                            axes = 1) / weights.sum()
+    cross = sum(np.real(job["phi_map_mean"] * np.conj(job["phi_true"])) for job in jobs)
+    power = sum(np.abs(job["phi_true"])**2 for job in jobs)
+    with np.errstate(divide = "ignore", invalid = "ignore"):
+        response = np.where(power > 0, cross / power, np.nan)
+        noise = np.where(response > 0, variance / response**2, np.nan)
+    return variance, response, noise
+
+
 def load_score_directory(directory, verbose = True):
     """Every phi-realization job file in `directory` (calibration excluded), as dicts.
+    A job's stored `phi_map` stack is reduced to `phi_map_moments` as it is read, so the
+    fields of only one job are ever in memory.
 
     Refuses mixed configurations, mixed cosmologies and duplicate seeds. A file with fewer
     than two draws carries no variance and is set aside; an unfinished file with two or more
@@ -236,6 +294,9 @@ def load_score_directory(directory, verbose = True):
         if verbose and not bool(data.get("finished", True)):
             print(f"  {os.path.basename(path)} is unfinished: using its "
                   f"{int(data['n_done'])}/{int(data['n_draws'])} draws")
+        if "phi_map" in data:
+            data.update(phi_map_moments(data))
+            del data["phi_map"]
         jobs.append(data)
     if not jobs:
         raise ValueError(f"no job in {directory} has two or more draws yet")
@@ -410,6 +471,38 @@ def merge_sampler_noise(directory, delta_ell = DEFAULT_DELTA_ELL, verbose = True
                   params = params, param_names = np.array(PARAM_ORDER),
                   delta_ell = delta_ell, filled_modes = filled, **config)
 
+    #map_joint's fixed-phi noise, from the jobs that stored their phi_MAP fields
+    map_jobs = [job for job in jobs if "phi_map_variance" in job]
+    if map_jobs:
+        steps = {int(job["map_joint_steps"]) for job in map_jobs}
+        if len(steps) > 1:
+            raise ValueError(f"the phi_map fields in {directory} were run with different "
+                             f"map_joint_steps {sorted(steps)}; refusing to average them")
+        if verbose and len(map_jobs) < n_jobs:
+            print(f"  {n_jobs - len(map_jobs)} job(s) hold no phi_map fields: the map_joint "
+                  f"variance uses the other {len(map_jobs)}")
+        variance, response, noise = phi_map_noise(map_jobs)
+
+        def bands(subset):
+            v, _, n = phi_map_noise(subset)
+            return np.array([band_harmonic(np.where(use, m, np.nan), index, n_band)[0]
+                             for m in (v, n)])
+
+        band_variance, band_noise = bands(map_jobs)
+        n_map = len(map_jobs)
+        if n_map > 2:
+            loo = np.array([bands(map_jobs[:j] + map_jobs[j + 1:]) for j in range(n_map)])
+            variance_error, noise_error = np.sqrt((n_map - 1) / n_map * np.sum(
+                (loo - np.nanmean(loo, axis = 0))**2, axis = 0))
+        else:
+            variance_error = noise_error = np.full(n_band, np.nan)
+        merged.update(phi_map_variance = variance, phi_map_response = response,
+                      phi_map_noise = noise, band_phi_map_variance = band_variance,
+                      band_phi_map_variance_error = variance_error,
+                      band_phi_map_noise = band_noise,
+                      band_phi_map_noise_error = noise_error,
+                      phi_map_realizations = n_map, map_joint_steps = steps.pop())
+
     calibration_path = os.path.join(directory, CALIBRATION_NAME)
     if os.path.exists(calibration_path):
         calibration = dict(np.load(calibration_path, allow_pickle = True))
@@ -444,6 +537,22 @@ def _report(merged):
         cal = (f"   {merged['calibration_ratio'][b]:.3f}" if has_cal else "")
         print(f"  {ell:6.0f} {merged['band_count'][b]:5d}  {ratio:.3f} +/- {error:.3f}"
               f"{cal}")
+    if "band_phi_map_variance" not in merged:
+        return
+    print(f"\nmap_joint ({merged['map_joint_steps']} steps) at fixed phi: variance of phi_MAP "
+          f"over the (f, n) draws, averaged over {merged['phi_map_realizations']} phi "
+          f"realizations")
+    print(f"  {'L':>6s} {'modes':>5s}  {'Var / N_QE':>17s}  {'(Var / rho^2) / N_QE':>20s}  "
+          f"{'(Var / rho^2) / N_bound':>23s}")
+    for b, ell in enumerate(merged["band_ells"]):
+        variance = merged["band_phi_map_variance"][b]
+        if not merged["band_count"][b] or not np.isfinite(variance):
+            continue
+        qe, noise = merged["band_nphi_qe"][b], merged["band_phi_map_noise"][b]
+        print(f"  {ell:6.0f} {merged['band_count'][b]:5d}  {variance / qe:7.3f} +/- "
+              f"{merged['band_phi_map_variance_error'][b] / qe:5.3f}  {noise / qe:10.3f} +/- "
+              f"{merged['band_phi_map_noise_error'][b] / qe:5.3f}  "
+              f"{noise / merged['band_nphi'][b]:23.3f}")
 
 
 # ── Plots ──────────────────────────────────────────────────────────────────
@@ -544,12 +653,28 @@ def plot_spectra(merged, map_joint, path):
                    linestyle = ":", label = map_joint[1])
         bottom.plot(ells[good], mj_band[good] / qe[good], color = "C2", marker = "s",
                     markersize = 3, linestyle = ":", label = "map_joint / QE")
-    if "calibration_ratio" in merged:
-        cal = np.asarray(merged["calibration_ratio"])
-        good = keep & np.isfinite(cal)
-        bottom.plot(ells[good], cal[good], color = "C4", marker = ".", linestyle = "-",
-                    linewidth = 0.8, label = "calibration: phi = 0 bound / unlensed QE "
-                                             "(should be 1)")
+    if "band_phi_map_variance" in merged:
+        #map_joint at FIXED phi: the raw variance of phi_MAP over the (f, n) draws, and the
+        #same divided by the measured response^2 (the N comparable to the other curves)
+        for key, color, marker, label in (
+                ("variance", "C1", "^", r"Var$(\phi_{\rm MAP}\,|\,\phi)$"),
+                ("noise", "C4", "v", r"Var$(\phi_{\rm MAP}\,|\,\phi)\,/\,\rho^2$")):
+            band = np.asarray(merged[f"band_phi_map_{key}"])
+            error = np.asarray(merged[f"band_phi_map_{key}_error"])
+            good = keep & np.isfinite(band)
+            label = f"{label} ({int(merged['phi_map_realizations'])} phi)"
+            top.errorbar(ells[good], band[good], yerr = error[good], color = color,
+                         marker = marker, markersize = 3, capsize = 2, linestyle = "-",
+                         linewidth = 0.8, label = label)
+            bottom.errorbar(ells[good], band[good] / qe[good], yerr = error[good] / qe[good],
+                            color = color, marker = marker, markersize = 3, capsize = 2,
+                            linestyle = "-", linewidth = 0.8, label = label + " / QE")
+    # if "calibration_ratio" in merged:
+    #     cal = np.asarray(merged["calibration_ratio"])
+    #     good = keep & np.isfinite(cal)
+    #     bottom.plot(ells[good], cal[good], color = "C4", marker = ".", linestyle = "-",
+    #                 linewidth = 0.8, label = "calibration: phi = 0 bound / unlensed QE "
+    #                                          "(should be 1)")
     top.set_ylabel(r"$N_L$ (covar units, information-weighted band mean)")
     top.legend(fontsize = 8)
     bottom.set_xscale("log")
@@ -572,7 +697,8 @@ def _title(merged, map_joint):
 
 def run_job(out_dir, realization_index, map_seed, nside, theta_pix, noise_level,
             param_ground = None, n_draws = DEFAULT_N_DRAWS, l_knee = 0.0, tol = DEFAULT_TOL,
-            calibration = False, checkpoint_every = DEFAULT_CHECKPOINT_EVERY):
+            calibration = False, checkpoint_every = DEFAULT_CHECKPOINT_EVERY,
+            map_joint_steps = DEFAULT_MAP_JOINT_STEPS):
     """One job, checkpointed to `out_dir` - what the HPC python script calls."""
     param_ground = dict(GROUND_TRUTH) if param_ground is None else param_ground
     os.makedirs(out_dir, exist_ok = True)
@@ -581,7 +707,7 @@ def run_job(out_dir, realization_index, map_seed, nside, theta_pix, noise_level,
     metadata = dict(realization_index = realization_index, map_seed = map_seed,
                     nside = nside, theta_pix = theta_pix, noise_level = noise_level,
                     l_knee = l_knee, beam_fwhm = 0.0, tol = tol, n_draws = n_draws,
-                    calibration = bool(calibration),
+                    calibration = bool(calibration), map_joint_steps = map_joint_steps,
                     params = np.array([param_ground[name] for name in PARAM_ORDER]),
                     param_names = np.array(PARAM_ORDER))
 
@@ -590,11 +716,14 @@ def run_job(out_dir, realization_index, map_seed, nside, theta_pix, noise_level,
 
     print(f"{'calibration (phi = 0)' if calibration else f'phi realization {realization_index}'}"
           f": seed {map_seed}, nside {nside}, {theta_pix:g}', {noise_level:g} uK-arcmin, "
-          f"{n_draws} draws", flush = True)
+          f"{n_draws} draws"
+          + (f", map_joint ({map_joint_steps} steps) at every draw" if map_joint_steps else ""),
+          flush = True)
     measure_score_sums(nside, theta_pix, noise_level, param_ground, map_seed,
                        n_draws = n_draws, l_knee = l_knee, tol = tol,
                        calibration = calibration, on_checkpoint = checkpoint,
-                       checkpoint_every = checkpoint_every)
+                       checkpoint_every = checkpoint_every,
+                       map_joint_steps = map_joint_steps)
     print(f"wrote {path}")
     return path
 
@@ -609,6 +738,9 @@ def main():
     parser.add_argument("--n_phi", type = int, default = 5)
     parser.add_argument("--n_draws", type = int, default = DEFAULT_N_DRAWS)
     parser.add_argument("--tol", type = float, default = DEFAULT_TOL)
+    parser.add_argument("--map_joint_steps", type = int, default = DEFAULT_MAP_JOINT_STEPS,
+                        help = "> 0: also run map_joint (this many steps) on every draw and "
+                               "store its phi_MAP fields")
     parser.add_argument("--seed_prefix", type = int, default = 1235)
     parser.add_argument("--no_calibration", action = "store_true")
     parser.add_argument("--out_dir", type = str, required = True)
@@ -616,7 +748,8 @@ def main():
 
     common = dict(nside = args.nside, theta_pix = args.theta_pix,
                   noise_level = args.noise_level, n_draws = args.n_draws,
-                  l_knee = args.l_knee, tol = args.tol)
+                  l_knee = args.l_knee, tol = args.tol,
+                  map_joint_steps = args.map_joint_steps)
     if not args.no_calibration:
         run_job(args.out_dir, 0, args.seed_prefix - 1, calibration = True, **common)
     for m in range(args.n_phi):
