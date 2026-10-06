@@ -283,7 +283,10 @@ GRID_CLS_KEYS = {"scalar_TT": "tt", "total_TT": "tt_lensed", "phi": "pp"}
 #                the floor the sampler's posterior-mean reconstruction cannot beat. A full 2D
 #                matrix, passed as --phi_noise; the phi block takes it as it is, and the 1D N_L
 #                behind Alens_L is its azimuthal average (as for "covariance"). It is a LOWER
-#                bound, so a forecast on it is slightly optimistic by construction
+#                bound, so a forecast on it is slightly optimistic by construction.
+#                With map_joint_phi_noise (--map_joint_phi_noise) the SAME file's
+#                `nphi_map_joint` is used in its place: map_joint's fixed-phi reconstruction
+#                noise Var(phi_MAP | phi) / rho^2 per mode (jobs run with map_joint_steps > 0)
 NPHI_SOURCES = ("covariance", "hu_okamoto", "measured", "score")
 
 #whether the RECONSTRUCTION - N_phi, and for "delensed" the delensing fraction Alens_L - is
@@ -854,10 +857,16 @@ def load_phi_noise(path):
     return merged
 
 
-def load_score_noise(path):
+def load_score_noise(path, map_joint_phi_noise = False):
     """The sampler noise bound N_bound = 1 / <F_phi> written by merge_sampler_noise_estimate.py
     (nphi_source = "score"). Returns the whole npz as a dict; `nphi` is the rfft-grid matrix
-    the phi block uses and the rest is the configuration it was measured at."""
+    the phi block uses and the rest is the configuration it was measured at.
+
+    `map_joint_phi_noise` swaps `nphi` for the file's `nphi_map_joint` - the per-mode variance
+    of map_joint's phi_MAP over (f, n) draws at fixed phi, divided by the measured response^2
+    and averaged over phi - so everything downstream of the "score" source (the phi block,
+    Alens_L, the checksum) reads map_joint's noise instead of the bound. The bound stays
+    available as `nphi_bound`."""
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"no sampler noise estimate at {path}. Produce one by running "
@@ -867,6 +876,14 @@ def load_score_noise(path):
     if "nphi" not in merged or np.asarray(merged["nphi"]).ndim != 2:
         raise ValueError(f"{path} has no 2D `nphi`; it does not look like a "
                          f"merge_sampler_noise_estimate.py product")
+    if map_joint_phi_noise:
+        if "nphi_map_joint" not in merged:
+            raise ValueError(
+                f"{path} has no `nphi_map_joint`: its jobs did not store map_joint's phi_MAP "
+                f"fields. Re-run get_sampler_noise_estimate.sh with map_joint_steps > 0 and "
+                f"merge_sampler_noise_estimate.py, or drop --map_joint_phi_noise.")
+        merged["nphi_bound"] = merged["nphi"]
+        merged["nphi"] = merged["nphi_map_joint"]
     return merged
 
 
@@ -989,7 +1006,7 @@ def delensed_cls_at_params(params, alens, transfer = None, camb_lmax = None):
     scaling = np.full(pars.max_l + 1, float(alens[-1]))
     scaling[:len(alens)] = alens
     partial = results.get_partially_lensed_cls(scaling, lmax = lmax - 1,
-                                               CMB_unit = "muK")
+                                               CMB_unit = "muK", lensing_method = 3)
     delensed = dl2cl(jnp.asarray(partial[:, 0]), lmax, lmax)
     if transfer is not None:
         ells = jnp.arange(2, 2 + delensed.shape[0]).astype(jnp.float64)
@@ -1102,13 +1119,18 @@ def delensing_efficiency(cphi, nphi):
     return float(jnp.sum(weight * rho_squared) / jnp.sum(weight))
 
 
-def interpolate_spectrum(ells, source_ells, spectrum):
+def interpolate_spectrum(ells, source_ells, spectrum, type_of = "extrapolate"):
     """A positive spectrum moved onto `ells` by log-log interpolation, extrapolated as a
     power law past either end of its support - the same jnp.interp call
     covar_matrix_from_cls uses to put a CAMB spectrum on the rfft grid."""
-    return np.asarray(jnp.exp(jnp.interp(jnp.log(ells), jnp.log(source_ells),
-                                         jnp.log(spectrum), left = "extrapolate",
-                                         right = "extrapolate")))
+    if type_of == "extrapolate":
+        return np.asarray(jnp.exp(jnp.interp(jnp.log(ells), jnp.log(source_ells),
+                                            jnp.log(spectrum), left = "extrapolate",
+                                            right = "extrapolate")))
+    elif type_of == "linear":
+        return np.asarray((jnp.interp((ells), (source_ells), (spectrum), left = "extrapolate",
+                           right = "extrapolate")))
+    return np.asarray((jnp.interp((ells), (source_ells), (spectrum))))
 
 
 def grid_max_ell(ell_grid):
@@ -1301,7 +1323,7 @@ def _radial_cl_profile(matrix, ell_grid, weights, pix_width, ell_axis, label = "
         print(f"  WARNING: {label} is log-log extrapolated past l = {grid_max:.0f} (the "
               f"grid's largest mode) out to l = {np.max(ell_axis):.0f}")
 
-    return interpolate_spectrum(ell_axis, profile_ell, profile)
+    return interpolate_spectrum(ell_axis, profile_ell, profile)#, type_of = "linear")
 
 
 def qe_noise_cl(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm, l_cutoff,
@@ -1547,7 +1569,10 @@ def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
     #C_phi + N_phi: a QE lensing reconstruction, i.e. phi measured to within the
     #quadratic estimator's noise rather than known exactly
     #wiener = 1 #cphi_fid / (cphi_fid + nphi)
-    phi_block = (covar(cls["phi"], phi_ells) + nphi)
+    # nphi = nphi.at[0].set(0.5*nphi[0])
+    # nphi = nphi.at[1].set(0.5*nphi[1])
+    # nphi = nphi.at[2].set(0.5*nphi[2])
+    phi_block = (covar(cls["phi"], phi_ells) + 0.8*nphi)
 
     if spectra == "delensed":
         #the complete-data f block, but paying for imperfect delensing: CAMB's own lensing
@@ -1749,9 +1774,13 @@ def frozen_reconstruction(cls_fid, spectra, nside, pix_width, ell_grid, noise_le
                                 camb_lmax = camb_lmax, radial_mean = radial_mean))
         #the iteration quiets BOTH the delensing and the phi block's estimator, with the
         #final step's filter AND response
+
         nphi = qe_noise_grid(response_cls, nside, pix_width, ell_grid, noise_level, l_knee,
                              beam_fwhm, l_cutoff, nphi_source, filter_tt = delensed_tt,
                              qe_response = qe_response, radial_mean = radial_mean)
+        # ells = jnp.arange(2, 2 + len(nphi_cl)).astype(jnp.float64)
+        # nl_pp = alens[1:]*cls_fid["phi"]/(1 - alens[1:])
+        # nphi = covar_matrix_from_cls(nside, pix_width, ell_grid, ells, nl_pp, origin_value = 0)        
         if verbose:
             print(f"  converged {converged} after {iterations} iterations")
     else:
@@ -1778,7 +1807,7 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                        constant_nphi = DEFAULT_CONSTANT_NPHI,
                        delensed_covariance = None, empirical_phi_noise = False,
                        empirical_phi_block = False, freeze_phi_noise = False,
-                       return_applier = False):
+                       map_joint_phi_noise = False, return_applier = False):
     """The CAMB / covariance-block stencil the flat-sky-grid forecasts are built from.
 
     Returns (names, steps, weights, blocks_fid, blocks_plus, blocks_minus): the sampled
@@ -1861,6 +1890,10 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
     #nphi_source has played since 2026-09-14. It is independent of the transfer function
     #above: R corrects the delensed temperature spectrum, N_eff the reconstruction noise, and
     #a "delensed" run may carry either, both, or neither
+    if map_joint_phi_noise and nphi_source != "score":
+        raise ValueError(f"map_joint_phi_noise reads `nphi_map_joint` from the "
+                         f"merge_sampler_noise_estimate.py npz, so it needs nphi_source = "
+                         f"'score' and --phi_noise <that npz>, not {nphi_source!r}")
     #"score" rides the same --phi_noise slot: its file is the sampler noise bound's merged
     #npz, carried through to qe_noise_grid / qe_noise_cl as measured_phi_noise
     measured_phi_noise = None
@@ -1870,8 +1903,8 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                              f"the measurement would be parsed and then ignored. Pass "
                              f"--nphi_source measured (merge_phi_noise.py) or score "
                              f"(merge_sampler_noise_estimate.py) to use it.")
-        measured_phi_noise = (load_score_noise(phi_noise) if nphi_source == "score"
-                              else load_phi_noise(phi_noise))
+        measured_phi_noise = (load_score_noise(phi_noise, map_joint_phi_noise)
+                              if nphi_source == "score" else load_phi_noise(phi_noise))
         check_phi_noise(measured_phi_noise, nside, theta_pix, noise_level, l_knee,
                         path = phi_noise)
     elif nphi_source == "score":
@@ -2041,6 +2074,12 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
             apply_transfer_function(jnp.ones(1), jnp.ones(1), transfer, verbose = True)
         if measured_phi_noise is not None and nphi_source == "measured":
             measured_phi_noise_cl(measured_phi_noise, np.array([100.0]), verbose = True)
+        elif nphi_source == "score" and map_joint_phi_noise:
+            print(f"  N_phi: map_joint's fixed-phi noise Var(phi_MAP | phi) / rho^2 from "
+                  f"{phi_noise} ({int(measured_phi_noise['phi_map_realizations'])} phi "
+                  f"realizations, {int(measured_phi_noise['map_joint_steps'])} map_joint "
+                  f"steps; {int(measured_phi_noise['map_joint_filled_modes'])} unrecovered "
+                  f"modes filled from the QE shape)")
         elif nphi_source == "score":
             print(f"  N_phi: sampler noise bound 1/<F_phi> from {phi_noise} "
                   f"({int(measured_phi_noise['n_realizations'])} phi realizations, "
@@ -2266,7 +2305,7 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
              radial_mean = DEFAULT_RADIAL_MEAN,
              constant_nphi = DEFAULT_CONSTANT_NPHI, delensed_covariance = None,
              empirical_phi_noise = False, empirical_phi_block = False,
-             freeze_phi_noise = False):
+             freeze_phi_noise = False, map_joint_phi_noise = False):
     """Gaussian Fisher matrix for the sampled LCDM parameters on an nside x nside box.
 
     Args:
@@ -2341,6 +2380,10 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
         freeze_phi_noise: with empirical_phi_block: the block becomes the truth-correlated
                       part <B>^2/<D> of <|phi_hat|^2> at each stencil point plus its noise
                       part <A> - <B>^2/<D> at theta_0
+        map_joint_phi_noise: with nphi_source = "score": N_phi is the phi_noise file's
+                      `nphi_map_joint` instead of the bound - the per-mode variance of
+                      map_joint's phi_MAP over (f, n) draws at fixed phi, divided by the
+                      measured response^2 and averaged over phi realizations
 
     Returns:
         (fisher, names) - the n_sampled x n_sampled matrix and the parameter names in
@@ -2353,7 +2396,8 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
         transfer_function = transfer_function, camb_lmax = camb_lmax,
         radial_mean = radial_mean, constant_nphi = constant_nphi,
         delensed_covariance = delensed_covariance, empirical_phi_noise = empirical_phi_noise,
-        empirical_phi_block = empirical_phi_block, freeze_phi_noise = freeze_phi_noise)
+        empirical_phi_block = empirical_phi_block, freeze_phi_noise = freeze_phi_noise,
+        map_joint_phi_noise = map_joint_phi_noise)
     return _fisher_from_blocks(plus, minus, fid, steps, weights), names
 
 
@@ -2851,6 +2895,12 @@ def add_delensed_covariance_argument(parser):
                                "D = |phi|^2) and its noise part <A> - <B>^2/<D>, and use the "
                                "signal part at every stencil point plus the noise part at "
                                "the fiducial cosmology")
+    parser.add_argument("--map_joint_phi_noise", action = "store_true",
+                        help = "with --nphi_source score: use the --phi_noise file's "
+                               "nphi_map_joint as N_phi instead of the sampler bound, i.e. "
+                               "the per-mode variance of map_joint's phi_MAP over (f, n) "
+                               "draws at fixed phi divided by the measured response^2 "
+                               "(needs jobs run with map_joint_steps > 0)")
     return parser
 
 
@@ -2895,6 +2945,7 @@ def run_config(spectra, args, names, **extra):
                 empirical_phi_noise = bool(getattr(args, "empirical_phi_noise", False)),
                 empirical_phi_block = bool(getattr(args, "empirical_phi_block", False)),
                 freeze_phi_noise = bool(getattr(args, "freeze_phi_noise", False)),
+                map_joint_phi_noise = bool(getattr(args, "map_joint_phi_noise", False)),
                 #0 means "not pinned", i.e. camb_lmax_for_grid chose it from the box
                 camb_lmax = getattr(args, "camb_lmax", None) or 0,
                 radial_mean = getattr(args, "radial_mean", DEFAULT_RADIAL_MEAN),
@@ -2942,6 +2993,7 @@ def main():
                                                and spectra == "delensed"),
                         freeze_phi_noise = (args.freeze_phi_noise
                                             and spectra == "delensed"),
+                        map_joint_phi_noise = args.map_joint_phi_noise,
                         empirical_phi_noise = (args.empirical_phi_noise
                                                and spectra == "delensed"))
 

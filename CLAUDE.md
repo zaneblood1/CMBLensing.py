@@ -68,6 +68,12 @@ python merge_sampler_noise_estimate.py --noise_dir <scp'd out_dir> --map_joint_n
 python -m cmb_lensing.fisher_forecast --nphi_source score --phi_noise <...>/sampler_noise_estimate.npz
 python -m cmb_lensing.sampler_noise_estimate --nside 64 --theta_pix 5 --n_phi 5 --n_draws 100 --out_dir <dir>   # local
 
+# Sampler EFFECTIVE phi noise: posterior-mean phi x true phi from fixed-theta chains (from a filled-in sampling_chains/)
+sbatch get_sampler_effective_noise.sh                                   # one job (one data map, one chain) per seed
+python merge_sampler_effective_noise.py --chain_dir <out_dir> --burn_in 200 --burn_in_scan 100 400   # on the HPC; works on running jobs
+python -m cmb_lensing.fisher_forecast --nphi_source score --phi_noise <...>/sampler_effective_noise.npz
+python -m cmb_lensing.sampler_effective_noise --nside 64 --theta_pix 5 --n_maps 4 --n_sweeps 400 --burn_in 100 --out_dir <dir>   # local
+
 # Empirical delensed COVARIANCE stencil (replaces CAMB's delensed block outright; from a filled-in sampling_chains/)
 sbatch get_delensed_covariance.sh                                       # 100 jobs, one seed each, 1 + 2k points per job
 python merge_delensed_covariance.py --covariance_dir <scp'd out_dir>    # -> delensed_covariance.npz (+ .png)
@@ -537,8 +543,47 @@ the response rho = sum Re(<phi_MAP> phi*) / sum |phi|^2 (`phi_map_response`) and
 Var / rho^2 (`phi_map_noise`), with band values + delete-one-phi errors in the report and
 spectra plot. MEASURED ~20 s per draw at nside 128 (vs ~1 s score only), so the driver passes
 `--time=$map_joint_time`. Var / rho^2 is biased low where rho is noisy (high L, few draws).
+The merge also writes `nphi_map_joint` (Var / rho^2 per mode; rho <= 0 modes filled as
+N_QE x the band ratio, origin 0), and `fisher_forecast --nphi_source score --phi_noise <npz>
+--map_joint_phi_noise` (`forecast(map_joint_phi_noise = True)`) uses it as N_phi in place of
+the bound: `load_score_noise` swaps it into `nphi`, so the phi block, Alens_L and the
+checksum all follow, and every refusal that applies to `score` still applies.
 Scripts (both `sampling_chains*/`, `.py` byte-identical): `get_sampler_noise_estimate.sh` ->
 `get_sampler_noise_estimate_1_phi_realization.sh/.py` -> `merge_sampler_noise_estimate.py`.
+
+### The sampler effective phi noise (`sampler_effective_noise.py`, added 2026-10-06)
+
+The direct measurement the score bound above is not: one chain per (f, phi, d) realization
+samples (f, phi) | d with theta HELD at GROUND_TRUTH, and the posterior-mean phi is cross
+correlated with the true phi. The chain is `posterior_mixed_draws` (the Louis path's fixed-theta
+copy of `sample_joint`'s sweep; operators from `_mixed_theta_matrices` at the ground truth with
+load_sim's QE norm, key `chain_key(map_seed, 0)`, start phi = 0), with the callback unmixing
+phi° by `pinv(G)`. NO sub-chains and no R-hat (user decision); no thinning. Per mode, with the
+moments SUMMED OVER REALIZATIONS before the ratio (a single mode of a single realization has
+r = cos(phase difference), and C tan^2 of it has infinite mean):
+`r^2 = <B>^2 / (<A><D>)`, `N = C_phi (1/r^2 - 1)`, delete-one-realization jackknife.
+Four estimates that must agree (`ESTIMATES`): `cross` (headline; A = cross power between the
+means of `n_blocks` = 4 disjoint post-burn-in blocks, free of the Var_post / n_eff Monte Carlo
+bias), `naive` (A = |phi_mean|^2, biased HIGH by ~(1 + N/C) / n_eff), `b_only` (r^2 = <B>/<D>,
+valid for an exact posterior mean), `variance` (r^2 = 1 - <V>/C from the chain's own posterior
+variance, divided by n - IAT; fragile where N >> C). Also first-half / second-half bands and
+`--burn_in_scan`. Bands: moments whitened by C_k, summed over the band, and (1/r^2 - 1) quoted
+relative to the QE's own under the same functional (`band_reference`) times the harmonic band
+N_QE - the plain C_band (1/r^2 - 1) is ~10% off at L < 300. Verified on synthetic AR(1) chains
+with an injected Wiener posterior: per-mode N exact to 1e-15 from exact moments, every estimate
+and the IAT recovered within errors. Self-conjugate columns / origin / unmeasured modes are
+filled as N_QE x the band ratio; `--smooth` makes EVERY mode that fill (`nphi_smooth`).
+**Storage is a live-readable memmap:** `sampler_phi_NNNN_samples.npy` (n_sweeps, nside,
+nside//2+1) complex64, preallocated (file shows full size from the start; `rsync --sparse` to
+copy a partial run), flushed every 10 sweeps, then the sidecar `sampler_phi_NNNN.npz`
+(`n_done`, `finished`, phi_true, cphi, phi_accepts, config) is rewritten atomically - the
+analysis reads only the first `n_done` rows, so it runs on a directory of RUNNING jobs. The
+merged `sampler_effective_noise.npz` has `nphi` + nside / theta_pix / noise_level / l_knee, so
+`fisher_forecast --nphi_source score --phi_noise` loads it unchanged (every `score` refusal
+applies). It also keeps the per-realization moments (`moment_*`) and per-chain per-mode `iat`.
+MEASURED nside 64 / 5' (8 local cores): ~1.0-1.35 s per sweep after ~25 s compile, 1.35 GB RSS.
+Scripts (both `sampling_chains*/`, both `.py` byte-identical): `get_sampler_effective_noise.sh`
+-> `get_sampler_effective_noise_1_chain.sh/.py` -> `merge_sampler_effective_noise.py`.
 
 **`fisher_forecast_full_sky.py` is the textbook forecast formula**,
 `F_ij = sum_l (2l+1)/2 f_sky Tr[C_l^-1 dC_l/di C_l^-1 dC_l/dj]`. Same likelihood and same

@@ -496,6 +496,18 @@ def merge_sampler_noise(directory, delta_ell = DEFAULT_DELTA_ELL, verbose = True
                 (loo - np.nanmean(loo, axis = 0))**2, axis = 0))
         else:
             variance_error = noise_error = np.full(n_band, np.nan)
+        #the full matrix fisher_forecast --map_joint_phi_noise loads: Var / rho^2 per mode,
+        #and where map_joint did not recover a mode (rho <= 0) the QE's value times the band
+        #ratio at that |L|, exactly as `nphi` is filled
+        map_ratio = band_noise / band_qe
+        map_good = np.isfinite(map_ratio)
+        nphi_map_joint = np.where(np.isfinite(noise) & (noise > 0), noise,
+                                  nphi_qe * np.interp(ell_grid, centres[map_good],
+                                                      map_ratio[map_good]))
+        nphi_map_joint[0, 0] = 0.0
+        merged.update(nphi_map_joint = nphi_map_joint,
+                      map_joint_filled_modes = int(np.sum(~(np.isfinite(noise)
+                                                            & (noise > 0))) - 1))
         merged.update(phi_map_variance = variance, phi_map_response = response,
                       phi_map_noise = noise, band_phi_map_variance = band_variance,
                       band_phi_map_variance_error = variance_error,
