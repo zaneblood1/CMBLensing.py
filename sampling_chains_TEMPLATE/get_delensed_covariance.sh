@@ -76,14 +76,29 @@ iterative_delens=0
 #qe_response: which TT spectrum weights the QE response - "unlensed" (Hu & Okamoto) or
 #"gradient" (CAMB's lensed T-grad-T, Lewis, Challinor & Hanson 2011)
 qe_response=unlensed
-#score_noise: path ON THE HPC to a merge_sampler_noise_estimate.py sampler_noise_estimate.npz
-#measured at THIS box (nside / theta_pix / noise_level / l_knee / cosmology). When set, W's
-#N_phi is that sampler noise bound 1/<F_phi> instead of the box QE matrix - the N_phi
-#fisher_forecast --nphi_source score --phi_noise <same npz> puts in its phi block. Requires
-#iterative_delens=0 (refused otherwise); qe_response then does not apply. Leave empty for
-#the QE matrix. The job files record the choice and a checksum of the matrix; the merge
-#refuses to mix, and the forecast warns if its --phi_noise is not the file used here
-score_noise=""
+#phi_noise: path ON THE HPC to an npz holding a per-mode phi noise estimate measured by an
+#EARLIER run at THIS box (nside / theta_pix / noise_level / l_knee) and cosmology. When set,
+#W's N_phi is that matrix instead of the box QE matrix and the jobs do NOT run map_joint at
+#all: map_joint_steps / reconstruction / constant_nphi then do nothing. Accepted files:
+#  - merge_sampler_noise_estimate.py sampler_noise_estimate.npz: the score bound 1/<F_phi>
+#    (`nphi`); with phi_noise_key=nphi_map_joint, map_joint's fixed-phi noise instead
+#  - merge_sampler_effective_noise.py sampler_effective_noise*.npz: sample_joint's effective
+#    noise (`nphi`; phi_noise_key=nphi_smooth for the band-smoothed one)
+#  - merge_delensed_covariance.py delensed_covariance.npz whose jobs stored the phi moments:
+#    map_joint's N_eff (`phi_noise_fid`; unmeasured modes get W = 0)
+#In place of its own phi moments a run given a delensed_covariance.npz COPIES that file's
+#merged map_joint phi grids (copied_phi_moments.npz in out_dir, passed through by the merge),
+#so --empirical_phi_noise still works; the +/- grids (--vary_nphi, --empirical_phi_block) are
+#copied only if that file's stencil has every derivative_params entry at this step_sigma. The
+#other two kinds of file have no moments to copy. Requires iterative_delens=0 (refused
+#otherwise); qe_response then does not apply. The job files record what the matrix is, its
+#key and a checksum; the merge refuses to mix, and the forecast warns unless it runs
+#--nphi_source score --phi_noise <same npz> on the same matrix (add --map_joint_phi_noise
+#for phi_noise_key=nphi_map_joint). Leave empty for the QE matrix
+phi_noise=""
+#phi_noise_key: which 2D grid of the phi_noise file to use. Empty takes the file's default
+#(`nphi`, else `phi_noise_fid`)
+phi_noise_key=""
 
 #one slurm job per realization
 num_realizations=100
@@ -99,6 +114,7 @@ for ((m=0; m<num_realizations; m++)); do
     map_seed=$((seed_prefix + m))
     sbatch run_single_delensed_covariance.sh "$m" "$map_seed" "$nside" "$theta_pix" \
         "$noise_level" "$l_knee" "$map_joint_steps" "$step_sigma" "$reconstruction" \
-        "$constant_nphi" "$iterative_delens" "$qe_response" "$score_noise" "$out_dir" \
+        "$constant_nphi" "$iterative_delens" "$qe_response" "$phi_noise" "$phi_noise_key" \
+        "$out_dir" \
         $derivative_params
 done

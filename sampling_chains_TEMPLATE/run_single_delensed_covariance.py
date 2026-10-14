@@ -6,7 +6,10 @@ numbers) the job runs, at theta_0 and at theta_0 +/- h_i for every --params entr
     load_sim(theta) -> inverse-lense the NOISELESS lensed field by the Wiener-filtered TRUE
                        phi, W phi with W = C_phi / (C_phi + N_phi) at theta_0
                     -> F conj(F) / nside^2 on the rfft grid
-    (map_joint still runs at every point, for the phi moments)
+    (map_joint still runs at every point, for the phi moments - unless --phi_noise
+     supplies W's N_phi from an earlier run's npz, in which case it is skipped and that
+     file's merged phi grids, if it is a delensed_covariance.npz, are copied to
+     copied_phi_moments.npz in --out_dir instead)
 
 and saves the 1 + 2k per-mode covariances (plus the unlensed and lensed ones, which validate
 the common random numbers), and the per-mode moments |phi_hat|^2, Re(phi_hat phi*), |phi|^2
@@ -27,6 +30,7 @@ import os
 import numpy as np
 
 from cmb_lensing.delensed_covariance import (measure_delensed_covariance,
+                                             copied_phi_grids, write_copied_phi,
                                              realization_file_name, DEFAULT_STEP_SIGMA,
                                              RECONSTRUCTIONS, DEFAULT_RECONSTRUCTION,
                                              DEFAULT_CONSTANT_NPHI, FIELD_KINDS,
@@ -63,11 +67,21 @@ parser.add_argument("--qe_response", choices = QE_RESPONSE_SOURCES,
                     default = DEFAULT_QE_RESPONSE,
                     help = "the TT spectrum weighting the QE response in the delensing Wiener "
                            "weight's N_phi (fisher_forecast --qe_response)")
-parser.add_argument("--score_noise", type = str, default = "",
-                    help = "path to a merge_sampler_noise_estimate.py sampler_noise_estimate.npz "
-                           "at this box: W's N_phi becomes that sampler noise bound instead of "
-                           "the box QE matrix (requires --iterative_delens 0; --qe_response "
-                           "then does not apply). Empty (default): the box QE matrix")
+parser.add_argument("--phi_noise", type = str, default = "",
+                    help = "path to an npz holding a per-mode phi noise estimate at this box "
+                           "and cosmology (merge_sampler_noise_estimate.py, "
+                           "merge_sampler_effective_noise.py or merge_delensed_covariance.py "
+                           "with the phi moments): W's N_phi becomes that matrix instead of "
+                           "the box QE matrix and map_joint is NOT run (a "
+                           "delensed_covariance.npz's merged phi grids are copied to "
+                           "--out_dir in place of the phi moments). Requires "
+                           "--iterative_delens 0; --qe_response then does not apply. Empty "
+                           "(default): the box QE matrix")
+parser.add_argument("--phi_noise_key", type = str, default = "",
+                    help = "which 2D grid of --phi_noise to use. Empty (default): its `nphi`, "
+                           "else its `phi_noise_fid`. Name e.g. nphi_map_joint for the "
+                           "map_joint noise of a sampler_noise_estimate.npz, or nphi_smooth "
+                           "of a sampler_effective_noise.npz")
 parser.add_argument("--out_dir", type = str, required = True)
 parser.add_argument("--params", nargs = "+", required = True, choices = PARAM_ORDER,
                     help = "the parameters to difference")
@@ -108,9 +122,12 @@ def write(result, finished):
                  qe_response = result["qe_response"],
                  wiener_nphi_source = result["wiener_nphi_source"],
                  wiener_nphi_checksum = result["wiener_nphi_checksum"],
+                 wiener_nphi_key = result["wiener_nphi_key"],
                  n_done = result["n_done"],
                  finished = finished,
-                 **{kind: result[kind] for kind in FIELD_KINDS + PHI_MOMENTS})
+                 #the phi moments are absent when map_joint was skipped (--phi_noise)
+                 **{kind: result[kind] for kind in FIELD_KINDS + PHI_MOMENTS
+                    if kind in result})
     os.replace(temp_path, out_path)
 
 
@@ -120,8 +137,17 @@ result = measure_delensed_covariance(
     map_joint_steps = args.map_joint_steps, reconstruction = args.reconstruction,
     constant_nphi = bool(args.constant_nphi),
     iterative_delens = bool(args.iterative_delens), qe_response = args.qe_response,
-    score_noise = args.score_noise or None,
+    phi_noise = args.phi_noise or None, phi_noise_key = args.phi_noise_key or None,
     on_point = lambda partial: write(partial, finished = False))
 write(result, finished = True)
+
+#map_joint was skipped, so there are no phi moments of this run's own: carry the noise file's
+#merged phi grids over (one sidecar for the whole directory; nothing if it has none)
+if args.phi_noise:
+    copied = copied_phi_grids(args.phi_noise, args.params, args.step_sigma)
+    if copied is not None:
+        write_copied_phi(args.out_dir, copied)
+        print(f"copied the phi grids of {args.phi_noise}"
+              + ("" if copied["has_stencil"] else " (centre only: different stencil)"))
 
 print(f"wrote {out_path}")

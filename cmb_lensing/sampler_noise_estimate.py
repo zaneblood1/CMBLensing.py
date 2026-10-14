@@ -260,6 +260,28 @@ def phi_map_noise(jobs):
     return variance, response, noise
 
 
+def phi_map_correlation_noise(jobs, cphi):
+    """map_joint's N = C_phi (1 / r^2 - 1) per mode, r^2 = <B>^2 / (<A> <D>) the cross
+    correlation of phi_MAP with the true phi over EVERY (phi, f, n) draw: A = |phi_MAP|^2
+    (a job's draw average = (n - 1) / n variance + |mean|^2), B = Re(phi_MAP phi*),
+    D = |phi|^2, each averaged over the jobs. NaN where the moments give no r^2 in (0, 1).
+
+    Against phi_map_noise's Var / rho^2: identical when <|mean|^2> = rho^2 <D> and
+    <D> = C_phi; it additionally counts the scatter of each phi's mean phi_MAP about
+    rho phi (a non-linear response) as noise.
+    """
+    auto, cross, true = 0.0, 0.0, 0.0
+    for job in jobs:
+        n, norm = int(job["n_done"]), int(job["nside"])**2
+        auto = auto + (n - 1) / n * job["phi_map_variance"] + np.abs(job["phi_map_mean"])**2 / norm
+        cross = cross + np.real(job["phi_map_mean"] * np.conj(job["phi_true"])) / norm
+        true = true + np.abs(job["phi_true"])**2 / norm
+    with np.errstate(divide = "ignore", invalid = "ignore"):
+        r2 = cross**2 / (auto * true)
+        good = (cross > 0) & (r2 > 0) & (r2 < 1)
+        return np.where(good, np.asarray(cphi) * (1.0 / r2 - 1.0), np.nan)
+
+
 def load_score_directory(directory, verbose = True):
     """Every phi-realization job file in `directory` (calibration excluded), as dicts.
     A job's stored `phi_map` stack is reduced to `phi_map_moments` as it is read, so the
@@ -509,7 +531,10 @@ def merge_sampler_noise(directory, delta_ell = DEFAULT_DELTA_ELL, verbose = True
                       map_joint_filled_modes = int(np.sum(~(np.isfinite(noise)
                                                             & (noise > 0))) - 1))
         merged.update(phi_map_variance = variance, phi_map_response = response,
-                      phi_map_noise = noise, band_phi_map_variance = band_variance,
+                      phi_map_noise = noise,
+                      phi_map_correlation_noise = phi_map_correlation_noise(
+                          map_jobs, first["cphi"]),
+                      band_phi_map_variance = band_variance,
                       band_phi_map_variance_error = variance_error,
                       band_phi_map_noise = band_noise,
                       band_phi_map_noise_error = noise_error,

@@ -99,8 +99,8 @@ from cmb_lensing.precompute_camb_1d import PARAM_ORDER, PARAM_SIGMA
 from cmb_lensing.fisher_forecast import (camb_cls_at_params, load_sim_cosmology,
                                          qe_noise_matrix, cls_with_qe_response,
                                          frozen_reconstruction, QE_RESPONSE_SOURCES,
-                                         DEFAULT_QE_RESPONSE, load_score_noise,
-                                         check_phi_noise, nphi_checksum)
+                                         DEFAULT_QE_RESPONSE, check_phi_noise,
+                                         nphi_checksum)
 from cmb_lensing.delensed_spectrum import (LENSE_STEPS, DEFAULT_DELTA_ELL, PARAM_RTOL,
                                            band_edges, band_average, jackknife_mean,
                                            _lense, _scalar_matrix, _to_fourier,
@@ -156,13 +156,41 @@ DEFAULT_ITERATIVE_DELENS = False
 
 #where W's N_phi comes from (recorded as `wiener_nphi_source`; the merge refuses to mix):
 #"covariance" = the box QE matrix built as above (iterative_delens / qe_response apply), what
-#every file before 2026-10-01 used and how files without the field are read; "score" = the
-#sampler noise bound 1/<F_phi> of a merge_sampler_noise_estimate.py npz (`score_noise` path),
-#the N_phi fisher_forecast --nphi_source score puts in its phi block. Its matrix is recorded
-#by checksum (`wiener_nphi_checksum`, fisher_forecast.nphi_checksum) so the forecast can tell
-#whether its own --phi_noise file is the one W was built from
-WIENER_NPHI_SOURCES = ("covariance", "score")
+#every file before 2026-10-01 used and how files without the field are read. The other three
+#are a per-mode noise matrix read from ONE npz (the `phi_noise` path, load_wiener_noise),
+#named after what that matrix is: "score" = the sampler noise bound 1/<F_phi> of a
+#merge_sampler_noise_estimate.py npz; "map_joint" = an effective map_joint noise (that npz's
+#`nphi_map_joint`, or a merge_delensed_covariance.py npz's `phi_noise_fid`); "sample_joint" =
+#the sampler's effective noise of a merge_sampler_effective_noise.py npz. The matrix is
+#recorded by key (`wiener_nphi_key`) and checksum (`wiener_nphi_checksum`,
+#fisher_forecast.nphi_checksum) so the forecast can tell whether its own --phi_noise matrix
+#is the one W was built from. With a noise file map_joint is NOT run by the job at all - it
+#only ever fed the phi moments - so such files carry no PHI_MOMENTS (files written before
+#2026-10-08 with a "score" W still ran it and do carry them). When the noise file is a
+#merged delensed_covariance.npz its merged phi grids are copied instead (COPIED_PHI_NAME),
+#so the empirical phi noise stays available
+WIENER_NPHI_SOURCES = ("covariance", "score", "map_joint", "sample_joint")
 DEFAULT_WIENER_NPHI_SOURCE = "covariance"
+
+#the per-mode noise grid load_wiener_noise takes from a noise npz when no key is named, in
+#order of preference: `nphi`, the headline matrix of merge_sampler_noise_estimate.py (the
+#score bound) and merge_sampler_effective_noise.py (the sampler's effective noise), both
+#filled on every mode; else `phi_noise_fid` of merge_delensed_covariance.py (map_joint's
+#N_eff = C_phi (1/r^2 - 1) at theta_0, NaN where unmeasured). Any other 2D grid of the file
+#(`nphi_map_joint`, `nphi_smooth`, `nphi_b_only_raw`, ...) must be asked for by name
+PHI_NOISE_KEYS = ("nphi", "phi_noise_fid")
+#the keys that hold a map_joint noise, and the one only merge_sampler_effective_noise.py
+#writes (how its npz is told apart from merge_sampler_noise_estimate.py's)
+MAP_JOINT_NOISE_KEYS = ("nphi_map_joint", "phi_noise_fid")
+SAMPLE_JOINT_MARKER = "nphi_cross_raw"
+
+#the merged per-mode phi grids ({base}_fid / _plus / _minus) a phi_noise job copies out
+#of the source delensed_covariance.npz in place of measuring its own moments, and the sidecar
+#in the job directory they go to: ONE file for the whole directory, since they are
+#realization means and identical for every job. The merge passes them through to its npz
+COPIED_PHI_BASES = ("phi_r2", "phi_measured", "phi_auto", "phi_signal", "phi_hat_noise",
+                    "phi_noise")
+COPIED_PHI_NAME = "copied_phi_moments.npz"
 
 REALIZATION_GLOB = "delensed_covariance_*.npz"
 MERGED_NAME = "delensed_covariance.npz"
@@ -206,6 +234,121 @@ def grid_covariance(field_fourier, nside):
     return grid_cross(field_fourier, field_fourier, nside)
 
 
+def load_wiener_noise(path, nside, theta_pix, noise_level, l_knee, param_ground, key = None):
+    """(nphi, key, source): a per-mode phi noise measured by an earlier run, for W.
+
+    `path` is any merged npz holding a noise estimate on the rfft grid of THIS box: a
+    merge_sampler_noise_estimate.py npz (the score bound `nphi`, or map_joint's
+    `nphi_map_joint` when asked for by `key`), a merge_sampler_effective_noise.py npz (the
+    sampler's effective noise `nphi`; `nphi_smooth` and the per-estimate `nphi_*_raw` grids
+    by `key`) or a merge_delensed_covariance.py npz whose jobs stored the phi moments
+    (`phi_noise_fid`). `key` None takes the first of PHI_NOISE_KEYS the file has. `source` is
+    the WIENER_NPHI_SOURCES name of what the matrix is. Refuses a file measured on another
+    box or at another cosmology than theta_0. `nphi` is returned as stored: unmeasured modes
+    are NaN, which the caller turns into W = 0.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"no phi noise file at {path}")
+    merged = dict(np.load(path, allow_pickle = True))
+    if key is None:
+        key = next((name for name in PHI_NOISE_KEYS if name in merged), None)
+        if key is None:
+            raise ValueError(
+                f"{path} has none of {PHI_NOISE_KEYS}: it must be a "
+                f"merge_sampler_noise_estimate.py, merge_sampler_effective_noise.py or "
+                f"merge_delensed_covariance.py (with phi moments) npz, or the grid to use "
+                f"must be named")
+    elif key not in merged:
+        raise ValueError(f"{path} has no `{key}`")
+    check_phi_noise(merged, nside, theta_pix, noise_level, l_knee, path = path)
+    measured_params = dict(zip(PARAM_ORDER, np.asarray(merged["params"], dtype = float)))
+    if not _same_cosmology(measured_params, param_ground):
+        raise ValueError(f"{path} was measured at a different cosmology than this stencil's "
+                         f"theta_0")
+    nphi = np.asarray(merged[key], dtype = float)
+    if nphi.shape != (nside, nside // 2 + 1):
+        raise ValueError(f"{path}: `{key}` has shape {nphi.shape}, expected the rfft grid "
+                         f"{(nside, nside // 2 + 1)}")
+    if SAMPLE_JOINT_MARKER in merged:
+        source = "sample_joint"
+    elif key in MAP_JOINT_NOISE_KEYS:
+        source = "map_joint"
+    else:
+        source = "score"
+    return nphi, key, source
+
+
+def copied_phi_grids(path, names, step_sigma):
+    """The merged phi grids of the delensed_covariance.npz at `path`, laid out on the stencil
+    (`names` order, `step_sigma`) of the run copying them; None if `path` has none (a
+    sampler_noise_estimate.npz, or a merge that predates the phi moments).
+
+    The centre grids are always copied - they are all a frozen-N_eff --empirical_phi_noise
+    reads. The +/- grids are copied only when the source measured every one of `names` at the
+    same step; otherwise they are left out (`has_stencil` False) and the forecast refuses the
+    options that need them (--vary_nphi, --empirical_phi_block). Box and cosmology are
+    load_wiener_noise's to check.
+    """
+    merged = np.load(path, allow_pickle = True)
+    if "phi_r2_fid" not in merged.files:
+        return None
+    source_names = [str(name) for name in merged["names"]]
+    steps = np.array([step_sigma * PARAM_SIGMA[name] for name in names])
+    has_stencil = (all(name in source_names for name in names) and np.allclose(
+        [float(merged["steps"][source_names.index(name)]) for name in names], steps,
+        rtol = PARAM_RTOL, atol = 0))
+    copied = dict(names = np.array(list(names)), steps = steps, has_stencil = has_stencil,
+                  source = str(path), source_seeds = np.asarray(merged["seeds"]),
+                  source_checksum = nphi_checksum(merged["phi_noise_fid"]),
+                  phi_smooth_delta_ell = float(merged["phi_smooth_delta_ell"]))
+    order = [source_names.index(name) for name in names] if has_stencil else []
+    for base in COPIED_PHI_BASES:
+        if f"{base}_fid" not in merged.files:
+            continue
+        copied[f"{base}_fid"] = np.asarray(merged[f"{base}_fid"])
+        if has_stencil:
+            copied[f"{base}_plus"] = np.asarray(merged[f"{base}_plus"])[order]
+            copied[f"{base}_minus"] = np.asarray(merged[f"{base}_minus"])[order]
+    return copied
+
+
+def write_copied_phi(out_dir, copied):
+    """Write the COPIED_PHI_NAME sidecar atomically. Every job of a directory writes the same
+    content, so whichever os.replace lands last is as good as any other."""
+    temp_path = os.path.join(out_dir, f".{COPIED_PHI_NAME}.{os.getpid()}.tmp")
+    with open(temp_path, "wb") as handle:
+        np.savez(handle, **copied)
+    os.replace(temp_path, os.path.join(out_dir, COPIED_PHI_NAME))
+
+
+def _load_copied_phi(directory, config, verbose = True):
+    """The directory's copied phi grids as a dict of merged-npz keys, or None. Only for files
+    that skipped map_joint, and only if the sidecar belongs to them: same stencil names and
+    step, and the source whose N_eff built their W."""
+    path = os.path.join(directory, COPIED_PHI_NAME)
+    if config["wiener_nphi_source"] == "covariance" or not os.path.exists(path):
+        return None
+    copied = dict(np.load(path, allow_pickle = True))
+    steps = [config["step_sigma"] * PARAM_SIGMA[name] for name in config["names"]]
+    if (tuple(str(name) for name in copied["names"]) != config["names"]
+            or not np.allclose(copied["steps"], steps, rtol = PARAM_RTOL, atol = 0)
+            or str(copied["source_checksum"]) != config["wiener_nphi_checksum"]):
+        raise ValueError(f"{path} does not belong to the job files beside it (different "
+                         f"stencil, or copied from a different file than their W was built "
+                         f"from); delete it or re-run the jobs")
+    if verbose:
+        print(f"  phi moments: COPIED from {copied['source']} "
+              f"({len(copied['source_seeds'])} realizations"
+              + ("" if bool(copied["has_stencil"]) else
+                 "; CENTRE ONLY - its stencil differs from this run's, so no --vary_nphi / "
+                 "--empirical_phi_block")
+              + ")")
+    grids = {key: value for key, value in copied.items()
+             if key.startswith(COPIED_PHI_BASES)}
+    grids["phi_smooth_delta_ell"] = float(copied["phi_smooth_delta_ell"])
+    return grids
+
+
 def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map_seed,
                                 names, step_sigma = DEFAULT_STEP_SIGMA, l_knee = 0.0,
                                 map_joint_steps = 30,
@@ -213,13 +356,19 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
                                 constant_nphi = DEFAULT_CONSTANT_NPHI,
                                 iterative_delens = DEFAULT_ITERATIVE_DELENS,
                                 qe_response = DEFAULT_QE_RESPONSE,
-                                score_noise = None,
+                                phi_noise = None, phi_noise_key = None,
                                 on_point = None, verbose = True):
     """One seed through the whole stencil: simulate, reconstruct, delens, square.
 
-    `score_noise`, if given, is the path to a merge_sampler_noise_estimate.py npz: W's N_phi is
-    then its `nphi` matrix (the sampler noise bound) instead of the box QE matrix, so
-    `iterative_delens` must be off and `qe_response` does not apply (WIENER_NPHI_SOURCES).
+    `phi_noise`, if given, is the path to an npz holding a per-mode phi noise estimate at
+    this box and cosmology (load_wiener_noise: the score bound, a map_joint noise or the
+    sampler's effective noise; `phi_noise_key` names the grid when the file's default is not
+    the one wanted). W's N_phi is then that matrix instead of the box QE matrix (W = 0 on its
+    unmeasured modes), so `iterative_delens` must be off and `qe_response` does not apply
+    (WIENER_NPHI_SOURCES). map_joint is then NOT run: the result carries no PHI_MOMENTS, and
+    `map_joint_steps`, `reconstruction` and `constant_nphi` have nothing left to act on. The
+    caller copies the noise file's merged phi grids, if it has any, in their place
+    (copied_phi_grids / write_copied_phi).
 
     `names` are the parameters to differentiate (any order; stored as given). `constant_nphi`
     only matters for reconstruction = "shifted" ("fiducial" freezes N_phi along with
@@ -244,20 +393,23 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
     unknown = [name for name in names if name not in PARAM_ORDER]
     if unknown or not names:
         raise ValueError(f"names must be a non-empty subset of {PARAM_ORDER}, got {names}")
-    score = None
-    if score_noise:
+    stored_nphi, wiener_key = None, ""
+    if phi_noise:
         if iterative_delens:
             raise ValueError(
-                "score_noise cannot be combined with iterative_delens: the sampler noise "
-                "bound comes from the exact likelihood at the true phi, so iterating the QE "
-                "on top of it would apply the improvement twice (fisher_forecast refuses "
-                "--nphi_source score with --iterative_delens for the same reason)")
-        score = load_score_noise(score_noise)
-        check_phi_noise(score, nside, theta_pix, noise_level, l_knee, path = score_noise)
-        score_params = dict(zip(PARAM_ORDER, np.asarray(score["params"], dtype = float)))
-        if not _same_cosmology(score_params, param_ground):
-            raise ValueError(f"{score_noise} was measured at a different cosmology than "
-                             f"this stencil's theta_0")
+                "phi_noise replaces W's N_phi with a measured noise matrix, so it cannot be "
+                "combined with iterative_delens, which iterates the QE matrix it replaces "
+                "(fisher_forecast refuses --nphi_source score with --iterative_delens for "
+                "the same reason)")
+        stored_nphi, wiener_key, wiener_source = load_wiener_noise(
+            phi_noise, nside, theta_pix, noise_level, l_knee, param_ground,
+            key = phi_noise_key or None)
+        wiener_checksum = nphi_checksum(stored_nphi)
+    else:
+        wiener_source, wiener_checksum = "covariance", ""
+    #map_joint only ever feeds the phi moments, which a run given its noise does not measure
+    run_map_joint = stored_nphi is None
+    moments = PHI_MOMENTS if run_map_joint else ()
 
     offsets, points, steps = stencil_points(param_ground, names, step_sigma)
     shape = (len(points), nside, nside // 2 + 1)
@@ -266,10 +418,9 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
                                            for point in points]),
                   inverse_error = np.nan, n_done = 0, delensing_phi = DELENSING_PHI,
                   iterative_delens = bool(iterative_delens), qe_response = qe_response,
-                  wiener_nphi_source = "score" if score is not None else "covariance",
-                  wiener_nphi_checksum = (nphi_checksum(score["nphi"]) if score is not None
-                                          else ""),
-                  **{kind: np.full(shape, np.nan) for kind in FIELD_KINDS + PHI_MOMENTS})
+                  wiener_nphi_source = wiener_source,
+                  wiener_nphi_checksum = wiener_checksum, wiener_nphi_key = wiener_key,
+                  **{kind: np.full(shape, np.nan) for kind in FIELD_KINDS + moments})
 
     def simulate(params):
         return load_sim(nside, theta_pix, "I", map_seed, **load_sim_cosmology(params),
@@ -288,13 +439,17 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
     phi_ells = jnp.arange(2, 2 + cls_fid["phi"].shape[0]).astype(jnp.float64)
     cphi_fid = covar_matrix_from_cls(nside, pix_width, ell_grid, phi_ells, cls_fid["phi"],
                                      origin_value = 0)
-    if score is not None:
-        #the sampler noise bound, already a full rfft-grid matrix in the same units
+    if stored_nphi is not None:
+        #an earlier run's per-mode noise, a rfft-grid matrix in the same units. A mode it
+        #could not measure (NaN) gets N_phi = inf, i.e. W = 0: no delensing by a mode with
+        #no estimate
+        usable = np.isfinite(stored_nphi) & (stored_nphi >= 0)
         if verbose:
-            print(f"delensing Wiener weight: sampler noise bound N_phi from {score_noise} "
-                  f"({int(score['n_realizations'])} phi realizations, checksum "
-                  f"{result['wiener_nphi_checksum'][:12]})")
-        nphi_fid = jnp.asarray(score["nphi"])
+            print(f"delensing Wiener weight: {wiener_source} N_phi `{wiener_key}` from "
+                  f"{phi_noise} (checksum {wiener_checksum[:12]}; "
+                  f"{int(np.sum(~usable))} of {usable.size} modes unmeasured -> W = 0); "
+                  f"map_joint is NOT run, no phi moments are stored")
+        nphi_fid = jnp.asarray(np.where(usable, stored_nphi, np.inf))
     else:
         if verbose:
             print(f"delensing Wiener weight: box QE N_phi, {qe_response} response, "
@@ -336,7 +491,8 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
             data_set = data_set.replace(quadratic_estimate = fiducial_set.quadratic_estimate)
 
         #phi_hat feeds the phi moments only; the delensing uses the Wiener-filtered truth
-        _, phi_hat = map_joint(data_set, num_steps = map_joint_steps)
+        if run_map_joint:
+            _, phi_hat = map_joint(data_set, num_steps = map_joint_steps)
         true_phi = _to_fourier(data_set.phi)
         delensing_phi = true_phi.replace(scalar_matrix = wiener * true_phi.scalar_matrix)
         fields = dict(unlensed = data_set.unlensed_field, lensed = data_set.lensed_field,
@@ -347,10 +503,11 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
         #the reconstruction against the truth, per mode - the empirical phi noise at this
         #point. Common random numbers make phi_true exactly sqrt(C_phi(theta)) times the same
         #white noise at every point, which the merge checks
-        hat, true = _scalar_matrix(phi_hat), _scalar_matrix(data_set.phi)
-        result["phi_auto"][index] = grid_cross(hat, hat, nside)
-        result["phi_cross"][index] = grid_cross(hat, true, nside)
-        result["phi_true"][index] = grid_cross(true, true, nside)
+        if run_map_joint:
+            hat, true = _scalar_matrix(phi_hat), _scalar_matrix(data_set.phi)
+            result["phi_auto"][index] = grid_cross(hat, hat, nside)
+            result["phi_cross"][index] = grid_cross(hat, true, nside)
+            result["phi_true"][index] = grid_cross(true, true, nside)
 
         if index == 0:
             #the inverse must undo the forward at the TRUE phi - delensed_spectrum's rung 2,
@@ -413,7 +570,15 @@ def _read_config(data):
                                     else DEFAULT_WIENER_NPHI_SOURCE)
     config["wiener_nphi_checksum"] = (str(data["wiener_nphi_checksum"])
                                       if "wiener_nphi_checksum" in data.files else "")
+    config["wiener_nphi_key"] = (str(data["wiener_nphi_key"])
+                                 if "wiener_nphi_key" in data.files else "")
     return config
+
+
+#how each stored-matrix W source reads in the printed report
+_WIENER_SOURCE_TEXT = {"score": "sampler noise bound N_phi",
+                       "map_joint": "stored map_joint N_phi",
+                       "sample_joint": "sampler effective N_phi"}
 
 
 def effective_constant_nphi(reconstruction, constant_nphi):
@@ -483,16 +648,21 @@ def load_covariance_directory(directory, verbose = True):
     stacked = {key: np.array(rows) for key, rows in stacked.items()}
     metadata = dict(config, offsets = offsets, point_params = point_params, seeds = seeds,
                     n_realizations = len(seeds), n_unfinished = len(unfinished))
+    #a phi_noise run measured no phi moments of its own; it copied the source's grids
+    metadata["copied_phi"] = (None if config["has_phi_moments"]
+                              else _load_copied_phi(directory, config, verbose))
     if verbose:
         print(f"Loaded {len(seeds)} realizations x {len(offsets)} stencil points from "
               f"{directory}")
         print(f"  nside {config['nside']}, {config['theta_pix']:g}', "
               f"{config['noise_level']:g} uK-arcmin, l_knee {config['l_knee']:g}, "
-              f"map_joint {config['map_joint_steps']} steps, reconstruction at the "
+              + (f"map_joint {config['map_joint_steps']} steps, "
+                 if config["has_phi_moments"] else "map_joint not run, ")
+              + f"reconstruction at the "
               f"{config['reconstruction']} cosmology, N_phi "
               f"{'frozen at theta_0' if config['constant_nphi'] else 'rebuilt per point'}")
-        if config["wiener_nphi_source"] == "score":
-            nphi_text = (f" (sampler noise bound N_phi, checksum "
+        if config["wiener_nphi_source"] != "covariance":
+            nphi_text = (f" ({_WIENER_SOURCE_TEXT[config['wiener_nphi_source']]}, checksum "
                          f"{config['wiener_nphi_checksum'][:12]})")
         else:
             nphi_text = (f" (box QE, {config['qe_response']} response, "
@@ -502,8 +672,9 @@ def load_covariance_directory(directory, verbose = True):
                  + nphi_text
                  if config["delensing_phi"] == "wiener_truth" else "map_joint's phi_hat"))
         print(f"  stencil: {list(config['names'])} at +/- {config['step_sigma']:g} sigma")
-        if not config["has_phi_moments"]:
-            print(f"  no per-mode phi moments (files predate them): no empirical phi noise")
+        if not config["has_phi_moments"] and metadata["copied_phi"] is None:
+            print(f"  no per-mode phi moments (files predate them, or map_joint was not "
+                  f"run and its noise file had none to copy): no empirical phi noise")
         print(f"  worst inverse-lensing round trip: "
               f"{np.max(stacked['inverse_error']):.3e}")
     return stacked, metadata
@@ -649,11 +820,15 @@ def leave_one_out_grids(directory, smooth_delta_ell = 0.0, verbose = True):
                                       for moment in PHI_MOMENTS},
                                      np.asarray(ell_grid), weights, smooth_delta_ell))
     totals = {key: np.sum(value, axis = 0) for key, value in rows.items()}
+    #copied phi grids are another run's realization means: they cannot be resampled over
+    #THIS run's realizations, so every delete-one set carries them unchanged and the
+    #jackknife error covers the f block only
+    copied = metadata["copied_phi"] or {}
 
     def generate():
         for drop in range(n_real):
             means = {key: (totals[key] - rows[key][drop]) / (n_real - 1) for key in rows}
-            yield forecast_grids(means, centre, plus, minus)
+            yield dict(forecast_grids(means, centre, plus, minus), **copied)
 
     return list(metadata["seeds"]), generate()
 
@@ -826,6 +1001,7 @@ def merge_delensed_covariance(directory, delta_ell = DEFAULT_DELTA_ELL, smooth_d
                   qe_response = metadata["qe_response"],
                   wiener_nphi_source = metadata["wiener_nphi_source"],
                   wiener_nphi_checksum = metadata["wiener_nphi_checksum"],
+                  wiener_nphi_key = metadata["wiener_nphi_key"],
                   **{key: metadata[key] for key in _CONFIG_KEYS})
 
     camb = _camb_grid_covariances(point_params, nside, pix_width, ell_grid)
@@ -880,13 +1056,21 @@ def merge_delensed_covariance(directory, delta_ell = DEFAULT_DELTA_ELL, smooth_d
     merged["crn_unlensed_error"] = crn_error
 
     merged["has_phi_moments"] = bool(metadata["has_phi_moments"])
+    #True when the phi grids below are another run's, passed through (no band diagnostics)
+    merged["phi_moments_copied"] = False
     if metadata["has_phi_moments"]:
         _merge_phi(stacked, metadata, merged, camb, centre, plus, minus, steps, band,
                    len(band_ells), ell_grid, weights, edges, pix_width, smooth_delta_ell)
+    elif metadata["copied_phi"] is not None:
+        #the source merge's own smoothing stands; this merge's smooth_delta_ell has no
+        #moments to act on
+        merged.update(metadata["copied_phi"])
+        merged["has_phi_moments"] = True
+        merged["phi_moments_copied"] = True
 
     if verbose:
         _report(merged, names)
-        if merged["has_phi_moments"]:
+        if merged["has_phi_moments"] and not merged["phi_moments_copied"]:
             _report_phi(merged, names)
     return merged
 

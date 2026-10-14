@@ -70,7 +70,7 @@ python -m cmb_lensing.sampler_noise_estimate --nside 64 --theta_pix 5 --n_phi 5 
 
 # Sampler EFFECTIVE phi noise: posterior-mean phi x true phi from fixed-theta chains (from a filled-in sampling_chains/)
 sbatch get_sampler_effective_noise.sh                                   # one job (one data map, one chain) per seed
-python merge_sampler_effective_noise.py --chain_dir <out_dir> --burn_in 200 --burn_in_scan 100 400   # on the HPC; works on running jobs
+sbatch merge_sampler_effective_noise.sh                                 # the analysis on a compute node (set chain_dir / burn_in / burn_in_scan in it); works on running jobs
 python -m cmb_lensing.fisher_forecast --nphi_source score --phi_noise <...>/sampler_effective_noise.npz
 python -m cmb_lensing.sampler_effective_noise --nside 64 --theta_pix 5 --n_maps 4 --n_sweeps 400 --burn_in 100 --out_dir <dir>   # local
 
@@ -419,13 +419,47 @@ N_phi through `fisher_forecast.frozen_reconstruction` (box QE matrix, i.e. the f
 off, which is bit-identical to the old W. Files record `iterative_delens` / `qe_response`
 (absent = False / "unlensed"), the merge refuses to mix them, and the forecast warns when its
 own flags differ. Measured at nside 64 / 5': iterating lowers N_phi ~1.5% (median), gradient
-raises it ~0.7%. **`score_noise` (added 2026-10-01; job arg 13, out_dir 14, params from 15):**
+raises it ~0.7%. **`phi_noise` (2026-10-08) REPLACES `score_noise` and `map_joint_noise`
+described below:** one driver variable / job arg 13 / `measure_delensed_covariance(phi_noise =
+...)` taking any merged noise npz at this box and cosmology
+(`delensed_covariance.load_wiener_noise`), plus `phi_noise_key` (job arg 14; out_dir 15,
+params from 16) to name a non-default grid. Default grid: `nphi` (score bound of a
+`sampler_noise_estimate.npz` -> source `"score"`; effective noise of a
+`sampler_effective_noise*.npz`, told apart by its `nphi_cross_raw` -> the new source
+`"sample_joint"`), else `phi_noise_fid` of a `delensed_covariance.npz` (`"map_joint"`);
+`phi_noise_key=nphi_map_joint` gives the old map_joint_noise behaviour on a sampler file.
+With `phi_noise` set map_joint is NEVER run (a score W used to run it), NaN modes get W = 0,
+files record `wiener_nphi_key`, and the phi grids are copied only from a
+`delensed_covariance.npz` (the other files have none). Refused with `iterative_delens=1`.
+Smoke-tested at nside 128 with all three kinds of file. **`score_noise` (added 2026-10-01; job arg 13, out_dir 14, params from 15):**
 an HPC path to a `sampler_noise_estimate.npz` at the same box and cosmology makes W's N_phi
 that sampler noise bound (`WIENER_NPHI_SOURCES`; refused with `iterative_delens=1`;
 `qe_response` then unused). Files record `wiener_nphi_source` ("covariance" when absent) and
 `wiener_nphi_checksum` (`fisher_forecast.nphi_checksum`, sha1 of the matrix); the merge
 refuses to mix, and the forecast warns if `--nphi_source` disagrees with the file or, under
-`score`, if its `--phi_noise` matrix's checksum differs from W's. Every run before 2026-10-01
+`score`, if its `--phi_noise` matrix's checksum differs from W's. **`map_joint_noise` (added
+2026-10-07; job arg 14, out_dir now 15, params from 16):** an HPC path to an earlier run's
+per-mode effective map_joint noise at the same box and cosmology
+(`delensed_covariance.load_map_joint_noise`, `MAP_JOINT_NOISE_KEYS`): a
+`sampler_noise_estimate.npz` with `nphi_map_joint`, or a merged `delensed_covariance.npz`
+with `phi_noise_fid` (its NaN / unmeasured modes get W = 0). W's N_phi is that matrix
+(`wiener_nphi_source = "map_joint"`, checksummed) and the jobs do NOT run map_joint, so the
+files carry no `PHI_MOMENTS` and `map_joint_steps` / `reconstruction` / `constant_nphi` do
+nothing. Instead, when the source is a `delensed_covariance.npz`, each job copies its MERGED
+phi grids (`COPIED_PHI_BASES`: `phi_r2` / `phi_measured` / `phi_auto` / `phi_signal` /
+`phi_hat_noise` / `phi_noise`, reordered to the job's `names`) into one sidecar
+`copied_phi_moments.npz` in out_dir (`copied_phi_grids` / `write_copied_phi`; scp it with the
+job files). The merge passes them through (`has_phi_moments = True`,
+`phi_moments_copied = True`, the source's smoothing, no phi band report / plot), so
+`--empirical_phi_noise` works; the +/- grids are copied only when the source stencil has
+every name at the same step, otherwise centre only and the forecast refuses `--vary_nphi` /
+`--empirical_phi_block`. `forecast_jackknife` carries the copied grids unchanged through
+every delete-one set, so its error covers the f block only. A sampler file has no moments
+to copy. Refused with
+`score_noise` or `iterative_delens=1`. The forecast warns unless it runs `--nphi_source
+score` on a matrix with the same checksum (for the sampler file: `--phi_noise <same npz>
+--map_joint_phi_noise`). MEASURED ~21 s / 1.3 GB for a 3-point job at nside 128 locally.
+Every run before 2026-10-01
 (incl. the `_wiener_*_iterative_delens_qe_gradient` dirs) used the QE W. The measured numbers quoted below for the `_shifted` / `_fiducial` runs are map_joint
 delensing.
 The unlensed and lensed fields are stored too: with common random numbers the empirical
@@ -566,8 +600,11 @@ Four estimates that must agree (`ESTIMATES`): `cross` (headline; A = cross power
 means of `n_blocks` = 4 disjoint post-burn-in blocks, free of the Var_post / n_eff Monte Carlo
 bias), `naive` (A = |phi_mean|^2, biased HIGH by ~(1 + N/C) / n_eff), `b_only` (r^2 = <B>/<D>,
 valid for an exact posterior mean), `variance` (r^2 = 1 - <V>/C from the chain's own posterior
-variance, divided by n - IAT; fragile where N >> C). Also first-half / second-half bands and
-`--burn_in_scan`. Bands: moments whitened by C_k, summed over the band, and (1/r^2 - 1) quoted
+variance, divided by n - IAT; fragile where N >> C). Also first-half / second-half bands.
+`--burn_in_scan` repeats the WHOLE analysis per burn-in (the merge script loops over
+`merge_effective_noise`), writing each one's npz + plots as it completes under a
+`_burn_in_<b>` suffix (the `--burn_in` one is un-suffixed) and ending with
+`report_burn_in_scan`'s table; a burn-in no chain has reached is skipped. Bands: moments whitened by C_k, summed over the band, and (1/r^2 - 1) quoted
 relative to the QE's own under the same functional (`band_reference`) times the harmonic band
 N_QE - the plain C_band (1/r^2 - 1) is ~10% off at L < 300. Verified on synthetic AR(1) chains
 with an injected Wiener posterior: per-mode N exact to 1e-15 from exact moments, every estimate
@@ -583,7 +620,9 @@ merged `sampler_effective_noise.npz` has `nphi` + nside / theta_pix / noise_leve
 applies). It also keeps the per-realization moments (`moment_*`) and per-chain per-mode `iat`.
 MEASURED nside 64 / 5' (8 local cores): ~1.0-1.35 s per sweep after ~25 s compile, 1.35 GB RSS.
 Scripts (both `sampling_chains*/`, both `.py` byte-identical): `get_sampler_effective_noise.sh`
--> `get_sampler_effective_noise_1_chain.sh/.py` -> `merge_sampler_effective_noise.py`.
+-> `get_sampler_effective_noise_1_chain.sh/.py` -> `merge_sampler_effective_noise.sh/.py`
+(the merge is too heavy for a login node: ESTIMATED 20-40 min and ~3 GB per burn-in at
+nside 128 / 6000 sweeps / 100 maps, never measured).
 
 **`fisher_forecast_full_sky.py` is the textbook forecast formula**,
 `F_ij = sum_l (2l+1)/2 f_sky Tr[C_l^-1 dC_l/di C_l^-1 dC_l/dj]`. Same likelihood and same

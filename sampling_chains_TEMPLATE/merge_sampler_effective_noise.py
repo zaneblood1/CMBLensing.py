@@ -7,6 +7,9 @@ running: only the sweeps each one reports as complete are read.
     python merge_sampler_effective_noise.py --chain_dir ABSOLUTE_PATH_TO/sampler_effective_noise_output \
         --burn_in 200 --burn_in_scan 100 400 800
 
+It is too heavy for a login node (tens of minutes and ~3 GB at nside 128 / 6000 sweeps / 100
+maps): submit it with merge_sampler_effective_noise.sh.
+
 For every chain: cut --burn_in sweeps, measure the integrated autocorrelation time (IAT) of
 every phi mode, and average the remaining UN-THINNED samples into the posterior mean phi.
 Then, per mode and with the moments summed over the data maps before the ratio is taken,
@@ -24,7 +27,9 @@ The report prints, per L band and as ratios to the QE's N0: the headline "cross"
 (|phi_mean|^2 from the cross power of disjoint chain blocks, which carries no Monte Carlo
 noise bias) with its jackknife error; the "naive", "b_only" and "variance" estimates that
 must agree with it; the same from the first and second half of every chain; the IAT and the
-smallest effective sample count. --burn_in_scan recomputes the headline at other burn-ins.
+smallest effective sample count. --burn_in_scan repeats the WHOLE analysis at other burn-ins,
+writing each one's npz and plots (names suffixed _burn_in_<b>) as soon as it completes, and
+ends with a table of the headline estimate against the burn-in.
 See cmb_lensing/sampler_effective_noise.py.
 
 This file is byte-identical between sampling_chains_TEMPLATE/ and sampling_chains/.
@@ -36,6 +41,7 @@ import os
 import numpy as np
 
 from cmb_lensing.sampler_effective_noise import (merge_effective_noise, write_outputs,
+                                                 report_burn_in_scan, burn_in_suffix,
                                                  DEFAULT_BURN_IN, DEFAULT_DELTA_ELL,
                                                  DEFAULT_N_BLOCKS)
 
@@ -48,9 +54,11 @@ def main():
     parser.add_argument("--burn_in", type = int, default = DEFAULT_BURN_IN,
                         help = "sweeps cut from the start of every chain")
     parser.add_argument("--burn_in_scan", type = int, nargs = "*", default = [],
-                        help = "further burn-ins at which the headline band spectrum is "
-                               "recomputed, to check that it has stopped moving (each one "
-                               "re-reads every chain)")
+                        help = "further burn-ins, each analysed in full after --burn_in and "
+                               "written as it completes to sampler_effective_noise_burn_in_"
+                               "<b>.npz / _spectra.png / _iat.png and iat_per_chain_burn_in_"
+                               "<b>/; a table comparing all of them is printed at the end "
+                               "(each one re-reads every chain)")
     parser.add_argument("--delta_ell", type = float, default = DEFAULT_DELTA_ELL,
                         help = "width of the |L| bands for the spectra and the band report")
     parser.add_argument("--n_blocks", type = int, default = DEFAULT_N_BLOCKS,
@@ -66,23 +74,43 @@ def main():
                                "sampler_noise_estimate.npz), drawn in the spectra plot")
     args = parser.parse_args()
 
-    merged = merge_effective_noise(args.chain_dir, burn_in = args.burn_in,
-                                   delta_ell = args.delta_ell, n_blocks = args.n_blocks,
-                                   smooth = args.smooth, burn_in_scan = args.burn_in_scan)
-    compare = []
-    for path in args.compare:
-        other = np.load(path, allow_pickle = True)
-        if np.asarray(other["nphi"]).shape != merged["nphi"].shape:
-            raise ValueError(f"{path} holds an nphi of shape {np.asarray(other['nphi']).shape}"
-                             f", not this box's {merged['nphi'].shape}")
-        compare.append((os.path.basename(os.path.dirname(os.path.abspath(path))) + "/"
-                        + os.path.basename(path), np.asarray(other["nphi"])))
-    out_path = write_outputs(merged, args.chain_dir, compare = compare)
-    print(f"\nUse it with:\n"
-          f"    python -m cmb_lensing.fisher_forecast --nphi_source score "
-          f"--phi_noise {out_path} --nside {int(merged['nside'])} "
-          f"--theta_pix {float(merged['theta_pix']):g} "
-          f"--noise {float(merged['noise_level']):g} ...")
+    compare = [(os.path.basename(os.path.dirname(os.path.abspath(path))) + "/"
+                + os.path.basename(path), np.asarray(np.load(path, allow_pickle = True)["nphi"]))
+               for path in args.compare]
+
+    #--burn_in first (the un-suffixed files), then every --burn_in_scan value in the order
+    #given. Each one is a complete analysis whose npz and plots are written BEFORE the next
+    #one starts, so a long scan can be inspected (or killed) part way through
+    scan = [b for b in dict.fromkeys(args.burn_in_scan) if b != args.burn_in]
+    results, out_path = [], None
+    for burn_in in [args.burn_in] + scan:
+        print(f"\n===== burn-in {burn_in} =====", flush = True)
+        try:
+            merged = merge_effective_noise(args.chain_dir, burn_in = burn_in,
+                                           delta_ell = args.delta_ell,
+                                           n_blocks = args.n_blocks, smooth = args.smooth)
+        except ValueError as error:
+            #e.g. no chain is long enough for this burn-in yet: the others still run
+            print(f"burn-in {burn_in} skipped: {error}", flush = True)
+            continue
+        for label, matrix in compare:
+            if matrix.shape != merged["nphi"].shape:
+                raise ValueError(f"{label} holds an nphi of shape {matrix.shape}, not this "
+                                 f"box's {merged['nphi'].shape}")
+        path = write_outputs(merged, args.chain_dir, compare = compare,
+                             suffix = "" if burn_in == args.burn_in
+                             else burn_in_suffix(burn_in))
+        out_path = path if burn_in == args.burn_in else out_path
+        results.append(merged)
+
+    report_burn_in_scan(sorted(results, key = lambda r: int(r["burn_in"])))
+    if out_path is not None:
+        merged = results[0]
+        print(f"\nUse it with:\n"
+              f"    python -m cmb_lensing.fisher_forecast --nphi_source score "
+              f"--phi_noise {out_path} --nside {int(merged['nside'])} "
+              f"--theta_pix {float(merged['theta_pix']):g} "
+              f"--noise {float(merged['noise_level']):g} ...")
 
 
 if __name__ == "__main__":

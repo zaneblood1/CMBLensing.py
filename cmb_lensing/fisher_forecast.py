@@ -853,7 +853,10 @@ def load_phi_noise(path):
     missing = [key for key in ("band_ells", "n_eff") if key not in merged]
     if missing:
         raise ValueError(f"{path} is missing {missing}; it does not look like a "
-                         f"merge_phi_noise.py product")
+                         f"merge_phi_noise.py product"
+                         + (". It holds a per-mode `nphi` matrix (a sampler noise estimate "
+                            "or sampler effective noise file): use nphi_source = 'score' "
+                            "for it, not 'measured'" if "nphi" in merged else ""))
     return merged
 
 
@@ -1572,7 +1575,7 @@ def covariance_blocks(cls, spectra, nside, pix_width, ell_grid,
     # nphi = nphi.at[0].set(0.5*nphi[0])
     # nphi = nphi.at[1].set(0.5*nphi[1])
     # nphi = nphi.at[2].set(0.5*nphi[2])
-    phi_block = (covar(cls["phi"], phi_ells) + 0.8*nphi)
+    phi_block = (covar(cls["phi"], phi_ells) + nphi)
 
     if spectra == "delensed":
         #the complete-data f block, but paying for imperfect delensing: CAMB's own lensing
@@ -1744,11 +1747,15 @@ def frozen_reconstruction(cls_fid, spectra, nside, pix_width, ell_grid, noise_le
             "quadratic estimator's filter; a measured N_eff already IS what the MAP achieved, "
             "so iterating it would re-apply the correction on top of the measurement.")
     if iterative_delens and nphi_source == "score":
-        raise ValueError(
-            "iterative delensing cannot be combined with nphi_source = 'score'. The "
-            "iteration approximates what a likelihood reconstruction achieves by quieting a "
-            "quadratic estimator's filter; the score bound is computed from the exact "
-            "likelihood at the true phi, so iterating would apply the improvement twice.")
+        #a measured matrix does not depend on the estimator's filter or response, so the
+        #iteration has nothing to update: Alens_L = N_L / (C_L + N_L) from the azimuthal
+        #average of the matrix IS its fixed point, reached by the one-shot branch below, and
+        #CAMB delenses with it at every stencil point
+        if verbose:
+            print("  iterative_delens with nphi_source = 'score': the measured N_phi is "
+                  "independent of the filter, so Alens_L is already the iteration's fixed "
+                  "point (one step); qe_response does not enter")
+        iterative_delens = False
     if nphi_source not in NPHI_SOURCES:
         raise ValueError(f"nphi_source must be one of {NPHI_SOURCES}, got {nphi_source!r}")
     _check_qe_response(qe_response)
@@ -1774,9 +1781,8 @@ def frozen_reconstruction(cls_fid, spectra, nside, pix_width, ell_grid, noise_le
                                 camb_lmax = camb_lmax, radial_mean = radial_mean))
         #the iteration quiets BOTH the delensing and the phi block's estimator, with the
         #final step's filter AND response
-
         nphi = qe_noise_grid(response_cls, nside, pix_width, ell_grid, noise_level, l_knee,
-                             beam_fwhm, l_cutoff, nphi_source, filter_tt = delensed_tt,
+                             beam_fwhm, l_cutoff, nphi_source, filter_tt = delensed_tt, #cls_fid["scalar_TT"], 
                              qe_response = qe_response, radial_mean = radial_mean)
         # ells = jnp.arange(2, 2 + len(nphi_cl)).astype(jnp.float64)
         # nl_pp = alens[1:]*cls_fid["phi"]/(1 - alens[1:])
@@ -1954,6 +1960,11 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
             raise ValueError(f"{delensed_covariance} carries no per-mode phi moments: its jobs "
                              f"predate them. Re-run get_delensed_covariance.sh and "
                              f"merge_delensed_covariance.py, or drop --empirical_phi_noise.")
+        if ((empirical_phi_block or (empirical_phi_noise and not constant_nphi))
+                and "phi_r2_fid" in empirical and "phi_r2_plus" not in empirical):
+            raise ValueError(f"{delensed_covariance} carries COPIED phi grids at the centre "
+                             f"only (its phi_noise source sat on a different stencil), "
+                             f"so only --empirical_phi_noise without --vary_nphi can use it.")
         if freeze_phi_noise and "phi_signal_fid" not in empirical:
             raise ValueError(f"{delensed_covariance} carries no phi_signal / phi_hat_noise "
                              f"grids. If its job files have the phi moments, re-run "
@@ -1982,8 +1993,10 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
         measured_source = str(empirical.get("wiener_nphi_source", "covariance"))
         if empirical_phi_noise or empirical_phi_block:
             pass
-        elif measured_source == "score" or nphi_source == "score":
-            if measured_source != nphi_source:
+        elif measured_source != "covariance" or nphi_source == "score":
+            #W built from a stored matrix ("score" bound or "map_joint" noise): the phi block
+            #matches it only when it loads that same matrix through nphi_source = "score"
+            if (measured_source != "covariance") != (nphi_source == "score"):
                 print(f"  WARNING: the empirical delensed covariance was delensed with a "
                       f"W built from the {measured_source!r} N_phi, but this forecast's phi "
                       f"block uses nphi_source = {nphi_source!r}; the two blocks sit on "
@@ -1991,7 +2004,8 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
             elif (nphi_checksum(measured_phi_noise["nphi"])
                   != str(empirical.get("wiener_nphi_checksum", ""))):
                 print(f"  WARNING: the empirical delensed covariance's W was built from a "
-                      f"DIFFERENT sampler noise bound than --phi_noise {phi_noise} (checksum "
+                      f"DIFFERENT N_phi matrix ({measured_source!r}) than this forecast's "
+                      f"--phi_noise {phi_noise} gives (checksum "
                       f"{str(empirical.get('wiener_nphi_checksum', ''))[:12]} vs "
                       f"{nphi_checksum(measured_phi_noise['nphi'])[:12]})")
         elif (measured_iterative, measured_response) != (bool(iterative_delens), qe_response):
@@ -2080,6 +2094,11 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground, 
                   f"realizations, {int(measured_phi_noise['map_joint_steps'])} map_joint "
                   f"steps; {int(measured_phi_noise['map_joint_filled_modes'])} unrecovered "
                   f"modes filled from the QE shape)")
+        elif nphi_source == "score" and "n_draws_total" not in measured_phi_noise:
+            #a merge_sampler_effective_noise.py file: the same `nphi` slot, a different origin
+            print(f"  N_phi: sampler effective noise (posterior-mean phi x true phi) from "
+                  f"{phi_noise} ({int(measured_phi_noise['n_realizations'])} chains, burn-in "
+                  f"{int(measured_phi_noise['burn_in'])})")
         elif nphi_source == "score":
             print(f"  N_phi: sampler noise bound 1/<F_phi> from {phi_noise} "
                   f"({int(measured_phi_noise['n_realizations'])} phi realizations, "

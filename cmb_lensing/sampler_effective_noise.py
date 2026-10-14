@@ -399,8 +399,7 @@ def _whitened_rows(moments, cphi, nside, use):
 
 
 def merge_effective_noise(directory, burn_in = DEFAULT_BURN_IN, delta_ell = DEFAULT_DELTA_ELL,
-                          n_blocks = DEFAULT_N_BLOCKS, smooth = False, burn_in_scan = (),
-                          verbose = True):
+                          n_blocks = DEFAULT_N_BLOCKS, smooth = False, verbose = True):
     """Burn in every chain, average it, and form the effective N_phi over realizations.
 
     Returns a dict ready for np.savez. `nphi` is the full rfft-grid matrix
@@ -409,8 +408,8 @@ def merge_effective_noise(directory, burn_in = DEFAULT_BURN_IN, delta_ell = DEFA
     ratio elsewhere - or, with `smooth`, that QE-shaped fill at EVERY mode (`nphi_smooth`
     always holds it). Also the raw per-mode matrix and jackknife error of every estimate,
     their band spectra and errors, the half-chain bands, the IAT summaries and the
-    per-realization moments. `burn_in_scan` lists further burn-ins at which the headline band
-    spectrum is recomputed (`band_scan`), to show that it has stopped moving.
+    per-realization moments. To check that the result has stopped moving with the burn-in,
+    call this once per burn-in and hand the results to report_burn_in_scan.
     """
     if n_blocks < 4 or n_blocks % 2:
         raise ValueError(f"n_blocks must be even and at least 4 (two blocks per half-chain), "
@@ -508,26 +507,27 @@ def merge_effective_noise(directory, burn_in = DEFAULT_BURN_IN, delta_ell = DEFA
     for name in MOMENTS:
         merged[f"moment_{name}"] = np.array([m[name] for m in moments])
 
-    #the headline band spectrum at other burn-ins (no IAT, no jackknife: a stability check)
-    scan = [b for b in burn_in_scan if b != burn_in]
-    if scan:
-        merged["burn_in_scan"] = np.array(scan)
-        merged["band_scan"] = np.array([_scan_bands(jobs, b, n_blocks, cphi, nside, use,
-                                                    arguments, verbose) for b in scan])
     if verbose:
         _report(merged)
     return merged
 
 
-def _scan_bands(jobs, burn_in, n_blocks, cphi, nside, use, arguments, verbose):
-    """The "cross" band spectrum at another burn-in, from the chains long enough for it."""
-    usable = [job for job in jobs if job["n_done"] - burn_in >= 10 * n_blocks]
-    if verbose:
-        print(f"  burn-in scan: {burn_in} ({len(usable)} chains)", flush = True)
-    if not usable:
-        return np.full(arguments[3], np.nan)
-    moments = [chain_moments(job, burn_in, n_blocks, with_iat = False) for job in usable]
-    return noise_estimates(_whitened_rows(moments, cphi, nside, use), *arguments)[1]["cross"]
+def report_burn_in_scan(results):
+    """Print the headline "cross" band spectrum / N_QE of several merge_effective_noise
+    results side by side, one column per burn-in: it should stop moving once the burn-in is
+    long enough. A longer burn-in can set aside chains a shorter one used."""
+    if len(results) < 2:
+        return
+    first = results[0]
+    print("\nburn-in scan of the cross estimate / N_QE (+/- jackknife); chains used: "
+          + ", ".join(f"{int(r['burn_in'])}: {int(r['n_realizations'])}" for r in results))
+    print(f"  {'L':>6s}  " + " ".join(f"{int(r['burn_in']):>15d}" for r in results))
+    for b, ell in enumerate(first["band_ells"]):
+        if first["band_count"][b]:
+            print(f"  {ell:6.0f}  " + " ".join(
+                f"{r['band_nphi'][b] / r['band_nphi_qe'][b]:6.3f} +/- "
+                f"{r['band_nphi_error'][b] / r['band_nphi_qe'][b]:5.3f}" for r in results),
+                flush = True)
 
 
 def _report(merged):
@@ -562,15 +562,7 @@ def _report(merged):
               f"{error('cross'):5.3f} {value('naive'):7.3f} {value('b_only'):6.3f} +/- "
               f"{error('b_only'):5.3f} {value('variance'):8.3f}  {value('half_1'):7.3f} "
               f"{value('half_2'):7.3f}  {iat[b]:7.1f} {iat_max[b]:7.1f} "
-              f"{n_used.min() / iat_max[b]:9.1f}")
-    if "band_scan" in merged:
-        print(f"\n  burn-in scan of the cross estimate / N_QE (analysis burn-in "
-              f"{merged['burn_in']}):")
-        print(f"  {'L':>6s}  " + " ".join(f"{b:>7d}" for b in merged["burn_in_scan"]))
-        for b, ell in enumerate(merged["band_ells"]):
-            if merged["band_count"][b]:
-                print(f"  {ell:6.0f}  " + " ".join(f"{row[b] / qe[b]:7.3f}"
-                                                   for row in merged["band_scan"]))
+              f"{n_used.min() / iat_max[b]:9.1f}", flush = True)
 
 
 # ── Plots ──────────────────────────────────────────────────────────────────
@@ -698,16 +690,22 @@ def plot_iat_per_chain(merged, directory):
         plt.close(figure)
 
 
-def write_outputs(merged, directory, compare = ()):
-    """Save the merged npz and every plot into `directory`; returns the npz path."""
-    out_path = os.path.join(directory, MERGED_NAME)
+def burn_in_suffix(burn_in):
+    return f"_burn_in_{int(burn_in)}"
+
+
+def write_outputs(merged, directory, compare = (), suffix = ""):
+    """Save the merged npz and every plot into `directory`; returns the npz path. `suffix`
+    (e.g. burn_in_suffix) goes into every name, so several burn-ins can share a directory."""
+    stem = os.path.join(directory, os.path.splitext(MERGED_NAME)[0] + suffix)
+    out_path = stem + ".npz"
     np.savez(out_path, **merged)
-    stem = os.path.splitext(out_path)[0]
     plot_spectra(merged, stem + "_spectra.png", compare = compare)
     plot_iat_summary(merged, stem + "_iat.png")
-    plot_iat_per_chain(merged, os.path.join(directory, "iat_per_chain"))
+    iat_directory = os.path.join(directory, "iat_per_chain" + suffix)
+    plot_iat_per_chain(merged, iat_directory)
     print(f"\nwrote {out_path}\nwrote {stem}_spectra.png\nwrote {stem}_iat.png\n"
-          f"wrote {os.path.join(directory, 'iat_per_chain')}/iat_chain_*.png")
+          f"wrote {iat_directory}/iat_chain_*.png", flush = True)
     return out_path
 
 

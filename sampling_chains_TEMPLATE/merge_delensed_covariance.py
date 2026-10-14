@@ -156,7 +156,7 @@ def main():
 
     print(f"\nwrote {out_path}")
     print(f"wrote {plot_path}")
-    if merged["has_phi_moments"]:
+    if merged["has_phi_moments"] and not merged["phi_moments_copied"]:
         phi_path = os.path.splitext(out_path)[0] + "_phi_noise.png"
         plot_phi_noise(merged, phi_path)
         print(f"wrote {phi_path}")
