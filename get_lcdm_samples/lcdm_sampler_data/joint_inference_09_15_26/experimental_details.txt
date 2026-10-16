@@ -1,0 +1,12 @@
+- 128 x 128 pixels
+- theta_pix = 2.5
+- white noise ONLY at 5 uk-arcmin
+- Normal HMC for Phi with num_steps = 10 and step_size = 0.05
+- Sampling (logA, omch2, theta_MC_100) jointly while ombh2 and ns are held at fiducial values
+- 3 Sequential 1-D MH steps in a rotated frame of reference where theta_vec_prime = R @ theta_vec and R-matrix is computed as the sigma normalized eigenvector outer product of the correlation matrix from Fisher forecast using delensed temperature spectra from CAMB
+- The proposals in the rotated frame of reference are given as 2.4 times the fisher forecast sigma
+- Fisher forecast decomposes Nphi by azimuthal averaging and then uses Al = N_l_pp / (C_l_pp + N_l_pp) as the input to CAMB's delensing algorithm
+- The fisher blocks then use finite differences to differentiate Covar["delensed"] + Cn & C_phi + N_phi
+- 10 data maps, 5 sub-chains per map, 6000 iterations per sub-chains, 100 burn-in fix theta
+- Initial points in (logA, omch2, theta_MC_100) chosen randomly and uniformly within allowed search ranges
+- Using refactored CAMB grid interpolator

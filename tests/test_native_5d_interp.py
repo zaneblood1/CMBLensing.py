@@ -34,6 +34,7 @@ import pytest
 from scipy.interpolate import make_interp_spline, NdBSpline
 
 from cmb_lensing.camb_grid_interp import _TensorSpline, GRID_AXES
+from cmb_lensing.constants import CAMB_GRID_PATH
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from handrolled_bspline_reference import _eval_bspline, _eval_bspline_grads
@@ -45,8 +46,7 @@ AXIS_RANGES = [(50.0, 130.0), (2.9, 3.2), (0.93, 0.99), (0.0210, 0.0236), (0.104
 #a stand-in for the ell axis; the real grid has 3998 and the evaluators only ever carry it
 N_TRAILING = 64
 
-REAL_GRID_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                              "cmb_lensing", "camb_splines", "camb_grid_spline.npz")
+REAL_GRID_PATH = CAMB_GRID_PATH
 
 
 def _build_grid(seed = 0, dtype = np.float32):

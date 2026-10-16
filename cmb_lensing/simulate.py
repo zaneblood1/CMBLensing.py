@@ -131,11 +131,12 @@ def te_rho_from_cls(cl_te, cl_tt, cl_ee):
                      0.0)
 
 
-def field_from_covar(nside, covar_matrix, rng_keys, key_counter):
-    seed = rng_keys[key_counter]
-    key_counter = key_counter + 1
-    field = field_from_covar_single_key(nside, covar_matrix, seed)
-    return field, key_counter
+def field_from_covar(nside, covar_matrix, rng_key):
+    """(field, rng_key): split a fresh subkey off `rng_key` for this one draw and hand back
+    the key to split the next one from."""
+    rng_key, subkey = jax.random.split(rng_key)
+    field = field_from_covar_single_key(nside, covar_matrix, subkey)
+    return field, rng_key
 
 def field_from_covar_single_key(nside, covar_matrix, seed):
     #draw a real Gaussian field with power spectrum covar_matrix. building it as the rfft2 of
@@ -799,10 +800,15 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
              precomputed_cls = None):
     """Simulate a lensed CMB data set. See the module and CLAUDE.md for the pipeline.
 
+    Randomness: one root key PRNGKey(master_seed), and every random field (phi, then the
+    unlensed field(s), then the noise) splits its own subkey off it in that fixed order
+    (field_from_covar). So the realization at a seed depends on the cosmology only through
+    the covariances the white noise is scaled by.
+
     `precomputed_cls` optionally supplies the CAMB spectra instead of running CAMB, for
     callers that build many realizations at ONE cosmology and would otherwise pay for an
-    identical CAMB evaluation every time (fisher_forecast_from_logpdf does exactly
-    this). It must be a dict in _extract_all_cls's format - the output of
+    identical CAMB evaluation every time (delensed_covariance and sampler_effective_phi_noise
+    do this). It must be a dict in _extract_all_cls's format - the output of
     fisher_forecast.camb_cls_at_params is one, since CAMB_LMAX equals DEFAULT_MAX_ELL.
 
     CALLER'S RESPONSIBILITY: the spectra must correspond to the SAME cosmology as the
@@ -822,7 +828,11 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
         cls = _validate_precomputed_cls(precomputed_cls, lmax)
 
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    keys = jax.random.split(jax.random.PRNGKey(master_seed), 100)
+    #one root key; every draw below splits its own subkey off it (field_from_covar). The draw
+    #ORDER (phi, the field(s), the noise) is fixed and independent of the cosmology, so two
+    #calls at the same seed share every white-noise realization - the common random numbers
+    #delensed_covariance.py's stencil relies on
+    rng_key = jax.random.PRNGKey(master_seed)
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
     #ells arrays matched to the cls lengths: the emulator override returns ells
@@ -834,7 +844,7 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
                                           phi_ells,
                                           cls["phi"], origin_value=0)
     cphi = a_phi * unscaled_cphi
-    phi, kc = field_from_covar(nside, cphi, keys, 0)
+    phi, rng_key = field_from_covar(nside, cphi, rng_key)
 
     #Unlensed field covariances (scalar + tensor). Unlensed scalar BB (identically zero
     #at r = 0) cannot go through the log-interpolating covariance builder (log(0) -> NaN)
@@ -876,13 +886,13 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
     #C_TT (1 - rho^2) >= 0 by the |rho| <= 1 construction; the maximum(0) guards
     #round-off only). The B draw against a zero covariance gives an exactly zero field
     if pol == "I":
-        field_t, kc = field_from_covar(nside, cf["TT"], keys, kc)
+        field_t, rng_key = field_from_covar(nside, cf["TT"], rng_key)
     else:
         conditional_tt = jnp.maximum(
             cf["TT"] - cf["TE"]**2 * reciprocal_matrix(cf["EE"]), 0.0)
-        t_indep, kc = field_from_covar(nside, conditional_tt, keys, kc)
-        field_e, kc = field_from_covar(nside, cf["EE"], keys, kc)
-        field_b, kc = field_from_covar(nside, cf["BB"], keys, kc)
+        t_indep, rng_key = field_from_covar(nside, conditional_tt, rng_key)
+        field_e, rng_key = field_from_covar(nside, cf["EE"], rng_key)
+        field_b, rng_key = field_from_covar(nside, cf["BB"], rng_key)
         te_ratio = cf["TE"] * reciprocal_matrix(cf["EE"])
         field_t = jfft.irfft2(te_ratio * jfft.rfft2(field_e)) + t_indep
 
@@ -908,10 +918,10 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
     for comp, ncl in zip(("TT", "TE", "EE", "BB"), (n_tt, n_te, n_ee, n_bb)):
         cn[comp] = _covar_or_zeros(nside, pix_width, ell_grid, ell_prime, ncl, origin_value=0)
 
-    wn_t, kc = field_from_covar(nside, cn["TT"], keys, kc)
+    wn_t, rng_key = field_from_covar(nside, cn["TT"], rng_key)
     if pol != "I":
-        wn_e, kc = field_from_covar(nside, cn["EE"], keys, kc)
-        wn_b, kc = field_from_covar(nside, cn["BB"], keys, kc)
+        wn_e, rng_key = field_from_covar(nside, cn["EE"], rng_key)
+        wn_b, rng_key = field_from_covar(nside, cn["BB"], rng_key)
 
     #Data = Mask * Beam * Lensed + Noise
     data_t = mask * beam * lensed_t + jfft.rfft2(wn_t)

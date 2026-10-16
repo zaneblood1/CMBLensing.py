@@ -14,7 +14,7 @@ conda activate myenv
 #one thread per job so 875 concurrent jobs do not each spawn a full OpenMP pool
 export OMP_NUM_THREADS=1
 #call the python grid script
-python3 /resnick/groups/wugroup/zblood/cmb_lensing/performance_testing/sampling_chains/run_single_camb_grid.py \
+python3 /resnick/groups/wugroup/zblood/cmb_lensing/camb_grid_generation/run_single_camb_grid.py \
     --log_a_index "$1" \
     --log_a "$2" \
     --ns_index "$3" \

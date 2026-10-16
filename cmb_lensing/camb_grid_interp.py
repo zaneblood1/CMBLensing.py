@@ -1,6 +1,7 @@
 """Evaluate the 5D CAMB grid spline at an arbitrary LCDM parameter vector.
 
-This is the joint-inference counterpart to precompute_camb_1d.load_camb_spline_predictors.
+This is the joint-inference counterpart to
+camb_grid_generation/precompute_camb_1d.py's load_camb_spline_predictors.
 That one splines in a single parameter with the other four pinned at ground truth, so
 sample_joint can only sample one parameter at a time. This one interpolates all five at
 once, off the tensor-product cubic spline built by merge_camb_grid.py.
@@ -67,8 +68,8 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
-#the sampler's parameter ordering (sample_lcdm.PARAM_ORDER)
-PARAM_ORDER = ["theta_MC_100", "logA", "ns", "ombh2", "omch2"]
+#the sampler's parameter ordering
+from cmb_lensing.constants import PARAM_ORDER
 #the grid's axis ordering - same, but with the acoustic axis in H0
 GRID_AXES = ["H0", "logA", "ns", "ombh2", "omch2"]
 
@@ -287,7 +288,7 @@ class CambGrid:
                 raise KeyError(
                     f"the merged CAMB grid at {self.path} has no {spectrum} spectrum - it "
                     f"predates the polarization/lensed-Cl extension. Re-run "
-                    f"sampling_chains/camb_grid.sh and "
+                    f"camb_grid_generation/camb_grid.sh and "
                     f"merge_camb_grid.py to regenerate it")
             self._spline_cache[spectrum] = _TensorSpline(self._data[key], self.knots)
         return self._spline_cache[spectrum]
@@ -393,7 +394,7 @@ def _missing_spectrum_predictor(grid, spectrum):
         raise KeyError(
             f"the merged CAMB grid at {grid.path} has no {spectrum} spectrum - it "
             f"predates the polarization/lensed-Cl extension. Re-run "
-            f"sampling_chains/camb_grid.sh and merge_camb_grid.py "
+            f"camb_grid_generation/camb_grid.sh and merge_camb_grid.py "
             f"to regenerate it")
     return predict
 

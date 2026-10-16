@@ -24,12 +24,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cmb_lensing.camb_grid_interp import _TensorSpline
+from cmb_lensing.constants import CAMB_GRID_PATH
 from handrolled_bspline_reference import _eval_bspline, _eval_bspline_grads
 
 GRID_SHAPE = (81, 5, 5, 5, 7)
 AXIS_RANGES = [(50.0, 130.0), (2.9, 3.2), (0.93, 0.99), (0.0210, 0.0236), (0.104, 0.136)]
-REAL_GRID_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "cmb_lensing", "camb_splines", "camb_grid_spline.npz")
+REAL_GRID_PATH = CAMB_GRID_PATH
 #the batch sizes the sampler actually issues: metropolis_sample_theta evaluates one
 #candidate at a time, make_eval_logpdf_batch vmaps a handful
 BATCH_SIZES = [1, 8, 64, 256]

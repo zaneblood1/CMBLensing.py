@@ -7,29 +7,41 @@ from cmb_lensing.util import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.mixing import *
 from cmb_lensing.constants import *
-from cmb_lensing.precompute_camb_1d import load_camb_spline_predictors, GROUND_TRUTH, PARAM_BOUNDS, PARAM_SIGMA
+from cmb_lensing.constants import (PARAM_ORDER, PARAM_INDEX, GROUND_TRUTH, PARAM_BOUNDS,
+                                   PARAM_SIGMA, CAMB_GRID_PATH)
 from cmb_lensing.camb_grid_interp import (load_camb_grid_predictors,
                                           load_camb_grid, GridPredictors)
+import importlib.util
 import os
 import random
 
-PARAM_ORDER = ["theta_MC_100", "logA", "ns", "ombh2", "omch2"]
-PARAM_INDEX = {name: i for i, name in enumerate(PARAM_ORDER)}
-
 USE_CAMB_SPLINE = False
 _camb_spline_predictors = {}
+#the 1D spline loader lives with the cache generator outside the package
+PRECOMPUTE_CAMB_1D_PATH = os.path.join(os.path.dirname(CAMB_SPLINES_DIR),
+                                       "camb_grid_generation", "precompute_camb_1d.py")
+
+def _load_precompute_camb_1d():
+    """camb_grid_generation/precompute_camb_1d.py, imported from its file. It is not part of
+    the package, and only the USE_CAMB_SPLINE path ever needs it."""
+    if not os.path.exists(PRECOMPUTE_CAMB_1D_PATH):
+        raise FileNotFoundError(f"USE_CAMB_SPLINE needs {PRECOMPUTE_CAMB_1D_PATH}")
+    spec = importlib.util.spec_from_file_location("precompute_camb_1d",
+                                                  PRECOMPUTE_CAMB_1D_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 def get_camb_spline_predictors(param_name):
     #lazy per-parameter singletons so the same function objects are reused every call -
     #they are passed as static jit args to _recompute_cosmo_matrices, so fresh objects
     #would retrace
     if param_name not in _camb_spline_predictors:
-        _camb_spline_predictors[param_name] = load_camb_spline_predictors(param_name)
+        _camb_spline_predictors[param_name] = (
+            _load_precompute_camb_1d().load_camb_spline_predictors(param_name))
     return _camb_spline_predictors[param_name]
 
 USE_CAMB_GRID = True
-CAMB_GRID_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "cmb_lensing", "camb_splines", "camb_grid_spline.npz")
 _camb_grid_predictors = None
 
 if USE_CAMB_GRID and USE_CAMB_SPLINE:
@@ -1368,9 +1380,21 @@ if __name__ == "__main__":
     # rotated_proposal_sigmas["beta"] = 1e-3
     # rotated_proposal_sigmas["gamma"] = 1e-3
 
-    data = np.load("/home/zane-blood/Desktop/cmb_lensing/cmb_lensing/fisher_output/fisher_from_blocks_2dot5_uk.npz")
-    rotation, rotated_sigmas = rotation_from_covariance(data["covariance"], list(data["names"]),
-                                  sampled_names = [n for n in PARAM_ORDER if should_sample[n]])
+    #the rotation comes from a Fisher forecast at this box, written by
+    #python -m cmb_lensing.fisher_forecast --nside 128 --theta_pix 2.5 --noise 2.5
+    rotation, rotated_sigmas = None, None
+    if reparameterize_lcdm:
+        from cmb_lensing.fisher_forecast import output_dir
+        fisher_path = os.path.join(output_dir(),
+                                   f"fisher_from_blocks_qe_delensed_camb_{noise_level}_uk.npz")
+        if not os.path.exists(fisher_path):
+            raise FileNotFoundError(f"reparameterize_lcdm needs {fisher_path}; run "
+                                    f"python -m cmb_lensing.fisher_forecast --nside {nside} "
+                                    f"--theta_pix {theta_pix} --noise {noise_level} first")
+        data = np.load(fisher_path)
+        rotation, rotated_sigmas = rotation_from_covariance(
+            data["covariance"], list(data["names"]),
+            sampled_names = [n for n in PARAM_ORDER if should_sample[n]])
 
     #run the sampling algorithm.
     param_distributions, _, _ = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 

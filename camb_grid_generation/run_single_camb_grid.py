@@ -101,7 +101,6 @@ def camb_cls_at(h0, ells):
 ells = np.arange(2, args.lmax).astype(np.float64)
 h0_grid = np.linspace(args.h0_min, args.h0_max, args.h0_nodes)
 
-
 #a CAMB failure leaves its row NaN and clears the ok flag rather than killing the job, so
 #one bad corner does not cost the whole H0 sweep. The merge step can then see the hole
 cls = {name: np.full((args.h0_nodes, ells.size), np.nan) for name in SPECTRA}

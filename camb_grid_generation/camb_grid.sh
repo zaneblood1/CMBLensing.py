@@ -23,7 +23,7 @@ l_sample_boost=1
 l_accuracy_boost=1
 
 #output folder shared by every job
-out_dir="/resnick/groups/wugroup/zblood/cmb_lensing/multi_param_CAMB_grid"
+out_dir="/resnick/groups/wugroup/zblood/CMBLensing.py/camb_splines"
 
 #Grid ranges. logA / ns / ombh2 / omch2 use the same -5 sigma to +5 sigma endpoints as
 #sample_lcdm.sh so the existing 1D caches stay a valid check along each axis. H0 replaces
