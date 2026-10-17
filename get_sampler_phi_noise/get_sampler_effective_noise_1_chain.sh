@@ -6,16 +6,15 @@
 #SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
 #SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
 #SBATCH --mem-per-cpu=4G #MEASURED 1.35 GB peak RSS at nside 64; the driver overrides this (chain_mem)
-#SBATCH --mail-user=zblood@caltech.edu #mail updates to this address
-#SBATCH --mail-type=FAIL #mail updates on failure only
+#SBATCH --mail-type=FAIL #mail updates on failure only (to SBATCH_MAIL_USER, see hpc_local.sh)
 #SBATCH --cpus-per-task=4 #This is the flag that actually increases CPUs for the JAX code
 
-#activate your own specific conda
-source /resnick/groups/wugroup/zblood/miniconda3/etc/profile.d/conda.sh
-conda activate myenv
+#conda and the other machine-specific setup; SLURM_SUBMIT_DIR is this folder, since the driver
+#submits from it
+source "$SLURM_SUBMIT_DIR/../hpc_local.sh" || exit 1
 
 #call the python script for a single chain (one data map)
-python3 /resnick/groups/wugroup/zblood/cmb_lensing/get_sampler_phi_noise/get_sampler_effective_noise_1_chain.py \
+python3 "$SLURM_SUBMIT_DIR/get_sampler_effective_noise_1_chain.py" \
     --realization_index "$1" \
     --map_seed "$2" \
     --nside "$3" \

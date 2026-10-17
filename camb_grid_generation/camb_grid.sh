@@ -1,10 +1,11 @@
 #!/bin/bash
 
-#SBATCH --time=00:10:00 #wall-time / max run time before termination in the format hh:mm:ss
-#SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
-#SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
-#SBATCH --mail-user=zblood@caltech.edu #mail updates to this address
-#SBATCH --mail-type=FAIL #mail updates on failure only
+#Run with "bash camb_grid.sh" (not sbatch): it only submits the jobs. It moves into its own
+#folder and sources the untracked repo-root hpc_local.sh (conda, SBATCH_MAIL_USER; copy
+#hpc_local.example.sh to create it), which the jobs inherit
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$here" || exit 1
+source ../hpc_local.sh || exit 1
 
 #shared CAMB settings for every grid point
 lmax=4000 #must equal constants.DEFAULT_MAX_ELL so the grid shares load_sim's ell support
@@ -22,8 +23,8 @@ accuracy_boost=1
 l_sample_boost=1
 l_accuracy_boost=1
 
-#output folder shared by every job
-out_dir="/resnick/groups/wugroup/zblood/CMBLensing.py/camb_splines"
+#output folder shared by every job; merge_camb_grid.py --grid_dir points here
+out_dir="$here/multi_param_CAMB_grid"
 
 #Grid ranges. logA / ns / ombh2 / omch2 use the same -5 sigma to +5 sigma endpoints as
 #sample_lcdm.sh so the existing 1D caches stay a valid check along each axis. H0 replaces

@@ -37,8 +37,8 @@ COVARIANCE_DATA = os.path.join(REPO_DIR, "get_delensed_field_covariance",
 #reported bounds and the two measured N_phi (which need FORECAST_PHI_NOISE). Each is
 #forecast with CAMB's delensed T block ("camb_delensed") and, when FORECAST_DELENSED_COVARIANCE
 #has a run for it, with the empirical one ("empirically_delensed") as well
-# FORECAST_NPHI_SOURCES = ("qe_unlensed", "qe_delensed", "map_joint", "sample_joint")
-FORECAST_NPHI_SOURCES = ("sample_joint",)
+FORECAST_NPHI_SOURCES = ("qe_unlensed", "qe_delensed", "map_joint", "sample_joint")
+
 #the QE response spectrum per qe_ source ("unlensed" when absent)
 FORECAST_QE_RESPONSE = {"qe_delensed": "gradient"}
 #nphi_source -> the npz its N_phi is read from, at the box the chains ran on, as a path with
@@ -1266,10 +1266,8 @@ def plot_delensed_spectra_comparison(nside, theta_pix, noise, out_dir,
     Series, all band-averaged over the same |l| annuli of the rfft grid: CAMB's unlensed,
     lensed and iteratively delensed TT (get_partially_lensed_cls at the Alens_L
     fisher_forecast.iterative_delensing converges to, unlensed response), and the empirical
-    delensed spectra (`delensed_fid`) of the merged runs in EMPIRICAL_DELENSED_RUNS. Each
-    empirical spectrum is drawn PAIRED: band(C_delensed) / band(C_unlensed) of the same
-    realizations times CAMB's unlensed band value, which cancels the realizations' cosmic
-    variance. Top panel: D_l = l (l + 1) C_l / 2 pi. Bottom panel: every series over CAMB
+    delensed spectra (`delensed_fid`) of the merged runs in EMPIRICAL_DELENSED_RUNS, drawn
+    directly (so they carry the realizations' cosmic variance). Top panel: D_l = l (l + 1) C_l / 2 pi. Bottom panel: every series over CAMB
     unlensed.
     """
     tag = noise_tag(noise)
@@ -1322,7 +1320,7 @@ def plot_delensed_spectra_comparison(nside, theta_pix, noise, out_dir,
                                       0.0, 10_000, verbose = False,
                                       qe_response = "unlensed")[2]
 
-    centres = band(np.asarray(first["unlensed_fid"]))[0]
+    centres = band(np.asarray(first["delensed_fid"]))[0]
     camb_unlensed = camb_band(cls["scalar_TT"])
     #grid units C_l / pix_width^2 -> D_l
     to_dl = centres * (centres + 1) / (2 * np.pi) * float(pix_width)**2
@@ -1330,9 +1328,8 @@ def plot_delensed_spectra_comparison(nside, theta_pix, noise, out_dir,
               ("CAMB lensed", "C3", "-", None, camb_band(cls["total_TT"])),
               ("CAMB iteratively delensed", "C4", "--", None, camb_band(delensed_tt))]
     for name, color, marker, merged in empirical:
-        paired = (band(np.asarray(merged["delensed_fid"]))[1]
-                  / band(np.asarray(merged["unlensed_fid"]))[1] * camb_unlensed)
-        series.append((name, color, "-", marker, paired))
+        delensed = band(np.asarray(merged["delensed_fid"]))[1]
+        series.append((name, color, "-", marker, delensed))
 
     figure, (top, bottom) = plt.subplots(2, 1, figsize = (11, 10), sharex = True,
                                          gridspec_kw = dict(height_ratios = [3, 2]))
@@ -1351,8 +1348,7 @@ def plot_delensed_spectra_comparison(nside, theta_pix, noise, out_dir,
     bottom.set_xlabel(r"$\ell$")
     bottom.set_ylabel(r"$C_\ell\ /\ C_\ell^{\rm unlensed,\ CAMB}$")
     figure.suptitle(f"Temperature spectra | nside {data_nside}, {data_theta_pix:g}', "
-                    f"{noise:g} uK-arcmin | bands of {delta_ell:g}, empirical paired with "
-                    f"its own unlensed", fontsize = 11)
+                    f"{noise:g} uK-arcmin | bands of {delta_ell:g}", fontsize = 11)
     figure.tight_layout(rect = (0, 0, 1, 0.96))
     path = os.path.join(out_dir, f"delensed_spectra_comparison_{tag}.png")
     figure.savefig(path, dpi = 150)

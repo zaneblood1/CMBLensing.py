@@ -1370,15 +1370,8 @@ if __name__ == "__main__":
     advanced_logging["plot_log_pdf"] = True
     advanced_logging["plot_lcdm_sigmas"] = True
 
-    #(theta, logA, omch2) x (theta, logA, omch2) correlation from fisher
-    # rotation_matrix = jnp.array([[1,     0.68,   -0.132], 
-    #                              [0.68,     1,   -0.301], 
-    #                              [-0.132, -0.301,     1]])
+    #Whether or not to work in a rotated LCDM sampling space
     reparameterize_lcdm = False
-    # rotated_proposal_sigmas = {}
-    # rotated_proposal_sigmas["alpha"] = 1e-3
-    # rotated_proposal_sigmas["beta"] = 1e-3
-    # rotated_proposal_sigmas["gamma"] = 1e-3
 
     #the rotation comes from a Fisher forecast at this box, written by
     #python -m cmb_lensing.fisher_forecast --nside 128 --theta_pix 2.5 --noise 2.5

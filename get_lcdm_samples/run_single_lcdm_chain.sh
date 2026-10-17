@@ -4,16 +4,15 @@
 #SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
 #SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
 #SBATCH --mem-per-cpu=16G   #memory per CPU core
-#SBATCH --mail-user=zblood@caltech.edu #mail updates to this address
-#SBATCH --mail-type=FAIL #mail updates on failure only
+#SBATCH --mail-type=FAIL #mail updates on failure only (to SBATCH_MAIL_USER, see hpc_local.sh)
 #SBATCH --cpus-per-task=4 #This is the flag that actually increases CPUs for JAX and Julia code
 
-#activate your own specific conda
-source /resnick/groups/wugroup/zblood/miniconda3/etc/profile.d/conda.sh
-conda activate myenv
+#conda and the other machine-specific setup; SLURM_SUBMIT_DIR is this folder, since the driver
+#submits from it
+source "$SLURM_SUBMIT_DIR/../hpc_local.sh" || exit 1
 #call the python sampling script
 export JULIA_PKG_PRECOMPILE_AUTO=0
-python3 /resnick/groups/wugroup/zblood/cmb_lensing/get_lcdm_samples/run_single_lcdm_chain.py \
+python3 "$SLURM_SUBMIT_DIR/run_single_lcdm_chain.py" \
     --map_seed "$1" \
     --chain "$2" \
     --ombh2_init "$3" \

@@ -93,7 +93,6 @@ and the noise level (e.g. "_from_blocks_qe_unlensed_camb_5.0_uk"):
 """
 
 import argparse
-import hashlib
 import os
 
 import matplotlib
@@ -113,7 +112,7 @@ from cmb_lensing.simulate import (camb_parameters, _extract_all_cls, dl2cl,
                                   scalar_quadratic_estimate)
 from cmb_lensing.constants import (DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT,
                                    DEFAULT_MNU, DEFAULT_TAUREIO, PARAM_ORDER, GROUND_TRUTH,
-                                   PARAM_SIGMA, CAMB_LMAX)
+                                   PARAM_SIGMA, CAMB_LMAX, DEFAULT_ELL_CUTOFF)
 
 
 METHOD = "blocks"
@@ -244,10 +243,8 @@ def camb_cls_at_params(params, camb_lmax = None):
         return _CAMB_CACHE[key]
 
     pars, results = camb_results_at_params(params, camb_lmax = camb_lmax)
-    power_spectra = results.get_cmb_power_spectra(pars, lmax = camb_lmax - 1,
-                                                  CMB_unit = "muK")
-    lens_potential = results.get_lens_potential_cls(lmax = camb_lmax - 1,
-                                                    CMB_unit = "muK")[:, :2]
+    power_spectra = results.get_cmb_power_spectra(pars, lmax = camb_lmax - 1, CMB_unit = "muK")
+    lens_potential = results.get_lens_potential_cls(lmax = camb_lmax - 1, CMB_unit = "muK")[:, :2]
     cls = _extract_all_cls(jnp.asarray(power_spectra["unlensed_scalar"]),
                            jnp.asarray(power_spectra["tensor"]),
                            jnp.asarray(power_spectra["total"]),
@@ -574,8 +571,7 @@ def iterative_delensing(param_ground, cls, nside, pix_width, ell_grid, noise_lev
         updated = delensing_alens(cls, nphi_cl)
         shift = float(np.max(np.abs(updated - alens)))
         alens = updated
-        filter_tt = delensed_cls_at_params(param_ground, alens,
-                                           camb_lmax = camb_lmax)["delensed_TT"]
+        filter_tt = delensed_cls_at_params(param_ground, alens, camb_lmax = camb_lmax)["delensed_TT"]
         if qe_response == "gradient":
             response_cls = dict(cls, gradient_TT = delensed_gradient_cls_at_params(
                 param_ground, alens, camb_lmax = camb_lmax))
@@ -602,8 +598,6 @@ def qe_reconstruction(param_ground, nside, pix_width, ell_grid, noise_level, l_k
     iteration's), "unlensed" the unlensed C_TT. Alens_L is delensing_alens of the matrix's
     radial profile otherwise. `qe_response` (QE_RESPONSE_SOURCES) applies to all three.
     """
-    if qe_filter not in QE_FILTERS:
-        raise ValueError(f"qe_filter must be one of {QE_FILTERS}, got {qe_filter!r}")
     cls = cls_with_qe_response(param_ground, qe_response, camb_lmax = camb_lmax)
     if qe_filter == "delensed":
         if verbose:
@@ -643,13 +637,6 @@ def _check_centre(merged, param_ground, path, what):
     if not same_cosmology(measured, param_ground):
         raise ValueError(f"the {what} {path} was measured about {measured}, not at this "
                          f"run's fiducial point {_point_text(param_ground)}")
-
-
-def nphi_checksum(matrix):
-    """A short fingerprint of an N_phi matrix (sha1 of its float64 bytes), so a file built
-    from a stored N_phi can be matched to the --phi_noise file a forecast uses."""
-    return hashlib.sha1(np.ascontiguousarray(np.asarray(matrix, dtype = np.float64))
-                        .tobytes()).hexdigest()
 
 
 def load_phi_noise_matrix(path, nside, theta_pix, noise_level, l_knee, param_ground,
@@ -719,8 +706,7 @@ def frozen_reconstruction(param_ground, nside, theta_pix, noise_level, l_knee, b
                                         qe_response = qe_response, camb_lmax = camb_lmax,
                                         verbose = verbose)
         description = dict(nphi_source = nphi_source, qe_filter = qe_filter,
-                           qe_response = qe_response, phi_noise = "", phi_noise_key = "",
-                           checksum = nphi_checksum(nphi))
+                           qe_response = qe_response, phi_noise = "", phi_noise_key = "")
         text = (f"box QE matrix, {qe_filter} C_TT in the filter, {qe_response} response")
     else:
         if not phi_noise:
@@ -741,8 +727,7 @@ def frozen_reconstruction(param_ground, nside, theta_pix, noise_level, l_knee, b
         nphi = jnp.asarray(stored)
         unmeasured = int(np.sum(~np.isfinite(stored)))
         description = dict(nphi_source = nphi_source, qe_filter = "", qe_response = "",
-                           phi_noise = str(phi_noise), phi_noise_key = key,
-                           checksum = nphi_checksum(stored))
+                           phi_noise = str(phi_noise), phi_noise_key = key)
         text = (f"{source} noise `{key}` from {phi_noise}"
                 + (f" ({merged['n_realizations']} realizations)"
                    if "n_realizations" in merged else "")
@@ -801,40 +786,6 @@ def check_delensed_covariance(merged, nside, theta_pix, noise_level, l_knee, par
     return [float(merged["steps"][measured.index(name)]) for name in names]
 
 
-def wiener_qe_filter(merged):
-    """The QE filter an empirical file's delensing W was built with. Files written before
-    `qe_filter` was recorded only knew `iterative_delens`: True was the delensed filter,
-    False the one-shot lensed one."""
-    if "qe_filter" in merged:
-        return str(merged["qe_filter"])
-    return "delensed" if bool(merged.get("iterative_delens", False)) else "lensed"
-
-
-def check_wiener_matches(merged, description, path = ""):
-    """Warn when the N_phi an empirical file's W was built from is not this forecast's N_phi:
-    the f block would then be delensed by a different reconstruction than the phi block
-    carries. Stored-matrix W are compared by checksum, QE W by filter and response."""
-    source = str(merged.get("wiener_nphi_source", "covariance"))
-    if source != "covariance":
-        if source != description["nphi_source"]:
-            print(f"  WARNING: {path}'s W was built from a {source!r} N_phi, but this "
-                  f"forecast's phi block uses {description['nphi_source']!r}")
-        elif str(merged.get("wiener_nphi_checksum", "")) != description["checksum"]:
-            print(f"  WARNING: {path}'s W was built from a DIFFERENT {source!r} matrix than "
-                  f"--phi_noise {description['phi_noise']} gives (checksum "
-                  f"{str(merged.get('wiener_nphi_checksum', ''))[:12]} vs "
-                  f"{description['checksum'][:12]})")
-        return
-    filter_used = wiener_qe_filter(merged)
-    response_used = str(merged.get("qe_response", "unlensed"))
-    if (f"qe_{filter_used}", response_used) != (description["nphi_source"],
-                                                 description["qe_response"]):
-        print(f"  WARNING: {path}'s W was built from the box QE with the {filter_used} "
-              f"filter and the {response_used} response, but this forecast's phi block uses "
-              f"{description['nphi_source']}"
-              + (f" / {description['qe_response']}" if description["qe_response"] else ""))
-
-
 # ── Covariance blocks and the stencil ─────────────────────────────────────
 
 def covariance_blocks(cls, nside, pix_width, ell_grid, noise, nphi):
@@ -866,7 +817,7 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground,
                        nphi_source = DEFAULT_NPHI_SOURCE, phi_noise = None,
                        phi_noise_key = None, qe_response = DEFAULT_QE_RESPONSE,
                        delensed_covariance = None, step_fracs = None, l_knee = 0,
-                       beam_fwhm = 0, l_cutoff = 10_000, camb_lmax = None, verbose = True,
+                       beam_fwhm = 0, l_cutoff = DEFAULT_ELL_CUTOFF, camb_lmax = None, verbose = True,
                        return_applier = False):
     """The covariance-block stencil the forecast contracts.
 
@@ -911,8 +862,6 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground,
         param_ground, nside, theta_pix, noise_level, l_knee, beam_fwhm, l_cutoff, nphi_source,
         qe_response = qe_response, phi_noise = phi_noise, phi_noise_key = phi_noise_key,
         camb_lmax = camb_lmax, verbose = verbose)
-    if empirical is not None:
-        check_wiener_matches(empirical, description, path = delensed_covariance)
 
     cls_fid = camb_cls_at_params(param_ground, camb_lmax = camb_lmax)
     noise, _, _ = _instrument_matrices(nside, pix_width, ell_grid, noise_level, l_knee,
@@ -954,8 +903,7 @@ def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground,
 
     if verbose:
         print(f"  f_delensed block: EMPIRICAL ({int(empirical['n_realizations'])} "
-              f"realizations, reconstruction at the {empirical['reconstruction']} "
-              f"cosmology) from {delensed_covariance}")
+              f"realizations) from {delensed_covariance}")
     result = (names, steps, weights) + apply_empirical(empirical) + (description,)
     return result + (apply_empirical,) if return_applier else result
 
@@ -986,7 +934,7 @@ def _fisher_from_blocks(blocks_plus, blocks_minus, blocks_fid, steps, weights):
 def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
              nphi_source = DEFAULT_NPHI_SOURCE, phi_noise = None, phi_noise_key = None,
              qe_response = DEFAULT_QE_RESPONSE, delensed_covariance = None,
-             step_fracs = None, l_knee = 0, beam_fwhm = 0, l_cutoff = 10_000,
+             step_fracs = None, l_knee = 0, beam_fwhm = 0, l_cutoff = DEFAULT_ELL_CUTOFF,
              camb_lmax = None, verbose = True):
     """Gaussian Fisher matrix for the sampled LCDM parameters on an nside x nside box.
 
@@ -1044,9 +992,7 @@ def forecast_jackknife(nside, theta_pix, noise_level, is_sampled, param_ground,
     fisher = _fisher_from_blocks(plus, minus, fid, steps, weights)
 
     merged = load_delensed_covariance(delensed_covariance)
-    seeds, samples = leave_one_out_grids(
-        covariance_dir, smooth_delta_ell = float(merged.get("phi_smooth_delta_ell", 0.0)),
-        verbose = False)
+    seeds, samples = leave_one_out_grids(covariance_dir, verbose = False)
     if seeds != [int(seed) for seed in merged["seeds"]]:
         raise ValueError(f"{covariance_dir} holds different realizations (seeds) from those "
                          f"{delensed_covariance} was merged from; re-run "

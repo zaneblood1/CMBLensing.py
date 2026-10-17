@@ -1,8 +1,13 @@
 using Pkg
-Pkg.activate("/resnick/groups/wugroup/zblood/CMBLensing.jl/Project.toml")
+#the CMBLensing.jl checkout is machine specific: CMBLENSING_JL_PATH is exported by the
+#repo-root hpc_local.sh (see hpc_local.example.sh)
+Pkg.activate(joinpath(ENV["CMBLENSING_JL_PATH"], "Project.toml"))
 using CMBLensing
 using ArgParse
 using NPZ
+
+#results go next to this script
+RESULTS_DIR = joinpath(@__DIR__, "performance_results")
 
 #load in the task id and the f, phi combo id
 function parse_commandline()
@@ -55,8 +60,8 @@ end_time = time()
 uncached_time = end_time - start_time
 
 #store the uncached time for this (f, phi) combo in its own proper directory
-mkpath("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/uncached_times")
-open("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/uncached_times/uncached_time_$(trial).txt", "w") do io
+mkpath("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/uncached_times")
+open("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/uncached_times/uncached_time_$(trial).txt", "w") do io
     write(io, string(uncached_time))
 end
 
@@ -67,24 +72,24 @@ end_time = time()
 cached_time = end_time - start_time
 
 #store the cached time for this (f, phi) combo in its own proper directory
-mkpath("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/cached_times")
-open("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/cached_times/cached_time_$(trial).txt", "w") do io
+mkpath("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/cached_times")
+open("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/cached_times/cached_time_$(trial).txt", "w") do io
     write(io, string(cached_time))
 end
 
 #store the learned / estimated f and phi
-mkpath("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb")
-mkpath("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/lensing_potential")
+mkpath("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb")
+mkpath("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/lensing_potential")
 if polarity == "I"
-    npzwrite("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/t_field_julia_predict_$(trial).npz", transpose(fJ[:Il]))
+    npzwrite("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/t_field_julia_predict_$(trial).npz", transpose(fJ[:Il]))
 end
 if polarity == "P"
-    npzwrite("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/e_field_julia_predict_$(trial).npz", transpose(fJ[:El]))
-    npzwrite("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/b_field_julia_predict_$(trial).npz", transpose(fJ[:Bl]))
+    npzwrite("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/e_field_julia_predict_$(trial).npz", transpose(fJ[:El]))
+    npzwrite("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/b_field_julia_predict_$(trial).npz", transpose(fJ[:Bl]))
 end
 if polarity == "IP"
-    npzwrite("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/t_field_julia_predict_$(trial).npz", transpose(fJ[:Il]))
-    npzwrite("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/e_field_julia_predict_$(trial).npz", transpose(fJ[:El]))
-    npzwrite("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/b_field_julia_predict_$(trial).npz", transpose(fJ[:Bl]))
+    npzwrite("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/t_field_julia_predict_$(trial).npz", transpose(fJ[:Il]))
+    npzwrite("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/e_field_julia_predict_$(trial).npz", transpose(fJ[:El]))
+    npzwrite("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/cmb/b_field_julia_predict_$(trial).npz", transpose(fJ[:Bl]))
 end
-npzwrite("/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/lensing_potential/phi_julia_predict_$(trial).npz", transpose(phiJ[:Il]))
+npzwrite("$(RESULTS_DIR)/julia_results/map_size_$(map_size)_polarity_$(polarity)_seed_$(seed)/learned_fields/lensing_potential/phi_julia_predict_$(trial).npz", transpose(phiJ[:Il]))

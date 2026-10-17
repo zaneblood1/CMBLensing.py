@@ -78,8 +78,8 @@ def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
 # ── Covariance and Field Generation ──────────────────────────────────────
 
 @partial(jax.jit, static_argnames=["nside", "rescale"])
-def covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls, origin_value=None,
-                          rescale=True, use_linear_interpolation=False, fill_value=None):
+def covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cls, origin_value=None, rescale=True):
+
     shape = (nside, nside // 2 + 1)
 
     def exponential_interpolate(ell_grid, ells, cls):
@@ -173,8 +173,7 @@ def get_beam(nside, pix_width, ell_grid, lmax_prime, beam_fwhm=0):
     ell_prime = jnp.arange(2, lmax_prime).astype(jnp.float64)
     b = jnp.sqrt(beam_cls(beam_fwhm, ell_prime))
     return covar_matrix_from_cls(nside, pix_width, ell_grid, ell_prime, b,
-                                 origin_value=0, rescale=False,
-                                 use_linear_interpolation=True, fill_value=1.0)
+                                 origin_value=0, rescale=False)
 
 
 # ── D Matrix ──────────────────────────────────────────────────────────────
@@ -487,7 +486,7 @@ def camb_parameters(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
     pars.max_l_tensor = 600 #NOTE switching to Yuuki's values from 2 * lmax_prime
     pars.max_eta_k_tensor = 1200 #NOTE switching to Yuuki's values from 4 * lmax_prime
     pars.WantScalars = True
-    pars.WantTensors = True #DEBUG should this be set to False?
+    pars.WantTensors = True
     pars.DoLensing = True
     pars.set_nonlinear_lensing(True)
     return pars

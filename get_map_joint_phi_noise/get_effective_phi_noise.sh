@@ -1,10 +1,11 @@
 #!/bin/bash
 
-#SBATCH --time=00:10:00 #wall-time / max run time before termination in the format hh:mm:ss
-#SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
-#SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
-#SBATCH --mail-user=zblood@caltech.edu #mail updates to this address
-#SBATCH --mail-type=FAIL #mail updates on failure only
+#Run with "bash get_effective_phi_noise.sh" (not sbatch): it only submits the jobs. It moves
+#into its own folder and sources the untracked repo-root hpc_local.sh (conda,
+#SBATCH_MAIL_USER; copy hpc_local.example.sh to create it), which the jobs inherit
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$here" || exit 1
+source ../hpc_local.sh || exit 1
 
 #Driver for the EFFECTIVE PHI-NOISE measurement. Spawns one job per seed: each simulates a
 #realization at the fiducial cosmology, reconstructs phi from the data with map_joint, and
@@ -63,7 +64,7 @@ shift_param=""
 shift_value=0
 
 #output folder shared by every job; the merge and --phi_noise point here
-out_dir="/resnick/groups/wugroup/zblood/cmb_lensing/get_map_joint_phi_noise/phi_noise_output"
+out_dir="$here/phi_noise_output"
 
 mkdir -p "$out_dir"
 

@@ -1,10 +1,12 @@
 #!/bin/bash
 
-#SBATCH --time=00:10:00 #wall-time / max run time before termination in the format hh:mm:ss
-#SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
-#SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
-#SBATCH --mail-user=zblood@caltech.edu #mail updates to this address
-#SBATCH --mail-type=FAIL #mail updates on failure only
+#Run with "bash run_performance_test.sh" (not sbatch): it only submits the jobs. It moves into
+#its own folder and sources the untracked repo-root hpc_local.sh (conda, SBATCH_MAIL_USER,
+#CMBLENSING_JL_PATH; copy hpc_local.example.sh to create it), which the jobs inherit. Results
+#land in performance_results/ next to the timing scripts
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$here" || exit 1
+source ../hpc_local.sh || exit 1
 
 #the total number of seeds (f, phi) pairs from load_sim() and the
 #total number of trials per (f, phi, map_size, pol) quadruplet combo

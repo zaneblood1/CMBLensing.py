@@ -1,6 +1,8 @@
 import os
 import shutil
-os.environ["PYTHON_JULIAPKG_PROJECT"] = "/resnick/groups/wugroup/zblood/CMBLensing.jl"
+#the CMBLensing.jl checkout is machine specific: CMBLENSING_JL_PATH is exported by the
+#repo-root hpc_local.sh (see hpc_local.example.sh)
+os.environ["PYTHON_JULIAPKG_PROJECT"] = os.environ["CMBLENSING_JL_PATH"]
 os.environ["PYTHON_JULIAPKG_OFFLINE"] = "yes"
 #Pre-populate juliapkg's STATE so resolve() returns immediately at its fast-path
 #check (STATE["resolved"] == True) without ever acquiring the NFS file lock that
@@ -12,6 +14,9 @@ from cmb_lensing.map_joint import *
 from juliacall import Main as jl
 import time
 import argparse
+
+#results go next to this script
+RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "performance_results")
 
 #Parse the arguments of the slurm job
 parser = argparse.ArgumentParser()
@@ -315,8 +320,8 @@ end_time = time.time()
 total_time = end_time - start_time
 
 #store the uncached time for this (f, phi) combo in its own proper directory
-os.makedirs(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/uncached_times", exist_ok = True)
-np.savetxt(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/uncached_times/uncached_time_{args.trial}.txt", \
+os.makedirs(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/uncached_times", exist_ok = True)
+np.savetxt(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/uncached_times/uncached_time_{args.trial}.txt", \
            np.array([total_time]))
 
 #now run the algorithm a second time to get the cached time
@@ -326,45 +331,45 @@ end_time = time.time()
 total_time = end_time - start_time
 
 #store the cached time for this (f, phi) combo in its own proper directory
-os.makedirs(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/cached_times", exist_ok = True)
-np.savetxt(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/cached_times/cached_time_{args.trial}.txt", \
+os.makedirs(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/cached_times", exist_ok = True)
+np.savetxt(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/cached_times/cached_time_{args.trial}.txt", \
            np.array([total_time]))
 
 #store the learned / estimated f and phi from python to compare with what julia found
-os.makedirs(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb", exist_ok = True)
-os.makedirs(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential", exist_ok = True)
+os.makedirs(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb", exist_ok = True)
+os.makedirs(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential", exist_ok = True)
 
 #cmb fields:
 #branching logic on saving the fields based on polarization equals I, P, or IP
 if args.pol == "I":
     #Save the python prediction
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/t_field_python_predict_{args.trial}.npz", field_python_predict.scalar_matrix)
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/t_field_python_predict_{args.trial}.npz", field_python_predict.scalar_matrix)
     #Also save the simulation ground truth
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/t_field_julia_simulation_{args.trial}.npz", jnp.array(jl.t_field_I))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/t_field_julia_simulation_{args.trial}.npz", jnp.array(jl.t_field_I))
 elif args.pol == "P":
     #Save the python prediction
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/e_field_python_predict_{args.trial}.npz", field_python_predict.polar_matrix_1)
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/b_field_python_predict_{args.trial}.npz", field_python_predict.polar_matrix_2)
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/e_field_python_predict_{args.trial}.npz", field_python_predict.polar_matrix_1)
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/b_field_python_predict_{args.trial}.npz", field_python_predict.polar_matrix_2)
     #Also save the simulation ground truth
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/e_field_julia_simulation_{args.trial}.npz", jnp.array(jl.e_field_P))
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/b_field_julia_simulation_{args.trial}.npz", jnp.array(jl.b_field_P))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/e_field_julia_simulation_{args.trial}.npz", jnp.array(jl.e_field_P))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/b_field_julia_simulation_{args.trial}.npz", jnp.array(jl.b_field_P))
 else:
     #Save the python prediction
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/t_field_python_predict_{args.trial}.npz", field_python_predict.scalar_matrix)
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/e_field_python_predict_{args.trial}.npz", field_python_predict.polar_matrix_1)
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/b_field_python_predict_{args.trial}.npz", field_python_predict.polar_matrix_2)
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/t_field_python_predict_{args.trial}.npz", field_python_predict.scalar_matrix)
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/e_field_python_predict_{args.trial}.npz", field_python_predict.polar_matrix_1)
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/b_field_python_predict_{args.trial}.npz", field_python_predict.polar_matrix_2)
     #Also save the simulation ground truth
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/t_field_julia_simulation_{args.trial}.npz", jnp.array(jl.t_field_IP))
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/e_field_julia_simulation_{args.trial}.npz", jnp.array(jl.e_field_IP))
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/b_field_julia_simulation_{args.trial}.npz", jnp.array(jl.b_field_IP))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/t_field_julia_simulation_{args.trial}.npz", jnp.array(jl.t_field_IP))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/e_field_julia_simulation_{args.trial}.npz", jnp.array(jl.e_field_IP))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/cmb/b_field_julia_simulation_{args.trial}.npz", jnp.array(jl.b_field_IP))
 
 #Lensing potential fields:
 #Save the python prediction
-np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential/phi_python_predict_{args.trial}.npz", phi_python_predict.scalar_matrix)
+np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential/phi_python_predict_{args.trial}.npz", phi_python_predict.scalar_matrix)
 #Also save the simulation ground truth
 if args.pol == "I":
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential/phi_julia_simulation_{args.trial}.npz", jnp.array(jl.phi_I))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential/phi_julia_simulation_{args.trial}.npz", jnp.array(jl.phi_I))
 elif args.pol == "P":
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential/phi_julia_simulation_{args.trial}.npz", jnp.array(jl.phi_P))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential/phi_julia_simulation_{args.trial}.npz", jnp.array(jl.phi_P))
 else:
-    np.savez(f"/resnick/groups/wugroup/zblood/cmb_lensing/runtime_comparison/performance_results/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential/phi_julia_simulation_{args.trial}.npz", jnp.array(jl.phi_IP))
+    np.savez(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{args.pol}_seed_{args.seed}/learned_fields/lensing_potential/phi_julia_simulation_{args.trial}.npz", jnp.array(jl.phi_IP))

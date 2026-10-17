@@ -1,10 +1,11 @@
 #!/bin/bash
 
-#SBATCH --time=00:10:00 #wall-time / max run time before termination in the format hh:mm:ss
-#SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
-#SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
-#SBATCH --mail-user=zblood@caltech.edu #mail updates to this address
-#SBATCH --mail-type=FAIL #mail updates on failure only
+#Run with "bash get_sampler_effective_noise.sh" (not sbatch): it only submits the jobs. It
+#moves into its own folder and sources the untracked repo-root hpc_local.sh (conda,
+#SBATCH_MAIL_USER; copy hpc_local.example.sh to create it), which the jobs inherit
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$here" || exit 1
+source ../hpc_local.sh || exit 1
 
 #Driver for the SAMPLER EFFECTIVE NOISE: the phi reconstruction noise the sampler's own
 #posterior mean reaches. Spawns one job per rng seed. Each job builds the deterministic
@@ -52,7 +53,7 @@ chain_mem="16G"
 
 #output folder shared by every job. Each chain stores num_sweeps complex64 rfft grids:
 #66 kB per sweep at nside 128, so 200 MB per chain at 3000 sweeps and 10 GB for 50 maps
-out_dir="/resnick/groups/wugroup/zblood/cmb_lensing/get_sampler_phi_noise/sampler_effective_noise_output"
+out_dir="$here/sampler_effective_noise_output"
 
 mkdir -p "$out_dir"
 #every job uses a distinct seed; the analysis refuses duplicates, so a loop change that
