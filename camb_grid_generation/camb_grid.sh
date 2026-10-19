@@ -15,15 +15,12 @@ k_pivot=0.05
 alens=1
 
 #CAMB accuracy. Defaults (all boosts = 1) match the existing 1D caches and load_sim's
-#data-map path, and cost ~3.6 s/call. Raising accuracy_boost to 2 costs ~46 s/call (13x)
-#and buys ~9e-4 -> better in lnCl, but then simulate.py:_run_camb must be raised to match
-#or the data map and the model disagree. l_sample_boost is nearly free but buys almost
-#nothing on its own
+#default behavior
 accuracy_boost=1
 l_sample_boost=1
 l_accuracy_boost=1
 
-#output folder shared by every job; merge_camb_grid.py --grid_dir points here
+#output folder shared by every job
 out_dir="$here/multi_param_CAMB_grid"
 
 #Grid ranges. logA / ns / ombh2 / omch2 use the same -5 sigma to +5 sigma endpoints as

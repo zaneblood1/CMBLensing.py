@@ -1,14 +1,5 @@
 """Precompute CAMB TT/PP Cls on a fixed 1D grid of any single LCDM parameter.
 
-The 1D theta conditional in sample_lcdm.py only ever queries Cls along one
-parameter's 50-point grid (all other parameters fixed at ground truth), and the Cls are
-map-independent, so a single one-time sweep of CAMB calls serves every chain of an HPC
-trial. This script runs that sweep for a chosen parameter (theta_MC_100, logA, ns, ombh2
-or omch2), saves the results to camb_<param>_grid.npz, and provides
-load_camb_spline_predictors(param_name) which returns jit-safe drop-in replacements for
-the emulator's predict_tt/predict_pp batch functions (Cls evaluated via a cubic spline in
-the swept parameter through the CAMB nodes).
-
 Usage (from the repository root):
     python camb_grid_generation/precompute_camb_1d.py ombh2      #full 50-point sweep (~10-20 min)
     python camb_grid_generation/precompute_camb_1d.py ns --test  #3-point smoke test
@@ -69,14 +60,13 @@ def camb_cls_at(param_name, value):
                            CAMB_LMAX, CAMB_LMAX)
     return np.asarray(cls["scalar_TT"]), np.asarray(cls["phi"])
 
-
 def run_sweep(param_name, grid, out_path):
+
     ells = np.arange(2, CAMB_LMAX).astype(np.float64)
     n_ell = ells.size
     kept_values = []
     kept_tt = []
     kept_pp = []
-
     t_start = time.time()
     for i, value in enumerate(grid):
         t0 = time.time()
@@ -190,6 +180,7 @@ def load_camb_spline_predictors(param_name, path = None):
 
 
 if __name__ == "__main__":
+    
     parser = argparse.ArgumentParser(description = "Precompute CAMB Cls on a 1D parameter grid")
     parser.add_argument("param", choices = PARAM_ORDER + ["all"],
                         help = "parameter to sweep, or 'all' for every parameter")

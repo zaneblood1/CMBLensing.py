@@ -56,7 +56,7 @@ Once the tuning has been done for the map size, resolution, polarity, noise leve
 
 # PRECOMPUTED CAMB GRID (DOWNLOAD)
 
-The LCDM sampler evaluates CAMB spectra through a 5D cubic spline over ```(H0, logA, ns, ombh2, omch2)``` stored in ```camb_splines/camb_grid_spline.npz``` at the repository root. That file is ~7.9 GB, so it is **not** in the repository (GitHub rejects it). Either rebuild it on an HPC with the scripts in ```camb_grid_generation/``` (```camb_grid.sh``` → ```merge_camb_grid.py``` → ```validate_camb_grid.py```, ~70k CAMB calls) or download the prebuilt copy from Google Drive:
+The LCDM sampler evaluates CAMB spectra through a 5D cubic spline over ```(H0, logA, ns, ombh2, omch2)``` stored in ```camb_splines/camb_grid_spline.npz``` at the repository root. That file is ~7.9 GB, so it is **not** in the repository (GitHub rejects it). Either rebuild it on an HPC with the scripts in ```camb_grid_generation/``` (```camb_grid.sh``` → ```merge_camb_grid.py``` → ```tests/test_camb_grid.py```, ~70k CAMB calls) or download the prebuilt copy from Google Drive:
 
 [Download camb_grid_spline.npz (Google Drive, ~7.9 GB)](https://drive.google.com/file/d/1HhVjNPMi4OR3vn7j7DkdK0pDnF_iNVBr/view?usp=sharingg)
 
@@ -106,8 +106,7 @@ cmb_lensing/
 │   ├── camb_grid.sh
 │   ├── run_single_camb_grid.py
 │   ├── run_single_camb_grid.sh
-│   ├── merge_camb_grid.py
-│   └── validate_camb_grid.py
+│   └── merge_camb_grid.py
 ├── docs/
 │   ├── map_joint_tutorial.ipynb
 │   └── sample_joint_tutorial.ipynb
@@ -150,9 +149,9 @@ cmb_lensing/
     ├── conftest.py
     ├── index.html
     ├── styles.css
+    ├── test_camb_grid.py
     ├── test_covariance_matrices.py
     ├── test_fisher_forecast.py
-    ├── test_native_5d_interp.py
     ├── test_gradients.py
     ├── test_lensing.py
     ├── test_logpdf.py

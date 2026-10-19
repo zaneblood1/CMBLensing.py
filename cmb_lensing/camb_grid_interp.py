@@ -1,262 +1,146 @@
 """Evaluate the 5D CAMB grid spline at an arbitrary LCDM parameter vector.
 
-This is the joint-inference counterpart to
-camb_grid_generation/precompute_camb_1d.py's load_camb_spline_predictors.
-That one splines in a single parameter with the other four pinned at ground truth, so
-sample_joint can only sample one parameter at a time. This one interpolates all five at
-once, off the tensor-product cubic spline built by merge_camb_grid.py.
+This is the five-parameter counterpart of camb_grid_generation/precompute_camb_1d.py,
+which puts a CubicSpline through lnCl along one parameter with the other four pinned.
+Here lnCl is known on a full tensor-product grid over (H0, logA, ns, ombh2, omch2), and
+the interpolant is the tensor-product cubic spline through it.
+
+How the spline is built (spline_coefficients). A tensor-product spline is separable:
+    s(x0, ..., x4) = sum_{i0..i4} c[i0, ..., i4] B_i0(x0) ... B_i4(x4)
+so asking it to pass through every grid value is the 1D interpolation problem solved
+along one axis at a time - a make_interp_spline (not-a-knot ends, the same as
+CubicSpline's default) along H0, then along logA on the result, and so on. What comes
+out is the coefficient array c and the knot vector of each axis, which is exactly what
+scipy.interpolate.NdBSpline evaluates. merge_camb_grid.py does this once for every
+spectrum and stores c and the knots, so loading the grid is instant.
 
     from cmb_lensing.camb_grid_interp import load_camb_grid_predictors
     predictors = load_camb_grid_predictors("<path>/camb_grid_spline.npz")
-    predictors.tt, predictors.ee, predictors.bb, predictors.pp  #unlensed + phi
-    predictors.tt_lensed, predictors.ee_lensed, predictors.bb_lensed
+    predictors.tt(params_batch)  #(M, 5) in PARAM_ORDER -> (M, n_ell) Cls
 
-Every loader returns a GridPredictors namedtuple of functions with the emulator's
-predictor signature f(params_batch) -> (M, n_ell), with params_batch ordered as
-sample_lcdm.PARAM_ORDER, so each drops straight into
-every existing call site (make_eval_logpdf_batch, _recompute_cosmo_matrices,
-get_new_cf_matrix). The unlensed spectra feed the field covariances, PP the phi
-covariance, and the lensed spectra the theta-dependent quadratic-estimate (and through
-it mass-matrix / G) recompute. Unlensed scalar BB is identically zero on the r = 0
-grids (bb_is_zero flag from merge_camb_grid.py), so its predictor returns exact zeros -
-with NaN rows for out-of-box queries, like every other spectrum. Coefficient tables are
-loaded LAZILY, one spectrum at a time on first use (~1.1 GB read, ~2.1 GB resident once
-NdBSpline has cast it to float64), so a T-only run never pays for the polarization or
-lensed tables; a pre-polarization grid file stays
-loadable, and only raises (with a clear message) if a spectrum it lacks is requested.
+Each coefficient table is loaded lazily, on first use of its spectrum (~1.1 GB read,
+~2.1 GB resident since NdBSpline casts to float64). Unlensed BB is identically zero at
+r = 0 (bb_is_zero), so its predictor returns zeros. te_rho = Cl_TE / sqrt(Cl_TT Cl_EE)
+crosses zero, so it is splined raw instead of in log space.
 
-theta_MC_100 vs H0
-------------------
-The sampler works in theta_MC_100 but the grid is laid out in H0, because a rectangular
-theta box has corners CAMB cannot solve. theta is a background quantity - it depends only
-on (H0, ombh2, omch2) once mnu and tau are pinned - so run_single_camb_grid.py records it
-at every node for free and merge_camb_grid.py collapses it to a 3D table. Converting a
-query is then: spline that table over (ombh2, omch2) to get the monotone theta(H0) curve
-at this cosmology, then invert it by interpolation. The curve is densified once at load
-time (N_THETA_DENSE points) so the inversion itself contributes negligible error.
+theta_MC_100 vs H0. The sampler works in theta_MC_100, but the grid is laid out in H0
+because a rectangular theta box has corners CAMB cannot solve. theta depends only on
+(H0, ombh2, omch2), so the merge stores it as a 3D table; here it gets the same
+tensor-product spline, and a query is converted by evaluating theta(H0) along a dense
+H0 line at its (ombh2, omch2) and inverting that monotone curve with np.interp.
 
-Out-of-box queries return NaN rather than extrapolating, which flows to a non-finite
-logpdf and a rejected proposal - byte for byte what the direct-CAMB path does when CAMB
-fails, and what the 1D caches do beyond their grid.
-
-Why NdBSpline, and not RegularGridInterpolator
----------------------------------------------
-Evaluation is scipy.interpolate.NdBSpline, which consumes precomputed tensor-product
-B-spline coefficients plus knots - precisely what merge_camb_grid.py already writes. The
-grid file needs no regeneration for this and the arithmetic is identical; see
-_TensorSpline. (This replaced a hand-rolled 4-point-per-axis separable contraction, kept
-as a regression reference in tests/handrolled_bspline_reference.py, that the production
-path is checked against in tests/test_native_5d_interp.py.)
-
-RegularGridInterpolator(method="cubic") is the wrong entry point despite building an
-NdBSpline of its own since scipy 1.12. It wants the raw sampled values, so it re-solves
-the interpolation problem merge_camb_grid.py has already solved - at a cost linear in the
-ell axis (~9 s per 64 ells at this grid shape, i.e. of order ten minutes per spectrum at
-3998 ells) - and it solves it with an ITERATIVE Krylov solver (scipy.sparse.linalg.gcrotmk,
-its hardcoded default) rather than the direct banded solve merge_camb_grid.py's per-axis
-make_interp_spline uses. The resulting coefficients differ by ~4e-4, which is the size of
-the whole lnCl error budget. scipy.ndimage's prefilter is out for the reason
-merge_camb_grid.py records: every boundary mode it offers folds the data back on itself,
-which is not exact even for a straight line and, on axes as short as 4 nodes, contaminates
-the entire axis rather than just its edges.
+Out-of-box queries return NaN, which the sampler turns into a rejected proposal.
 """
 
 import os
 from collections import namedtuple
 import numpy as np
+from scipy.interpolate import make_interp_spline, NdBSpline
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
-#the sampler's parameter ordering
-from cmb_lensing.constants import PARAM_ORDER
-#the grid's axis ordering - same, but with the acoustic axis in H0
+#the sampler's parameter ordering (params_batch columns)
+from cmb_lensing.constants import PARAM_INDEX
+#the grid's axis ordering - PARAM_ORDER with the acoustic axis in H0 instead of theta
 GRID_AXES = ["H0", "logA", "ns", "ombh2", "omch2"]
+GRID_INDEX = {name: i for i, name in enumerate(GRID_AXES)}
 
-#every spectrum a merged grid can serve. All predictor loaders return one of these, with
-#one predictor function per field; requesting a spectrum the grid file does not hold
-#raises at call time with a pointer to the regeneration scripts. te_rho is the TE
-#correlation ratio Cl_TE / sqrt(Cl_TT * Cl_EE) - the sampler reconstructs the TE
-#covariance from it and its own splined TT/EE, which keeps the T/E block positive
-#semi-definite by construction
+#every spectrum the grid serves, one predictor each
 SPECTRA = ["tt", "ee", "bb", "pp", "tt_lensed", "ee_lensed", "bb_lensed", "te_rho"]
-#spectra splined in their raw values rather than lnCl (sign-changing quantities);
-#their predictors return the splined value directly, with no exp
+#spectra splined in their raw values rather than lnCl (sign-changing quantities)
 LINEAR_SPECTRA = {"te_rho"}
 GridPredictors = namedtuple("GridPredictors", SPECTRA)
 
-#nodes used to densify the theta(H0) curve before inverting it. 2000 points over an H0
-#range of ~105 leaves the inversion error orders of magnitude below the spline error
+#points on the dense H0 line the theta(H0) curve is inverted on
 N_THETA_DENSE = 2000
 
-#how far outside an axis a query may land, as a fraction of that axis's span, before it is
-#treated as out of box rather than snapped to the edge. Covers round-off only
+#how far outside an axis (as a fraction of its span) a query may land and still be
+#snapped onto the edge:
 BOUNDARY_TOL = 1e-9
 
-# ── Cubic B-spline evaluation ─────────────────────────────────────────────
 
-class _TensorSpline:
-    """One coefficient table wrapped as an evaluable tensor-product cubic B-spline.
-
-    merge_camb_grid.py writes, per spectrum, the B-spline coefficients over the five
-    parameter axes plus the knot vectors that go with them - which is exactly
-    scipy.interpolate.NdBSpline's contract (len(knots[a]) == coeff.shape[a] + k + 1), with
-    the trailing ell axis carried through untouched. So the stored grid drives NdBSpline
-    directly, with no regeneration and no reinterpretation of the file format.
-
-    What this class still owns on top of NdBSpline is the box screen. NdBSpline's
-    extrapolate = False returns NaN strictly outside the knot range with no round-off
-    slack, and the sampler needs slack: it scans each conditional on a
-    jnp.linspace(lo, hi, SEARCH_PRECISION) whose endpoints ARE the box edges, and a query
-    built by round-tripping through theta -> H0 lands a few ulp outside. Without the
-    BOUNDARY_TOL clamp every scan would silently lose its two endpoints to NaN. Queries
-    genuinely outside stay NaN, which the sampler turns into a rejected proposal - byte for
-    byte what the direct-CAMB path does when CAMB fails.
-
-    Memory: NdBSpline's constructor casts the coefficients to float64 (scipy's
-    _get_dtype), so a ~1.1 GB float32 table becomes a ~2.1 GB float64 one. CambGrid.spline
-    therefore drops its reference to the float32 array as soon as the spline is built,
-    leaving one copy resident rather than two."""
-
-    def __init__(self, coeff, knots):
-        from scipy.interpolate import NdBSpline
-        self.knots = [np.asarray(k, dtype = np.float64) for k in knots]
-        self.n_axes = len(self.knots)
-        self.trailing = tuple(coeff.shape[self.n_axes:])
-        self.spline = NdBSpline(tuple(self.knots), coeff, 3, extrapolate = False)
-
-    def _screen(self, points):
-        """(valid mask, points clipped onto the closed box), with BOUNDARY_TOL of slack."""
-        clamped = np.array(points, dtype = np.float64, copy = True)
-        valid = np.all(np.isfinite(points), axis = 1)
-        for a, knot in enumerate(self.knots):
-            lo, hi = knot[3], knot[-4]
-            tol = BOUNDARY_TOL * (hi - lo)
-            valid &= (points[:, a] >= lo - tol) & (points[:, a] <= hi + tol)
-            clamped[:, a] = np.clip(clamped[:, a], lo, hi)
-        return valid, clamped
-
-    def __call__(self, points):
-        """(M, n_axes) query points in parameter units -> (M,) + trailing, NaN wherever a
-        query falls outside the box."""
-        points = np.atleast_2d(np.asarray(points, dtype = np.float64))
-        out = np.full((points.shape[0],) + self.trailing, np.nan)
-        valid, clamped = self._screen(points)
-        if valid.any():
-            out[valid] = self.spline(clamped[valid])
-        return out
-
-    def value_and_grads(self, points):
-        """Value AND per-axis first derivative: ((M,) + trailing, (M, n_axes) + trailing),
-        with d value / d points[:, a] in slot a. NaN rows out of box in both outputs."""
-        points = np.atleast_2d(np.asarray(points, dtype = np.float64))
-        out = np.full((points.shape[0],) + self.trailing, np.nan)
-        gout = np.full((points.shape[0], self.n_axes) + self.trailing, np.nan)
-        valid, clamped = self._screen(points)
-        if not valid.any():
-            return out, gout
-        inside = clamped[valid]
-        out[valid] = self.spline(inside)
-        for a in range(self.n_axes):
-            nu = [0] * self.n_axes
-            nu[a] = 1
-            gout[valid, a] = self.spline(inside, nu = nu)
-        return out, gout
+def spline_coefficients(axes, values):
+    """Cubic B-spline coefficients and knots of the tensor-product spline through
+    values[i0, i1, ...] on the grid axes. Axes of values beyond len(axes) (ell) are
+    carried along untouched."""
+    coeff = values
+    knots = []
+    for a in range(len(axes)):
+        spline = make_interp_spline(axes[a], coeff, k = 3, axis = a)
+        #make_interp_spline puts the interpolated axis first in .c; put it back
+        coeff = np.moveaxis(spline.c, 0, a)
+        knots.append(spline.t)
+    return coeff, knots
 
 
-def _local_support(coeff, knots, point, nu = None):
-    """One in-box point of the tensor-product cubic spline, touching only its support.
-
-    A cubic B-spline at x in knot span [t_j, t_{j+1}) is carried by the four coefficients
-    c[j-3 .. j] and the eight knots t[j-3 .. j+4] alone, so slicing both per axis gives a
-    spline that is EXACTLY the full one on that span. `coeff` can therefore be a read-only
-    np.memmap of the ~1.1 GB table: this reads 4^5 * n_ell float32s (~16 MB at 3998 ells)
-    instead of building the ~2.1 GB float64 NdBSpline _TensorSpline needs. `point` must
-    already be clamped onto the box. `nu` is NdBSpline's per-axis derivative order."""
-    from scipy.interpolate import NdBSpline
-    slices, sub_knots = [], []
-    for a, t in enumerate(knots):
-        n = t.size - 4
-        j = int(np.clip(np.searchsorted(t, point[a], side = "right") - 1, 3, n - 1))
-        slices.append(slice(j - 3, j + 1))
-        sub_knots.append(t[j - 3:j + 5])
-    block = np.asarray(coeff[tuple(slices)], dtype = np.float64)
-    #the point sits inside the sub-spline's single base span (right edge included), so
-    #extrapolation never actually happens; True just keeps the right edge from NaNing
-    spline = NdBSpline(tuple(sub_knots), block, 3, extrapolate = True)
-    return spline(point[None, :], nu = nu)[0]
+def screen(knots, points):
+    """(valid, clipped) for (M, n_axes) points: valid marks the rows inside the box
+    (within BOUNDARY_TOL), clipped has every coordinate clipped onto the box."""
+    valid = np.all(np.isfinite(points), axis = 1)
+    clipped = points.copy()
+    for a in range(points.shape[1]):
+        #the box runs from the 4th knot to the 4th-last one: the not-a-knot cubic spline
+        #repeats each end knot 4 times
+        lo = knots[a][3]
+        hi = knots[a][-4]
+        tol = BOUNDARY_TOL * (hi - lo)
+        valid &= (points[:, a] >= lo - tol) & (points[:, a] <= hi + tol)
+        clipped[:, a] = np.clip(points[:, a], lo, hi)
+    return valid, clipped
 
 
-# ── Grid file ─────────────────────────────────────────────────────────────
+def evaluate_spline(spline, points):
+    """NdBSpline at (M, n_axes) points -> (M,) + trailing, with NaN rows for points
+    outside the box. Points within BOUNDARY_TOL of an edge are clipped onto it."""
+    points = np.atleast_2d(np.asarray(points, dtype = np.float64))
+    valid, clipped = screen(spline.t, points)
+    trailing = spline.c.shape[points.shape[1]:]
+    out = np.full((points.shape[0],) + trailing, np.nan)
+    if valid.any():
+        out[valid] = spline(clipped[valid])
+    return out
+
 
 class CambGrid:
     """The merged 5D spline, plus the theta_MC_100 -> H0 conversion it needs."""
 
     def __init__(self, path):
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f"no merged CAMB grid at {path} - generate the grid with "
-                f"camb_grid.sh and merge it with "
-                f"merge_camb_grid.py")
-        data = np.load(path)
         self.path = path
-        #coefficient tables are ~1.1 GB each and there are up to six of them, so they are
-        #NOT read here: _spline_cache fills lazily, per spectrum, on first use. np.load on
-        #an npz keeps a file handle and reads members on indexing, which is exactly the
-        #laziness needed
-        self._data = data
-        self._spline_cache = {}
-        #unlensed scalar BB is identically zero on r = 0 / tensors-off grids; the merge
-        #step verifies that and records this flag instead of a coefficient table
-        self.bb_is_zero = bool(data["bb_is_zero"]) if "bb_is_zero" in data.files else False
-        self.ells = data["ells"]
+        #np.load on an npz reads a member only when it is indexed, so the coefficient
+        #tables stay on disk until spline() asks for them
+        self.data = np.load(path)
+        self.bb_is_zero = bool(self.data["bb_is_zero"])
+        self.ells = self.data["ells"]
         self.n_ell = self.ells.size
-        self.axes = [data[f"axis_{name}"] for name in GRID_AXES]
-        self.knots = [data[f"knots_{name}"] for name in GRID_AXES]
+        self.axes = [self.data[f"axis_{name}"] for name in GRID_AXES]
+        self.knots = [self.data[f"knots_{name}"] for name in GRID_AXES]
+        self.spline_cache = {}
 
-        #densify theta(H0) once at every (ombh2, omch2) node, so a query only has to spline
-        #over those two axes and then invert a 1D monotone curve. The nodes are exact grid
-        #points, so this is a plain 1D cubic along H0 - no 3D stencil needed
-        from scipy.interpolate import CubicSpline
-        self.h0_dense = np.linspace(self.axes[0][0], self.axes[0][-1], N_THETA_DENSE)
-        dense = CubicSpline(self.axes[0], data["theta_grid"], axis = 0)(self.h0_dense)
-        #_TensorSpline interpolates over the LEADING axes and carries the rest through as
-        #trailing values, so the dense H0 axis has to sit last: the two interpolated axes
-        #are ombh2 and omch2, and what comes back is a whole theta(H0) curve per query
-        dense = np.moveaxis(dense, 0, -1)
-        if not np.all(np.diff(dense, axis = -1) > 0):
-            raise RuntimeError("theta_MC_100 is not monotonically increasing in H0 "
-                               "somewhere on the grid - it cannot be inverted")
-        #spline over the two node axes so queries between ombh2/omch2 nodes are
-        #interpolated, not snapped to the nearest node
-        from scipy.interpolate import make_interp_spline
-        coeff_dense = dense
-        theta_knots = []
-        for axis, values in ((0, self.axes[3]), (1, self.axes[4])):
-            spline = make_interp_spline(values, np.moveaxis(coeff_dense, axis, 0), k = 3)
-            coeff_dense = np.moveaxis(spline.c, 0, axis)
-            theta_knots.append(spline.t)
-        self.coeff_theta_dense = coeff_dense
-        self.theta_knots = theta_knots
-        #this one is small (a few MB) and every query needs it, so unlike the spectra it is
-        #built eagerly
-        self.theta_spline = _TensorSpline(coeff_dense, theta_knots)
+        #theta_grid[H0, ombh2, omch2] gets the same tensor-product spline as the spectra
+        h0_axis = self.axes[GRID_INDEX["H0"]]
+        ombh2_axis = self.axes[GRID_INDEX["ombh2"]]
+        omch2_axis = self.axes[GRID_INDEX["omch2"]]
+        theta_coeff, theta_knots = spline_coefficients([h0_axis, ombh2_axis, omch2_axis],
+                                                       self.data["theta_grid"])
+        self.theta_spline = NdBSpline(tuple(theta_knots), theta_coeff, 3)
+        self.h0_dense = np.linspace(h0_axis[0], h0_axis[-1], N_THETA_DENSE)
 
     def h0_from_theta(self, theta, ombh2, omch2):
-        """Invert theta_MC_100 -> H0 at each (ombh2, omch2). Returns NaN where the
-        requested theta is not reachable inside the grid's H0 range."""
-        pts = np.stack([np.atleast_1d(ombh2), np.atleast_1d(omch2)], axis = -1)
-        curves = self.theta_spline(pts)
+        """H0 giving theta_MC_100 at each (ombh2, omch2); NaN where theta is not reached
+        inside the grid's H0 range."""
         theta = np.atleast_1d(theta)
+        ombh2 = np.atleast_1d(ombh2)
+        omch2 = np.atleast_1d(omch2)
         h0 = np.full(theta.shape, np.nan)
         for m in range(theta.size):
-            curve = curves[m]
+            line = np.stack([self.h0_dense,
+                             np.full(N_THETA_DENSE, ombh2[m]),
+                             np.full(N_THETA_DENSE, omch2[m])], axis = -1)
+            #theta(H0) at this (ombh2, omch2), increasing in H0
+            curve = evaluate_spline(self.theta_spline, line)
             if not np.all(np.isfinite(curve)):
                 continue
-            #same round-off tolerance as _TensorSpline's box screen: a theta taken from
-            #the edge of the
-            #sampler's search range must not be rejected for being one ulp past the end of
-            #the curve it was derived from
             tol = BOUNDARY_TOL * (curve[-1] - curve[0])
             if theta[m] < curve[0] - tol or theta[m] > curve[-1] + tol:
                 continue
@@ -264,157 +148,64 @@ class CambGrid:
         return h0
 
     def grid_points(self, params_batch):
-        """(M, 5) in PARAM_ORDER -> (M, 5) in the grid's own axes, i.e. with
-        theta_MC_100 replaced by the H0 that produces it at this ombh2/omch2."""
+        """(M, 5) in PARAM_ORDER -> (M, 5) in GRID_AXES, i.e. theta_MC_100 replaced by
+        the H0 that produces it at this ombh2 / omch2."""
         pb = np.atleast_2d(np.asarray(params_batch, dtype = np.float64))
-        h0 = self.h0_from_theta(pb[:, 0], pb[:, 3], pb[:, 4])
-        return np.stack([h0, pb[:, 1], pb[:, 2], pb[:, 3], pb[:, 4]], axis = -1)
-
-    def has_spectrum(self, spectrum):
-        if spectrum == "bb" and self.bb_is_zero:
-            return True
-        return f"coeff_{spectrum}" in self._data.files
+        theta = pb[:, PARAM_INDEX["theta_MC_100"]]
+        ombh2 = pb[:, PARAM_INDEX["ombh2"]]
+        omch2 = pb[:, PARAM_INDEX["omch2"]]
+        points = np.zeros_like(pb)
+        for name in GRID_AXES:
+            if name == "H0":
+                points[:, GRID_INDEX["H0"]] = self.h0_from_theta(theta, ombh2, omch2)
+            else:
+                points[:, GRID_INDEX[name]] = pb[:, PARAM_INDEX[name]]
+        return points
 
     def spline(self, spectrum):
-        """Lazily load one spectrum's coefficient table and cache it as an evaluable
-        _TensorSpline.
-
-        Only the spline is cached, not the array it was built from: NdBSpline holds its own
-        float64 copy, so keeping the float32 original as well would double an already
-        ~2.1 GB per-spectrum footprint for nothing."""
-        if spectrum not in self._spline_cache:
-            key = f"coeff_{spectrum}"
-            if key not in self._data.files:
-                raise KeyError(
-                    f"the merged CAMB grid at {self.path} has no {spectrum} spectrum - it "
-                    f"predates the polarization/lensed-Cl extension. Re-run "
-                    f"camb_grid_generation/camb_grid.sh and "
-                    f"merge_camb_grid.py to regenerate it")
-            self._spline_cache[spectrum] = _TensorSpline(self._data[key], self.knots)
-        return self._spline_cache[spectrum]
-
-    def coeff_memmap(self, spectrum):
-        """A read-only np.memmap of one spectrum's float32 coefficient table, straight out
-        of the npz. merge_camb_grid.py writes every member ZIP_STORED (uncompressed), so the
-        .npy bytes sit contiguously in the file and nothing is read until it is indexed."""
-        import zipfile
-        name = f"coeff_{spectrum}.npy"
-        with zipfile.ZipFile(self.path) as archive:
-            info = archive.getinfo(name)
-        if info.compress_type != zipfile.ZIP_STORED:
-            raise ValueError(f"{name} in {self.path} is compressed and cannot be memory "
-                             f"mapped; use CambGrid.cl instead")
-        with open(self.path, "rb") as f:
-            #the local file header's name / extra lengths can differ from the central
-            #directory's (zip64 extras), so read them from the local header itself
-            f.seek(info.header_offset + 26)
-            name_len, extra_len = np.frombuffer(f.read(4), dtype = "<u2")
-            f.seek(info.header_offset + 30 + int(name_len) + int(extra_len))
-            major, _ = np.lib.format.read_magic(f)
-            read_header = (np.lib.format.read_array_header_1_0 if major == 1
-                           else np.lib.format.read_array_header_2_0)
-            shape, fortran, dtype = read_header(f)
-            offset = f.tell()
-        return np.memmap(self.path, dtype = dtype, mode = "r", offset = offset,
-                         shape = shape, order = "F" if fortran else "C")
-
-    def cl_local(self, spectrum, params_batch, grid_axis = None):
-        """CambGrid.cl for a FEW points, at a few MB of memory rather than ~2.1 GB.
-
-        Same values as cl (the same spline, restricted exactly to each point's support -
-        see _local_support), for callers that only need a handful of cosmologies, such as a
-        Fisher stencil, and must not load a whole coefficient table. With `grid_axis` set
-        (an index into GRID_AXES) it returns the analytic derivative of the SPLINED quantity
-        (lnCl, or te_rho raw) along that grid axis instead - at fixed H0, so d/dtheta and
-        the ombh2 / omch2 derivatives at fixed theta also need the H0 inversion's slope."""
-        points = self.grid_points(params_batch)
-        out = np.full((points.shape[0], self.n_ell), np.nan)
-        valid = self._points_valid(points)
-        if spectrum == "bb" and self.bb_is_zero:
-            out[valid] = 0.0
-            return out
-        if not valid.any():
-            return out
-        coeff = self.coeff_memmap(spectrum)
-        nu = None
-        if grid_axis is not None:
-            nu = np.zeros(len(GRID_AXES), dtype = int)
-            nu[grid_axis] = 1
-        for m in np.flatnonzero(valid):
-            clamped = np.array([np.clip(points[m, a], k[3], k[-4])
-                                for a, k in enumerate(self.knots)])
-            out[m] = _local_support(coeff, self.knots, clamped, nu = nu)
-        del coeff
-        if grid_axis is not None or spectrum in LINEAR_SPECTRA:
-            return out
-        return np.exp(out)
-
-    def _points_valid(self, points):
-        """The same validity screen _TensorSpline applies: finite coordinates inside the
-        box (with the round-off tolerance). Needed to give the zero-BB spectrum the same
-        NaN-outside-the-box semantics as the splined spectra."""
-        valid = np.all(np.isfinite(points), axis = 1)
-        for a, knot in enumerate(self.knots):
-            lo, hi = knot[3], knot[-4]
-            tol = BOUNDARY_TOL * (hi - lo)
-            valid &= (points[:, a] >= lo - tol) & (points[:, a] <= hi + tol)
-        return valid
+        """One spectrum's NdBSpline, built from its stored coefficients on first use."""
+        if spectrum not in self.spline_cache:
+            coeff = self.data[f"coeff_{spectrum}"]
+            self.spline_cache[spectrum] = NdBSpline(tuple(self.knots), coeff, 3)
+        return self.spline_cache[spectrum]
 
     def cl(self, spectrum, params_batch):
-        """(M, 5) in PARAM_ORDER -> (M, n_ell) values of the requested spectrum (Cls for
-        the lnCl-splined spectra, the correlation ratio itself for te_rho). NaN rows
-        outside the box (or at an unreachable theta_MC_100), which the sampler turns into
-        a rejected proposal."""
+        """(M, 5) in PARAM_ORDER -> (M, n_ell): Cls, or the ratio itself for te_rho. NaN
+        rows outside the box or at an unreachable theta_MC_100."""
         points = self.grid_points(params_batch)
         if spectrum == "bb" and self.bb_is_zero:
+            #zeros, with the same NaN rows as any other spectrum
             out = np.zeros((points.shape[0], self.n_ell))
-            out[~self._points_valid(points)] = np.nan
+            valid, _ = screen(self.knots, points)
+            out[~valid] = np.nan
             return out
-        values = self.spline(spectrum)(points)
+        values = evaluate_spline(self.spline(spectrum), points)
         if spectrum in LINEAR_SPECTRA:
             return values
         return np.exp(values)
 
+
 _loaded_grids = {}
 
 def load_camb_grid(path):
-    """Load (and cache) a merged grid. Cached so the file is opened once per process even
-    though the predictors are built separately (the coefficient tables themselves load
-    lazily, per spectrum)."""
+    """One CambGrid per file per process."""
     path = os.path.abspath(path)
     if path not in _loaded_grids:
         _loaded_grids[path] = CambGrid(path)
     return _loaded_grids[path]
 
-def _missing_spectrum_predictor(grid, spectrum):
-    """Stand-in slot for a spectrum the grid file does not hold: raises with a clear
-    message the moment it is called (i.e. at trace time), so a pre-polarization grid
-    file keeps working for T-only sampling."""
-    def predict(params_batch):
-        raise KeyError(
-            f"the merged CAMB grid at {grid.path} has no {spectrum} spectrum - it "
-            f"predates the polarization/lensed-Cl extension. Re-run "
-            f"camb_grid_generation/camb_grid.sh and merge_camb_grid.py "
-            f"to regenerate it")
-    return predict
-
-_loaded_callback_predictors = {}
+_loaded_predictors = {}
 
 def load_camb_grid_predictors(path):
-    """Returns a GridPredictors namedtuple of functions with the emulator predictor
-    signature f(params_batch) -> (M, n_ell), backed by the 5D grid spline.
-    jit-safe via jax.pure_callback, matching
-    load_camb_spline_predictors. Cached per path so consumers passing the predictors as
-    static jit arguments always see the same function objects."""
+    """GridPredictors of jit-safe functions f(params_batch) -> (M, n_ell), via
+    jax.pure_callback. Cached per path: the sampler passes them as static jit arguments,
+    so they must be the same function objects on every call."""
     path = os.path.abspath(path)
-    if path in _loaded_callback_predictors:
-        return _loaded_callback_predictors[path]
+    if path in _loaded_predictors:
+        return _loaded_predictors[path]
     grid = load_camb_grid(path)
 
     def make_predictor(spectrum):
-        if not grid.has_spectrum(spectrum):
-            return _missing_spectrum_predictor(grid, spectrum)
-
         def eval_fn(params_batch):
             return grid.cl(spectrum, params_batch)
 
@@ -427,5 +218,5 @@ def load_camb_grid_predictors(path):
         return predict
 
     predictors = GridPredictors(*[make_predictor(name) for name in SPECTRA])
-    _loaded_callback_predictors[path] = predictors
+    _loaded_predictors[path] = predictors
     return predictors
