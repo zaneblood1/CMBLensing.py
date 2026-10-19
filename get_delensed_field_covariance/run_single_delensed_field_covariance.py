@@ -1,6 +1,6 @@
 """One realization of the empirical delensed covariance, at every point of the stencil.
 
-Spawned once per seed by get_delensed_covariance.sh. For its seed (one set of common random
+Spawned once per seed by get_delensed_field_covariance.sh. For its seed (one set of common random
 numbers) the job runs, at theta_0 and at theta_0 +/- h_i for every --params entry,
 
     load_sim(theta) -> inverse-lense the NOISELESS lensed field by the Wiener-filtered TRUE

@@ -66,9 +66,9 @@ bash get_sampler_effective_noise.sh                            # one fixed-theta
 sbatch merge_sampler_effective_noise.sh                        # a job itself, submit from its folder; -> sampler_effective_noise.npz; works on running jobs
 python -m cmb_lensing.sampler_effective_phi_noise --nside 64 --theta_pix 5 --n_maps 4 --n_sweeps 400 --burn_in 100 --out_dir <dir>   # local
 
-# Band-averaged map_joint N_eff (diagnostic only; get_map_joint_phi_noise/)
-bash get_effective_phi_noise.sh
-python merge_phi_noise.py --noise_dir <scp'd out_dir>
+# Per-mode map_joint N_phi at GROUND_TRUTH (get_map_joint_phi_noise/)
+bash get_map_joint_phi_noise.sh                                # one job per seed
+python merge_map_joint_phi_noise.py --noise_dir <scp'd out_dir>  # -> map_joint_phi_noise.npz ("nphi")
 ```
 
 No linter or formatter is configured. No CI pipeline exists.
@@ -102,7 +102,7 @@ get_delensed_field_covariance/ get_delensed_covariance.sh, run_single_delensed_c
   delensed_field_covariance_data/  merged delensed_covariance.npz runs, nside 128 / 2.5', see below
 get_sampler_phi_noise/        get_sampler_effective_noise.sh, *_1_chain.sh/.py, merge_sampler_effective_noise.sh/.py
   sampler_phi_noise_data/       sampler_effective_noise_output_mean_chains_{2dot5,5,10}uk/
-get_map_joint_phi_noise/      get_effective_phi_noise.sh, get_phi_noise_1_realization.sh/.py, merge_phi_noise.py
+get_map_joint_phi_noise/      get_map_joint_phi_noise.sh, get_map_joint_phi_noise_1_realization.sh/.py, merge_map_joint_phi_noise.py
 runtime_comparison/           slurm scripts timing map_joint Python vs Julia
 hpc_local.example.sh          template for the gitignored hpc_local.sh every HPC script sources
 ```
@@ -199,10 +199,10 @@ phi          C_phi + N_phi           (N_phi frozen at theta_0)
 |---|---|---|
 | `qe_unlensed` | box QE matrix (`qe_noise_matrix` = `scalar_quadratic_estimate` without `NPHI_FAC`) with the **unlensed** C_TT in its filter (cfl_tt → cf_tt) | **UPPER bound** on the information |
 | `qe_delensed` (default) | same QE with the filter **iterated** from the lensed to the partially delensed C_TT (`iterative_delensing`, 5-6 iterations to 1e-6) | **LOWER bound** |
-| `map_joint` | `phi_noise_fid` of a merged `delensed_covariance.npz` with phi moments (`--phi_noise`); NaN (unmeasured) modes carry no phi information | comparison |
+| `map_joint` | `nphi` of a merged `map_joint_phi_noise.npz` (or the legacy `phi_noise_fid` of an older merged `delensed_covariance.npz`) (`--phi_noise`); NaN (unmeasured) modes carry no phi information | comparison |
 | `sample_joint` | `nphi` of a `sampler_effective_noise.npz` (`--phi_noise`) | comparison |
 
-`--qe_response` (`unlensed` default / `gradient` = CAMB's lensed T-grad-T, iterated with the filter under `qe_delensed`) applies to the two `qe_` sources; `chain_analysis.py` uses `gradient` for `qe_delensed` and `unlensed` for `qe_unlensed`, matching the data folders. `load_phi_noise_matrix` classifies a noise file (`nphi_cross_raw` present → `sample_joint`; `phi_noise_fid` / `nphi_map_joint` → `map_joint`; else `score`, a legacy sampler_noise_estimate bound the forecast no longer accepts) and refuses another box or cosmology.
+`--qe_response` (`unlensed` default / `gradient` = CAMB's lensed T-grad-T, iterated with the filter under `qe_delensed`) applies to the two `qe_` sources; `chain_analysis.py` uses `gradient` for `qe_delensed` and `unlensed` for `qe_unlensed`, matching the data folders. `load_phi_noise_matrix` classifies a noise file (`nphi_cross_raw` present → `sample_joint`; anything else → `map_joint`; the legacy `score` label was dropped 2026-10-19) and refuses another box or cosmology.
 
 **Temperature block.** Default: CAMB's `get_partially_lensed_cls` at the frozen `Alens_L`, re-run at every stencil point (`delensed_cls_at_params`; the non-perturbative correlation-function lensing, NOT an interpolation between unlensed and lensed). `--delensed_covariance <npz>` swaps in the EMPIRICAL per-mode delensed covariance (centre and +/- points; C_n still analytic) and its steps h_i for both blocks. Nothing checks that the file's W was built from the same N_phi as the forecast's phi block (`check_wiener_matches` / `nphi_checksum` removed 2026-10-16); matching them is the user's job. `forecast_jackknife(..., delensed_covariance, **stencil_kwargs)` re-forms the f block from every delete-one realization mean (`delensed_covariance.leave_one_out_grids`; needs the per-seed job files) and returns `(fisher, names, leave_one_out)`. Nothing calls it any more: since 2026-10-15 `chain_analysis.py` draws every forecast WITHOUT error bars (only the measured chains carry them).
 
@@ -226,7 +226,7 @@ Conventions and facts that still apply:
 - **`NPHI_FAC = 2`** is CMBLensing.jl's preconditioning heuristic; `qe_noise_matrix` does NOT divide by it (physical N^(0)). The box QE norm is the square-domain, periodically wrapped Hu & Okamoto N0 to 0.5%; its annulus scatter (1.6x at L = 540, 5.7x at L = 2090 on nside 64 / 5') is real anisotropy.
 - **`gradient` response:** raises N_phi 0.4-2.6% and moves the sigmas < 0.35% at nside 64 / 5' / 5 uK.
 - Outputs are in `OUTPUT_PARAM_ORDER` (`omch2, ombh2, ns, theta_MC_100, logA`), chain_analysis's order. The npz stores the run config, steps, and the N_phi description (source, filter, response, file).
-- Kept for other modules: `prior_covariances`, `load_sim_cosmology`, `sampled_names_and_steps`, `covariance_from_fisher`, `report_sigmas`, `save_outputs`, `add_box_arguments`, `sampled_from_args`, `box_subtitle`, `run_config(args, names, steps = None, **extra)` (mixed_logpdf), `qe_noise_matrix` (sampler_effective_phi_noise, plots), `_instrument_matrices` / `qe_response_cl` / `cls_with_qe_response` (map_joint_phi_noise.py), `iterative_delensing` (plots).
+- Kept for other modules: `prior_covariances`, `load_sim_cosmology`, `sampled_names_and_steps`, `covariance_from_fisher`, `report_sigmas`, `save_outputs`, `add_box_arguments`, `sampled_from_args`, `box_subtitle`, `run_config(args, names, steps = None, **extra)` (mixed_logpdf), `qe_noise_matrix` (sampler_effective_phi_noise, plots), `iterative_delensing` (plots).
 
 None of these is the marginal Fisher of p(d | theta) that the sampler targets. Two facts from the deleted marginal-Fisher work worth keeping: **never `jax.grad` w.r.t. theta** - `phi_dot_wrapper`'s custom VJP (`statistics.py`) differentiates `dot(phi, Cphi)` rather than `dot(phi, Cphi^-1 phi)`, so any autodiff through `phi_covariance` is silently wrong; and the mixed change of variables has a theta-dependent Jacobian (`mixed_logpdf` subtracts `logdet(G) + logdet(D)`), so a mixed Hessian is not comparable to an unmixed one.
 
@@ -234,7 +234,7 @@ None of these is the marginal Fisher of p(d | theta) that the sampler targets. T
 
 Replaces the forecast's CAMB delensed T block, value AND finite difference. Per seed (common random numbers) and per stencil point `{theta_0, theta_0 +/- h_i}` a job runs `load_sim(theta)` → inverse-lenses the NOISELESS lensed field by the Wiener-filtered TRUE phi `W phi` (`W = C_phi / (C_phi + N_phi)` per mode, built once at theta_0) → stores `|F|^2 / nside^2` on the rfft grid (covar_matrix_from_cls units, origin zeroed). Only the delensed field is stored. The merge is just the realization mean at each stencil point (`delensed_fid` / `_plus` / `_minus` + metadata): no band diagnostics, no plot, no common-random-number or round-trip check (all removed 2026-10-16; the CRN check measured ~5e-13 when it existed).
 
-**This path does nothing else (2026-10-16):** no map_joint, no phi moments, no `copied_phi_moments.npz`, no `reconstruction` / `constant_nphi` (N_phi is always constant in theta). map_joint's reconstruction noise is `get_map_joint_phi_noise/`'s job. A merged file written from now on has no `phi_noise_fid`, so it can no longer be `--phi_noise` for `--nphi_source map_joint`; the older merged files in `delensed_field_covariance_data/` still can.
+**This path does nothing else (2026-10-16):** no map_joint, no phi moments, no `copied_phi_moments.npz`, no `reconstruction` / `constant_nphi` (N_phi is always constant in theta). map_joint's reconstruction noise is `get_map_joint_phi_noise/`'s job (its merged `map_joint_phi_noise.npz` can be this path's `phi_noise`). A merged file written from now on has no `phi_noise_fid`, so it can no longer be `--phi_noise` for `--nphi_source map_joint`; the older merged files in `delensed_field_covariance_data/` still can.
 
 **W's N_phi** (recorded in every job file; the merge refuses to mix):
 - box QE (`wiener_nphi_source = "qe"`): `qe_filter` (`QE_FILTERS`: `lensed` one-shot, the default; `delensed` iterated; `unlensed`) + `qe_response`, built by `fisher_forecast.qe_reconstruction`.
@@ -248,7 +248,7 @@ One chain per (f, phi, d) realization samples (f, phi) | d with theta HELD at GR
 
 ### Other measurement modules
 
-- **`map_joint_phi_noise.py`** (renamed from `phi_noise.py` on 2026-10-15) — map_joint's band-averaged N_L^eff from |L|-annulus moments (`get_map_joint_phi_noise/`). Since 2026-10-16 the only place map_joint's reconstruction error is measured (the delensed-covariance path no longer runs map_joint); the forecast's map_joint source still reads the per-MODE `phi_noise_fid` of the existing merged delensed_covariance.npz files until this path writes a per-mode `nphi`.
+- **`map_joint_phi_noise.py`** (renamed from `phi_noise.py` on 2026-10-15; per-mode since 2026-10-19) — map_joint's per-MODE N_phi = C_phi (1/r^2 - 1) on the rfft2 grid (`get_map_joint_phi_noise/`), always at GROUND_TRUTH. Each job (one seed: load_sim → map_joint) stores the per-mode moments `auto` = |phi_hat|^2, `cross` = Re phi_hat phi*, `true_auto` = |phi|^2 (/ nside^2, covar_matrix_from_cls units) and `cphi`. The merge averages them over realizations BEFORE forming r^2 = <B>^2/(<A><D>), and writes `map_joint_phi_noise.npz` with `nphi` (NaN where the mean cross is <= 0, 0 at the origin), a delete-one jackknife `nphi_error`, the mean moments and the box / cosmology keys, so it works directly as `--nphi_source map_joint --phi_noise` and as delensed_covariance's `phi_noise`. No band averaging, no QE reference, no validation rungs, no cosmology shift, no `qe_response` / `beam_fwhm` (all removed 2026-10-19). The only place map_joint's reconstruction error is measured (the delensed-covariance path no longer runs map_joint).
 - **`fixed_theta_chain.py`** (renamed from `fisher_forecast_from_mixed_logpdf.py` on 2026-10-15, when its mixed-Hessian and Louis forecast were deleted) — only what `sampler_effective_phi_noise.run_job` needs: `mixed_theta_matrices` (C_f / C_phi / D / G at one cosmology, built like the sampler's), `posterior_mixed_draws` (the fixed-theta Gibbs sweep, streamed to an `on_draw` callback) and `chain_key(map_seed, chain_index = 0) = fold_in(fold_in(PRNGKey(map_seed), CHAIN_STREAM), chain_index)`. CHAIN_STREAM must not be 0 or 1: load_sim's keys all descend from `split(PRNGKey(map_seed))` = `fold_in(PRNGKey(map_seed), 0 | 1)` under partitionable threefry, so a chain rooted at `PRNGKey(map_seed)` itself would reuse them. `chain_key(map_seed)` gives exactly the key the old `chain_key(map_seed, 0)` did.
 
 ### Polarization Modes

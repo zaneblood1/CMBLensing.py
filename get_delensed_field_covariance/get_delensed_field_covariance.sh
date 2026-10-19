@@ -54,7 +54,7 @@ mkdir -p "$out_dir"
 #change that repeats one fails the merge loudly instead of double counting
 for ((m=0; m<num_realizations; m++)); do
     map_seed=$((seed_prefix + m))
-    sbatch run_single_delensed_covariance.sh "$m" "$map_seed" "$nside" "$theta_pix" \
+    sbatch run_single_delensed_field_covariance.sh "$m" "$map_seed" "$nside" "$theta_pix" \
         "$noise_level" "$l_knee" "$step_sigma" "$qe_filter" "$qe_response" "$phi_noise" \
         "$out_dir" \
         $derivative_params
