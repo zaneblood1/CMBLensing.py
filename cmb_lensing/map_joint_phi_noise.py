@@ -116,6 +116,37 @@ def noise_from_moments(auto, cross, true_auto, cphi):
     return nphi
 
 
+def noise_with_jackknife(autos, crosses, true_autos, cphi):
+    """(nphi, nphi_error, mean_auto, mean_cross, mean_true_auto) from the stacked
+    (n_realizations, nside, nside // 2 + 1) per-realization moments.
+
+    The moments are averaged over realizations before noise_from_moments takes the ratio;
+    `nphi_error` is a delete-one-realization jackknife through the same ratio (NaN with
+    fewer than 3 realizations). Shared with sampler_phi_noise.
+    """
+    n_realization = len(autos)
+    mean_auto = np.mean(autos, axis = 0)
+    mean_cross = np.mean(crosses, axis = 0)
+    mean_true_auto = np.mean(true_autos, axis = 0)
+    nphi = noise_from_moments(mean_auto, mean_cross, mean_true_auto, cphi)
+
+    #delete-one jackknife
+    nphi_error = np.full(cphi.shape, np.nan)
+    if n_realization > 2:
+        leave_one_out = []
+        for index in range(n_realization):
+            kept = np.arange(n_realization) != index
+            leave_one_out.append(noise_from_moments(np.mean(autos[kept], axis = 0),
+                                                    np.mean(crosses[kept], axis = 0),
+                                                    np.mean(true_autos[kept], axis = 0),
+                                                    cphi))
+        leave_one_out = np.array(leave_one_out)
+        spread = leave_one_out - np.mean(leave_one_out, axis = 0)
+        nphi_error = np.sqrt((n_realization - 1) / n_realization *
+                             np.sum(spread**2, axis = 0))
+    return nphi, nphi_error, mean_auto, mean_cross, mean_true_auto
+
+
 def merge_phi_noise(directory):
     """Average the per-realization moments and form the per-mode N_phi, with a jackknife error.
 
@@ -142,25 +173,8 @@ def merge_phi_noise(directory):
     first = np.load(paths[0])
     cphi = np.asarray(first["cphi"])
 
-    mean_auto = np.mean(autos, axis = 0)
-    mean_cross = np.mean(crosses, axis = 0)
-    mean_true_auto = np.mean(true_autos, axis = 0)
-    nphi = noise_from_moments(mean_auto, mean_cross, mean_true_auto, cphi)
-
-    #delete-one jackknife
-    nphi_error = np.full(cphi.shape, np.nan)
-    if n_realization > 2:
-        leave_one_out = []
-        for index in range(n_realization):
-            kept = np.arange(n_realization) != index
-            leave_one_out.append(noise_from_moments(np.mean(autos[kept], axis = 0),
-                                                    np.mean(crosses[kept], axis = 0),
-                                                    np.mean(true_autos[kept], axis = 0),
-                                                    cphi))
-        leave_one_out = np.array(leave_one_out)
-        spread = leave_one_out - np.mean(leave_one_out, axis = 0)
-        nphi_error = np.sqrt((n_realization - 1) / n_realization *
-                             np.sum(spread**2, axis = 0))
+    nphi, nphi_error, mean_auto, mean_cross, mean_true_auto = noise_with_jackknife(
+        autos, crosses, true_autos, cphi)
 
     return dict(nphi = nphi, nphi_error = nphi_error, cphi = cphi,
                 mean_auto = mean_auto, mean_cross = mean_cross,

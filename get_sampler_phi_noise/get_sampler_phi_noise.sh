@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#Run with "bash get_sampler_effective_noise.sh" (not sbatch): it only submits the jobs. It
+#Run with "bash get_sampler_phi_noise.sh" (not sbatch): it only submits the jobs. It
 #moves into its own folder and sources the untracked repo-root hpc_local.sh (conda,
 #SBATCH_MAIL_USER; copy hpc_local.example.sh to create it), which the jobs inherit
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,14 +20,12 @@ source ../hpc_local.sh || exit 1
 #    r_L^2 = <phi_mean phi_true*>^2 / (<|phi_mean|^2> <|phi_true|^2>)
 #    N_L   = C_L^phiphi (1 / r_L^2 - 1)
 #
-#with a delete-one-realization jackknife error. See cmb_lensing/sampler_effective_phi_noise.py.
+#with a delete-one-realization jackknife error. See cmb_lensing/sampler_phi_noise.py.
 #
 #The jobs can be analysed WHILE THEY RUN (each flushes its samples every 10 sweeps and the
-#analysis reads only the sweeps a job reports as complete), on the HPC:
-#    python merge_sampler_effective_noise.py --chain_dir <out_dir> --burn_in 200
-#and the merged file plugs into the forecast as an N_phi matrix:
-#    python -m cmb_lensing.fisher_forecast --nphi_source sample_joint \
-#        --phi_noise <out_dir>/sampler_effective_noise.npz ...
+#merge reads only the sweeps a job reports as complete), on the HPC, from this folder (set
+#burn_in in it first):
+# sbatch merge_sampler_phi_noise.sh
 
 #systematics: MATCH sample_lcdm.sh so the noise describes the box the chains run on
 nside=128
@@ -35,10 +33,7 @@ theta_pix=2.5
 noise_level=5
 l_knee=0
 
-#Gibbs sweeps per chain, INCLUDING whatever the analysis later cuts as burn-in. The chain
-#mean's Monte Carlo error falls as IAT / sweeps per mode, and the "naive" estimate's bias as
-#(1 + N / C) IAT / sweeps, so the high-L modes (N >> C) are what set this.
-#MEASURED 1.35 s per sweep at nside 64 / 5' (8 local cores) after ~25 s of compilation
+#Gibbs sweeps per chain
 num_sweeps=6000
 
 #one slurm job (one data map, one chain) per seed. The moments are summed over the maps per
@@ -47,20 +42,19 @@ num_maps=100
 seed_prefix=234567
 
 #wall time and memory per job. A job killed at the wall clock keeps every flushed sweep and
-#is analysed as a shorter chain. MEASURED 1.35 GB peak RSS at nside 64
+#is analysed as a shorter chain. 
 chain_time="18:00:00"
 chain_mem="16G"
 
-#output folder shared by every job. Each chain stores num_sweeps complex64 rfft grids:
-#66 kB per sweep at nside 128, so 200 MB per chain at 3000 sweeps and 10 GB for 50 maps
-out_dir="$here/sampler_effective_noise_output"
-
+#output folder shared by every job.
+out_dir="$here/sampler_phi_noise_output"
 mkdir -p "$out_dir"
+
 #every job uses a distinct seed; the analysis refuses duplicates, so a loop change that
 #repeats one fails loudly instead of double counting a realization
 for ((m=0; m<num_maps; m++)); do
     map_seed=$((seed_prefix + m))
     sbatch --time="$chain_time" --mem-per-cpu="$chain_mem" \
-        get_sampler_effective_noise_1_chain.sh "$m" "$map_seed" "$nside" "$theta_pix" \
+        get_sampler_phi_noise_1_chain.sh "$m" "$map_seed" "$nside" "$theta_pix" \
         "$noise_level" "$l_knee" "$num_sweeps" "$out_dir"
 done

@@ -3,26 +3,17 @@
 sample_lcdm.sample_joint's Gibbs sweep minus its theta step: f from its exact conditional
 (gibbs_sample_f), a mix, one HMC step on phi° (gibbs_sample_phi) and an unmix, with C_f /
 C_phi / D / G built once at a fixed cosmology by the same constructors the sampler uses
-(mixed_theta_matrices). sampler_effective_phi_noise.py runs one such chain per realization at the
+(mixed_theta_matrices). sampler_phi_noise.py runs one such chain per realization at the
 ground truth and cross correlates the posterior-mean phi with the true phi to measure the
 sampler's effective reconstruction noise.
-
-    data_set = load_sim(..., map_seed, ...)
-    cf_op, cphi_op, d_fid, g_fid = mixed_theta_matrices(
-        params, data_set, nside, pix_width, ell_grid, data_set.quadratic_estimate.scalar_matrix)
-    posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_sweeps,
-                          chain_key(map_seed), on_draw = callback)
 """
 
 import numpy as np
-
 import jax
 jax.config.update("jax_enable_x64", True)
-
 from cmb_lensing.simulate import get_d_tt_matrix, get_g_matrix_lcdm
 from cmb_lensing.mixing import mix, unmix
 from cmb_lensing.fisher_forecast import prior_covariances
-
 
 #fold_in data separating a chain's MCMC randomness from its data realization's. load_sim
 #starts from PRNGKey(map_seed) and splits off one subkey per draw (rng_key, subkey =
@@ -32,13 +23,11 @@ from cmb_lensing.fisher_forecast import prior_covariances
 #fold_in(PRNGKey(map_seed), CHAIN_STREAM) with CHAIN_STREAM not 0 or 1 it never can
 CHAIN_STREAM = 2_026_092_301
 
-
-def chain_key(map_seed, chain_index = 0):
+def chain_key(map_seed):
     """The MCMC root key of one chain on the realization load_sim draws at `map_seed`:
     distinct per `chain_index` and disjoint from every key load_sim uses."""
     stream = jax.random.fold_in(jax.random.PRNGKey(map_seed), CHAIN_STREAM)
-    return jax.random.fold_in(stream, chain_index)
-
+    return stream
 
 def mixed_theta_matrices(params, data_set, nside, pix_width, ell_grid, qe_frozen):
     """(C_f, C_phi, D, G) operators at one cosmology, built the way sample_lcdm builds them.
@@ -46,18 +35,16 @@ def mixed_theta_matrices(params, data_set, nside, pix_width, ell_grid, qe_frozen
     D = get_d_tt_matrix(C_f, C_n) and G = get_g_matrix_lcdm(C_phi, N_phi) - the same two
     constructors _recompute_cosmo_matrices uses - so the mixing here matches the sampler's.
     `qe_frozen` is the quadratic-estimate norm matrix G is built from (load_sim's own
-    `quadratic_estimate.scalar_matrix`, for sampler_effective_phi_noise), as the sampler holds its
+    `quadratic_estimate.scalar_matrix`, for sampler_phi_noise), as the sampler holds its
     QE norm fixed for a whole chain.
     T-only.
     """
     cf, cphi = prior_covariances(params, nside, pix_width, ell_grid)
     cf_op = data_set.field_covariance.replace(scalar_matrix = cf)
     cphi_op = data_set.phi_covariance.replace(scalar_matrix = cphi)
-    d_op = data_set.mixing_d.replace(
-        scalar_matrix = get_d_tt_matrix(cf, data_set.noise_covariance.scalar_matrix))
+    d_op = data_set.mixing_d.replace(scalar_matrix = get_d_tt_matrix(cf, data_set.noise_covariance.scalar_matrix))
     g_op = data_set.mixing_g.replace(scalar_matrix = get_g_matrix_lcdm(cphi, qe_frozen))
     return cf_op, cphi_op, d_op, g_op
-
 
 def posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_draws, rng_key,
                           on_draw = None, verbose = True):
@@ -95,8 +82,8 @@ def posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_draws, rng_k
     phi = 0 * data_set.phi
     field_zeroes = 0 * data_set.unlensed_field
     key = rng_key
-
     draws, accepts = [], []
+
     for sweep in range(1, n_draws + 1):
         key, key_f, key_phi = jax.random.split(key, 3)
         field = gibbs_sample_f(field_zeroes, data_set.data, phi, args, key_f)

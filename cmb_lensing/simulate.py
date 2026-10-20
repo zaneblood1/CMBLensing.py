@@ -806,7 +806,7 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
 
     `precomputed_cls` optionally supplies the CAMB spectra instead of running CAMB, for
     callers that build many realizations at ONE cosmology and would otherwise pay for an
-    identical CAMB evaluation every time (delensed_covariance and sampler_effective_phi_noise
+    identical CAMB evaluation every time (delensed_covariance and sampler_phi_noise
     do this). It must be a dict in _extract_all_cls's format - the output of
     fisher_forecast.camb_cls_at_params is one, since CAMB_LMAX equals DEFAULT_MAX_ELL.
 

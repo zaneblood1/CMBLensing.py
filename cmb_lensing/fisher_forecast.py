@@ -35,7 +35,7 @@ and two empirical N_phi measured on this box at the fiducial cosmology, for comp
                  `nphi` of a merge_map_joint_phi_noise.py npz (or the legacy `phi_noise_fid`
                  of an older merge_delensed_covariance.py npz), passed as --phi_noise
   "sample_joint" the sampler's effective noise from the posterior-mean phi of fixed-theta
-                 chains, the `nphi` of a merge_sampler_effective_noise.py npz (--phi_noise)
+                 chains, the `nphi` of a merge_sampler_phi_noise.py npz (--phi_noise)
 
 THE TWO TEMPERATURE BLOCKS. By default C_TT^delensed is CAMB's own (get_partially_lensed_cls,
 the non-perturbative correlation-function lensing with C_L^phiphi scaled by Alens_L), re-run
@@ -81,7 +81,7 @@ Usage:
     python -m cmb_lensing.fisher_forecast --nphi_source qe_unlensed --noise 5
     python -m cmb_lensing.fisher_forecast --nphi_source qe_delensed --qe_response gradient
     python -m cmb_lensing.fisher_forecast --nphi_source map_joint --phi_noise <delensed_covariance.npz>
-    python -m cmb_lensing.fisher_forecast --nphi_source sample_joint --phi_noise <sampler_effective_noise.npz>
+    python -m cmb_lensing.fisher_forecast --nphi_source sample_joint --phi_noise <sampler_phi_noise.npz>
     python -m cmb_lensing.fisher_forecast --nphi_source qe_unlensed --delensed_covariance <delensed_covariance.npz>
 
 Writes into cmb_lensing/fisher_output/, tagged with the N_phi source, the temperature block
@@ -163,14 +163,14 @@ QE_RESPONSE_SOURCES = ("unlensed", "gradient")
 DEFAULT_QE_RESPONSE = "unlensed"
 
 #the per-mode noise grid load_phi_noise_matrix takes from a noise npz when no key is named,
-#in order of preference: `nphi` (merge_sampler_effective_noise.py, filled on every mode, or
-#merge_map_joint_phi_noise.py, NaN where unmeasured), else `phi_noise_fid` (an older
-#merge_delensed_covariance.py: map_joint's N_eff at theta_0, NaN where unmeasured). Any other
-#2D grid of the file must be asked for by name
+#in order of preference: `nphi` (merge_sampler_phi_noise.py or merge_map_joint_phi_noise.py,
+#NaN where unmeasured), else `phi_noise_fid` (an older merge_delensed_covariance.py:
+#map_joint's N_eff at theta_0, NaN where unmeasured). Any other 2D grid of the file must be
+#asked for by name
 PHI_NOISE_KEYS = ("nphi", "phi_noise_fid")
-#the key only merge_sampler_effective_noise.py writes (how a sampler file is told apart from a
-#map_joint one)
-SAMPLE_JOINT_MARKER = "nphi_cross_raw"
+#the key only the sampler merges write (merge_sampler_phi_noise.py and the older
+#merge_sampler_effective_noise.py): how a sampler file is told apart from a map_joint one
+SAMPLE_JOINT_MARKER = "burn_in"
 
 #relative tolerance for "these two parameter vectors are the same cosmology": the values
 #round-trip through np.savez as float64
@@ -201,7 +201,6 @@ def _point_text(params):
 
 def camb_results_at_params(params, camb_lmax = None):
     """(CAMBparams, CAMBdata) at an arbitrary 5-parameter point, memoized per (point, lmax).
-
     Set up through simulate.camb_parameters, so the run is identical to load_sim's: H0 solved
     from cosmomc_theta, r = 0, mnu = 0.06, tau = 0.05, nt = 0, k_pivot = 0.05, Alens = 1,
     non-linear lensing. The results object is kept because the delensed and gradient spectra
@@ -232,7 +231,6 @@ def camb_results_at_params(params, camb_lmax = None):
 
 def camb_cls_at_params(params, camb_lmax = None):
     """Full cls dict from one CAMB run at an arbitrary 5-parameter point.
-
     The spectra are exactly what simulate._run_camb extracts (same calls, same units, same
     _extract_all_cls), on ells 2..camb_lmax-1 with no extrapolation. Every downstream axis is
     derived from the returned arrays' LENGTH, so raising camb_lmax propagates on its own.
@@ -644,8 +642,8 @@ def load_phi_noise_matrix(path, nside, theta_pix, noise_level, l_knee, param_gro
     """(nphi, key, source, merged): a per-mode phi noise measured by an earlier run.
 
     `path` is a merged npz holding a noise grid on the rfft grid of THIS box at the fiducial
-    cosmology: a merge_sampler_effective_noise.py npz (`nphi`; `nphi_smooth` or an
-    `nphi_*_raw` by `key`) -> source "sample_joint"; anything else -> "map_joint": a
+    cosmology: a merge_sampler_phi_noise.py npz (`nphi`, NaN where unmeasured) -> source
+    "sample_joint"; anything else -> "map_joint": a
     merge_map_joint_phi_noise.py npz (`nphi`) or an older merge_delensed_covariance.py npz
     with phi moments (`phi_noise_fid`), both NaN where unmeasured. `key` None takes the first
     of PHI_NOISE_KEYS the file has. Refuses another box or cosmology. `nphi` is returned as
@@ -658,7 +656,7 @@ def load_phi_noise_matrix(path, nside, theta_pix, noise_level, l_knee, param_gro
         key = next((name for name in PHI_NOISE_KEYS if name in merged), None)
         if key is None:
             raise ValueError(f"{path} has none of {PHI_NOISE_KEYS}: it must be a "
-                             f"merge_sampler_effective_noise.py npz or a "
+                             f"merge_sampler_phi_noise.py npz or a "
                              f"merge_delensed_covariance.py npz with phi moments, or the "
                              f"grid to use must be named")
     elif key not in merged:
@@ -711,7 +709,7 @@ def frozen_reconstruction(param_ground, nside, theta_pix, noise_level, l_knee, b
             raise ValueError(f"nphi_source = {nphi_source!r} needs --phi_noise <npz>: a "
                              + ("merge_map_joint_phi_noise.py npz"
                                 if nphi_source == "map_joint"
-                                else "merge_sampler_effective_noise.py npz"))
+                                else "merge_sampler_phi_noise.py npz"))
         stored, key, source, merged = load_phi_noise_matrix(
             phi_noise, nside, theta_pix, noise_level, l_knee, param_ground,
             key = phi_noise_key or None)
@@ -1259,7 +1257,7 @@ def main():
                         help = "--nphi_source map_joint: a merge_map_joint_phi_noise.py npz "
                                "(its nphi) or an older merge_delensed_covariance.py npz "
                                "with phi moments (its phi_noise_fid); sample_joint: a "
-                               "merge_sampler_effective_noise.py npz (its nphi). Refused if "
+                               "merge_sampler_phi_noise.py npz (its nphi). Refused if "
                                "measured at another box or cosmology")
     parser.add_argument("--phi_noise_key", type = str, default = None,
                         help = "which 2D grid of --phi_noise to use (default nphi, else "

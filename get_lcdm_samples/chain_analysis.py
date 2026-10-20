@@ -20,7 +20,6 @@ from cmb_lensing.fisher_forecast import (annotated_heatmap, covariance_from_fish
                                          prior_covariances)
 from cmb_lensing.delensed_covariance import (MERGED_NAME, DEFAULT_DELTA_ELL, band_edges,
                                              band_average)
-from cmb_lensing.sampler_effective_phi_noise import used_modes, band_index, band_harmonic
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_DIR = os.path.dirname(HERE)
@@ -44,7 +43,7 @@ FORECAST_QE_RESPONSE = {"qe_delensed": "gradient"}
 #nphi_source -> the npz its N_phi is read from, at the box the chains ran on, as a path with
 #the noise tag (e.g. 2dot5uk) left open as {tag} (resolved by forecast_input): map_joint -> a
 #merge_delensed_covariance.py npz with phi moments (its phi_noise_fid), sample_joint -> a
-#merge_sampler_effective_noise.py npz (its nphi)
+#merge_sampler_phi_noise.py npz (its nphi)
 FORECAST_PHI_NOISE = {
     "map_joint": os.path.join(COVARIANCE_DATA, "lower_qe_bound",
                               "delensed_covariance_output_{tag}_nphi_unlensedx2",
@@ -1127,6 +1126,21 @@ def check_spectra_box(path, data, nside, theta_pix, noise):
         print(f"  WARNING: {path} was measured at (nside, theta_pix, noise) = {measured}, "
               f"not the chains' {(nside, theta_pix, noise)}")
 
+def band_index(ell_grid, edges, use):
+    """The |L| band of every rfft-grid mode, -1 for a mode outside the bands or not in `use`."""
+    ells = np.asarray(ell_grid)
+    index = np.digitize(ells, edges) - 1
+    return np.where(use & (index >= 0) & (index < len(edges) - 1), index, -1)
+
+def band_harmonic(matrix, index, n_band):
+    """The INFORMATION-weighted band value 1 / <1/N> over the band's finite positive modes
+    (the mean that commutes with averaging Fisher information), and the mode count."""
+    inside = (index >= 0) & np.isfinite(matrix) & (matrix > 0)
+    total = np.bincount(index[inside], weights = 1.0 / matrix[inside], minlength = n_band)
+    count = np.bincount(index[inside], minlength = n_band)
+    with np.errstate(divide = "ignore", invalid = "ignore"):
+        return np.where(count > 0, count / total, np.nan), count
+
 def band_median(matrix, index, n_band):
     """Median over each band's finite modes (NaN for an empty band)."""
     values = np.full(n_band, np.nan)
@@ -1164,9 +1178,9 @@ def plot_phi_noise_vs_qe(nside, theta_pix, noise, out_dir):
     """Per-mode phi noise spectra against the box QE matrix at this noise level:
     phi_noise_vs_qe_per_mode_<tag>.png in out_dir.
 
-    Each noise level is anchored on its sampler_effective_noise.npz (the sampler's b_only
-    noise C_phi (1/r^2 - 1), r^2 = <phi_bar phi*> / <|phi|^2>), which fixes the box, the bands
-    and the cosmology; map_joint's N_eff = C_phi (1/r^2 - 1) is the `phi_noise_fid` of the
+    Each noise level is anchored on its merged sampler phi noise npz (its `nphi`, the
+    sampler's C_phi (1/r^2 - 1), r^2 = <phi_bar phi*>^2 / (<|phi_bar|^2><|phi|^2>)), which
+    fixes the box and the cosmology; map_joint's N_eff = C_phi (1/r^2 - 1) is the `phi_noise_fid` of the
     lower_qe_bound merged delensed_covariance.npz. Top panel: information-weighted band means
     with CAMB's C_L^phiphi and the QE matrices of qe_noise_matrices. Bottom panel: every mode's
     N_k / N_QE,k as a faint point, with the band median on top.
@@ -1181,19 +1195,19 @@ def plot_phi_noise_vs_qe(nside, theta_pix, noise, out_dir):
     check_spectra_box(chain_path, chain, nside, theta_pix, noise)
     data_nside, data_theta_pix = int(chain["nside"]), float(chain["theta_pix"])
     ell_grid = np.asarray(gen_ell_grid(data_nside, data_theta_pix)[0])
-    use = used_modes(ell_grid)
-    edges = np.asarray(chain["band_edges"])
+    use = ell_grid > 0
+    edges = band_edges(ell_grid)
     n_band = len(edges) - 1
     index = band_index(ell_grid, edges, use)
-    centres = np.asarray(chain["band_ells"])
+    centres = 0.5 * (edges[1:] + edges[:-1])
     params = {name: float(chain["params"][i]) for i, name in enumerate(PARAM_ORDER)}
     cphi, qe_matrices = qe_noise_matrices(params, data_nside, data_theta_pix,
                                           float(chain["noise_level"]), float(chain["l_knee"]),
                                           float(chain["beam_fwhm"]))
     nphi_qe = qe_matrices[0][3]
-    series = [("b_only $\\langle\\bar\\phi\\,\\phi^*\\rangle/\\langle|\\phi|^2\\rangle$ "
+    series = [("sample_joint $N_{\\rm eff}$ = $C_\\phi(1/r^2-1)$ "
                f"({int(chain['n_realizations'])} chains, burn-in {int(chain['burn_in'])})",
-               "C1", "^", np.asarray(chain["nphi_b_only_raw"]))]
+               "C1", "^", np.asarray(chain["nphi"]))]
     map_joint_path = os.path.join(COVARIANCE_DATA, "lower_qe_bound",
                                   f"delensed_covariance_output_{tag}_nphi_unlensedx2",
                                   MERGED_NAME)
