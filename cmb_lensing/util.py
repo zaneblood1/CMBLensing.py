@@ -198,8 +198,6 @@ def rk4_solve(F, y0, t0, t1, nsteps, args = ()):
 
     return jax.lax.fori_loop(0, nsteps, rk4_step, y0)
 
-#just do something stupid like this because reflections
-#make my head hurt...
 def real_fourier_2_full_plane(real_fourier_field):
     full_fourier_field = jfft.fft2(jfft.irfft2(real_fourier_field))
     return full_fourier_field

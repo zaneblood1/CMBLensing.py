@@ -10,11 +10,15 @@
 #conda, CMBLENSING_JL_PATH and the other machine-specific setup; SLURM_SUBMIT_DIR is this
 #folder, since the driver submits from it
 source "$SLURM_SUBMIT_DIR/../hpc_local.sh" || exit 1
-#IMPORTANT!! Set the following environment variable to 0 such that calling Pkg.activate("/path/to/Project.toml")
+#IMPORTANT! Set the following environment variable to 0 such that calling Pkg.activate("/path/to/Project.toml")
 #will only give julia instructions on how to execute code and will NOT cause concurrent writes to ~/.julia/compiled
 #which will lead to lock contention...
 export JULIA_PKG_PRECOMPILE_AUTO=0
-
 #call the julia performance timing script for a specific (f, phi) combo
 #and a specific trial number, map_size, and polarity key
-julia "$SLURM_SUBMIT_DIR/julia_performance_test.jl" --map_size $1 --seed $2 --trial $3 --pol $4 --theta_pix $5
+julia "$SLURM_SUBMIT_DIR/julia_performance_test.jl" \
+    --map_size $1 \
+    --seed $2 \
+    --trial $3 \
+    --pol $4 \
+    --theta_pix $5

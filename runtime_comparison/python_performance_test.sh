@@ -14,4 +14,9 @@ source "$SLURM_SUBMIT_DIR/../hpc_local.sh" || exit 1
 export JULIA_PKG_PRECOMPILE_AUTO=0
 #call the python performance timing script for a specific (f, phi) combo
 #and a specific trial number, map_size, and polarity key
-python3 "$SLURM_SUBMIT_DIR/python_performance_test.py" --map_size $1 --seed $2 --trial $3 --pol $4 --theta_pix $5
+python3 "$SLURM_SUBMIT_DIR/python_performance_test.py" \
+    --map_size $1 \
+    --seed $2 \
+    --trial $3 \
+    --pol $4 \
+    --theta_pix $5

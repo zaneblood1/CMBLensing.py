@@ -10,9 +10,8 @@ SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 TRIALS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 THETA_PIX = 2.5
 
-#BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR = "/media/zane-blood/KINGSTON/"
-RESULTS_DIR = os.path.join(BASE_DIR, "performance_results_3")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+RESULTS_DIR = os.path.join(BASE_DIR, "performance_results")
 JULIA_DIR = os.path.join(RESULTS_DIR, "julia_results")
 PYTHON_DIR = os.path.join(RESULTS_DIR, "python_results")
 ANALYSIS_DIR = os.path.join(RESULTS_DIR, "performance_analysis")
@@ -72,9 +71,6 @@ def load_time(language_dir, map_size, polarity, seed, trial, cached=True):
     return np.loadtxt(path)
 
 
-JULIA_FIELD_MAP = {"t_field": "t_field_julia_predict", "e_field": "e_field_julia_predict", "b_field": "b_field_julia_predict"}
-
-
 def load_array(path):
     data = np.load(path, allow_pickle=True)
     if isinstance(data, np.ndarray):
@@ -82,30 +78,25 @@ def load_array(path):
     return jnp.array(data[data.files[0]])
 
 
+#field_name is the file stem the timing scripts write, e.g. t_field_julia_predict,
+#t_field_python_predict or t_field_julia_simulation
 def load_field(language_dir, map_size, polarity, seed, trial, field_name):
-    if language_dir == JULIA_DIR:
-        filename = f"{JULIA_FIELD_MAP[field_name]}_{trial}.npz"
-    else:
-        filename = f"{field_name}_{trial}.npz"
     path = os.path.join(
         language_dir,
         folder_name(map_size, polarity, seed),
         "learned_fields", "cmb",
-        filename
+        f"{field_name}_{trial}.npz"
     )
     return load_array(path)
 
 
+#phi_name is the file stem: phi_julia_predict, phi_python_predict or phi_julia_simulation
 def load_phi(language_dir, map_size, polarity, seed, trial, phi_name):
-    if language_dir == JULIA_DIR:
-        filename = f"phi_julia_predict_{trial}.npz"
-    else:
-        filename = f"{phi_name}_{trial}.npz"
     path = os.path.join(
         language_dir,
         folder_name(map_size, polarity, seed),
         "learned_fields", "lensing_potential",
-        filename
+        f"{phi_name}_{trial}.npz"
     )
     return load_array(path)
 
@@ -147,13 +138,13 @@ def average_fractional_difference(polarity, available_map_sizes):
             for trial in get_available_trials(JULIA_DIR, map_size, polarity, seed, cached=True):
                 for fn in field_names:
                     julia_sim = load_field(PYTHON_DIR, map_size, polarity, seed, trial, f"{fn}_julia_simulation")
-                    julia_pred = load_field(JULIA_DIR, map_size, polarity, seed, trial, fn)
+                    julia_pred = load_field(JULIA_DIR, map_size, polarity, seed, trial, f"{fn}_julia_predict")
                     python_pred = load_field(PYTHON_DIR, map_size, polarity, seed, trial, f"{fn}_python_predict")
                     norm_sim = jnp.linalg.norm(julia_sim)
                     julia_samples[fn].append(float(jnp.linalg.norm(julia_sim - julia_pred) / norm_sim))
                     python_samples[fn].append(float(jnp.linalg.norm(julia_sim - python_pred) / norm_sim))
                 phi_sim = load_phi(PYTHON_DIR, map_size, polarity, seed, trial, "phi_julia_simulation")
-                phi_julia_pred = load_phi(JULIA_DIR, map_size, polarity, seed, trial, "phiJ")
+                phi_julia_pred = load_phi(JULIA_DIR, map_size, polarity, seed, trial, "phi_julia_predict")
                 phi_python_pred = load_phi(PYTHON_DIR, map_size, polarity, seed, trial, "phi_python_predict")
                 norm_phi = jnp.linalg.norm(phi_sim)
                 julia_samples["phi"].append(float(jnp.linalg.norm(phi_sim - phi_julia_pred) / norm_phi))
@@ -178,11 +169,11 @@ def average_julia_vs_python_diff(polarity, available_map_sizes):
         for seed in get_available_seeds(polarity, map_size):
             for trial in get_available_trials(JULIA_DIR, map_size, polarity, seed, cached=True):
                 for fn in field_names:
-                    julia_pred = load_field(JULIA_DIR, map_size, polarity, seed, trial, fn)
+                    julia_pred = load_field(JULIA_DIR, map_size, polarity, seed, trial, f"{fn}_julia_predict")
                     python_pred = load_field(PYTHON_DIR, map_size, polarity, seed, trial, f"{fn}_python_predict")
                     norm_julia = jnp.linalg.norm(julia_pred)
                     samples[fn].append(float(jnp.linalg.norm(julia_pred - python_pred) / norm_julia))
-                phi_julia_pred = load_phi(JULIA_DIR, map_size, polarity, seed, trial, "phiJ")
+                phi_julia_pred = load_phi(JULIA_DIR, map_size, polarity, seed, trial, "phi_julia_predict")
                 phi_python_pred = load_phi(PYTHON_DIR, map_size, polarity, seed, trial, "phi_python_predict")
                 norm_phi = jnp.linalg.norm(phi_julia_pred)
                 samples["phi"].append(float(jnp.linalg.norm(phi_julia_pred - phi_python_pred) / norm_phi))
@@ -211,7 +202,7 @@ def average_cross_correlation(polarity, available_map_sizes):
             for trial in get_available_trials(JULIA_DIR, map_size, polarity, seed, cached=True):
                 for fn in field_names:
                     julia_sim = load_field(PYTHON_DIR, map_size, polarity, seed, trial, f"{fn}_julia_simulation")
-                    julia_pred = load_field(JULIA_DIR, map_size, polarity, seed, trial, fn)
+                    julia_pred = load_field(JULIA_DIR, map_size, polarity, seed, trial, f"{fn}_julia_predict")
                     python_pred = load_field(PYTHON_DIR, map_size, polarity, seed, trial, f"{fn}_python_predict")
 
                     ell, rho_js_jp = primal_cross_correlation(julia_sim, julia_pred, THETA_PIX)
@@ -229,7 +220,7 @@ def average_cross_correlation(polarity, available_map_sizes):
                     accum_pp_jp[fn] += np.array(rho_pp_jp)
 
                 phi_sim = load_phi(PYTHON_DIR, map_size, polarity, seed, trial, "phi_julia_simulation")
-                phi_julia_pred = load_phi(JULIA_DIR, map_size, polarity, seed, trial, "phiJ")
+                phi_julia_pred = load_phi(JULIA_DIR, map_size, polarity, seed, trial, "phi_julia_predict")
                 phi_python_pred = load_phi(PYTHON_DIR, map_size, polarity, seed, trial, "phi_python_predict")
 
                 ell_phi, rho_phi_js_jp = primal_cross_correlation(phi_sim, phi_julia_pred, THETA_PIX)
@@ -256,61 +247,36 @@ def average_cross_correlation(polarity, available_map_sizes):
     return components, js_jp_results, js_pp_results, pp_jp_results
 
 
-# --- Goal 1: Cached run time vs map size ---
-def plot_cached_run_times():
+# --- Cached or uncached run time vs map size ---
+def plot_run_times(cached = True):
+
     out_dir = os.path.join(ANALYSIS_DIR, "run_time_vs_map_size")
     os.makedirs(out_dir, exist_ok=True)
+    label = "Cached" if cached else "Uncached"
 
     for polarity in get_available_polarities():
         available_map_sizes = get_available_map_sizes(polarity)
-        julia_means, julia_stds = average_times(JULIA_DIR, polarity, available_map_sizes, cached=True)
-        python_means, python_stds = average_times(PYTHON_DIR, polarity, available_map_sizes, cached=True)
+        julia_means, julia_stds = average_times(JULIA_DIR, polarity, available_map_sizes, cached = cached)
+        python_means, python_stds = average_times(PYTHON_DIR, polarity, available_map_sizes, cached = cached)
         x = np.array(available_map_sizes)
         jm, js = np.array(julia_means), np.array(julia_stds)
         pm, ps = np.array(python_means), np.array(python_stds)
         fig, ax = plt.subplots()
-        ax.plot(x, jm, "o-", label="Julia (cached)")
+        ax.plot(x, jm, "o-", label=f"Julia ({label.lower()})")
         ax.fill_between(x, jm - js, jm + js, alpha=0.3)
-        ax.plot(x, pm, "o-", label="Python (cached)")
+        ax.plot(x, pm, "o-", label=f"Python ({label.lower()})")
         ax.fill_between(x, pm - ps, pm + ps, alpha=0.3)
         ax.set_xlabel("Map Size (Nside)")
-        ax.set_ylabel("Average Cached Run Time (s)")
+        ax.set_ylabel(f"Average {label} Run Time (s)")
         ax.set_yscale('log')
-        ax.set_title(f"Cached Run Time vs Map Size — Polarity: {polarity}")
+        ax.set_title(f"{label} Run Time vs Map Size — Polarity: {polarity}")
         ax.legend()
         ax.set_xticks(available_map_sizes)
-        fig.savefig(os.path.join(out_dir, f"cached_run_time_{polarity}.png"), dpi=150, bbox_inches="tight")
+        fig.savefig(os.path.join(out_dir, f"{label.lower()}_run_time_{polarity}.png"), dpi=150, bbox_inches="tight")
         plt.close(fig)
 
 
-# --- Goal 5: Uncached run time vs map size ---
-def plot_uncached_run_times():
-    out_dir = os.path.join(ANALYSIS_DIR, "run_time_vs_map_size")
-    os.makedirs(out_dir, exist_ok=True)
-
-    for polarity in get_available_polarities():
-        available_map_sizes = get_available_map_sizes(polarity)
-        julia_means, julia_stds = average_times(JULIA_DIR, polarity, available_map_sizes, cached=False)
-        python_means, python_stds = average_times(PYTHON_DIR, polarity, available_map_sizes, cached=False)
-        x = np.array(available_map_sizes)
-        jm, js = np.array(julia_means), np.array(julia_stds)
-        pm, ps = np.array(python_means), np.array(python_stds)
-        fig, ax = plt.subplots()
-        ax.plot(x, jm, "o-", label="Julia (uncached)")
-        ax.fill_between(x, jm - js, jm + js, alpha=0.3)
-        ax.plot(x, pm, "o-", label="Python (uncached)")
-        ax.fill_between(x, pm - ps, pm + ps, alpha=0.3)
-        ax.set_xlabel("Map Size (Nside)")
-        ax.set_ylabel("Average Uncached Run Time (s)")
-        ax.set_yscale('log')
-        ax.set_title(f"Uncached Run Time vs Map Size — Polarity: {polarity}")
-        ax.legend()
-        ax.set_xticks(available_map_sizes)
-        fig.savefig(os.path.join(out_dir, f"uncached_run_time_{polarity}.png"), dpi=150, bbox_inches="tight")
-        plt.close(fig)
-
-
-# --- Goal 1b / 5b: The same run times in tabular form ---
+# --- The same run times in tabular form ---
 def format_time(mean, std):
     return f"{mean:.4g} ± {std:.3g}"
 
@@ -351,7 +317,7 @@ def save_run_time_table(cached = True):
         plt.close(fig)
 
 
-# --- Goal 2: Fractional difference (sim vs prediction) vs map size ---
+# --- Fractional difference (sim vs prediction) vs map size ---
 def plot_fractional_difference():
     out_dir = os.path.join(ANALYSIS_DIR, "perc_diff_vs_map_size")
     os.makedirs(out_dir, exist_ok=True)
@@ -377,7 +343,7 @@ def plot_fractional_difference():
         plt.close(fig)
 
 
-# --- Goal 3: Julia prediction vs Python prediction fractional difference ---
+# --- Julia prediction vs Python prediction fractional difference ---
 def plot_julia_vs_python_diff():
     out_dir = os.path.join(ANALYSIS_DIR, "perc_diff_vs_map_size")
     os.makedirs(out_dir, exist_ok=True)
@@ -400,7 +366,7 @@ def plot_julia_vs_python_diff():
         plt.close(fig)
 
 
-# --- Goal 4: Cross correlation vs map size ---
+# --- Cross correlation vs map size ---
 PANEL_ORDER = ["t_field", "e_field", "b_field", "phi"]
 COMPONENT_LABELS = {"t_field": "T", "e_field": "E", "b_field": "B", "phi": "$\\phi$"}
 
@@ -458,8 +424,8 @@ def plot_cross_correlations():
 
 
 if __name__ == "__main__":
-    plot_cached_run_times()
-    plot_uncached_run_times()
+    plot_run_times(cached = True)
+    plot_run_times(cached = False)
     save_run_time_table(cached = True)
     save_run_time_table(cached = False)
     plot_fractional_difference()

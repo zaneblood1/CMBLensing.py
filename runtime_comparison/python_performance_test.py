@@ -316,6 +316,8 @@ else:
 #run the algorithm once initially to get the uncached time
 start_time = time.time()
 field_python_predict, phi_python_predict = map_joint(data_set, num_steps = 30)
+#wait for the device to finish so the timing never stops at dispatch
+jax.block_until_ready((field_python_predict, phi_python_predict))
 end_time = time.time()
 total_time = end_time - start_time
 
@@ -327,6 +329,8 @@ np.savetxt(f"{RESULTS_DIR}/python_results/map_size_{args.map_size}_polarity_{arg
 #now run the algorithm a second time to get the cached time
 start_time = time.time()
 field_python_predict, phi_python_predict  = map_joint(data_set, num_steps = 30)
+#wait for the device to finish so the timing never stops at dispatch
+jax.block_until_ready((field_python_predict, phi_python_predict))
 end_time = time.time()
 total_time = end_time - start_time
 
