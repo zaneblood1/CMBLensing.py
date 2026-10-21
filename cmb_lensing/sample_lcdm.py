@@ -8,18 +8,18 @@ from cmb_lensing.map_joint import *
 from cmb_lensing.mixing import *
 from cmb_lensing.constants import *
 from cmb_lensing.constants import (PARAM_ORDER, PARAM_INDEX, GROUND_TRUTH, PARAM_BOUNDS,
-                                   PARAM_SIGMA, CAMB_GRID_PATH)
+                                   PARAM_SIGMA, CAMB_GRID_PATH, DEFAULT_HMC_NUM_STEPS, 
+                                   DEFAULT_HMC_STEP_SIZE)
 from cmb_lensing.camb_grid_interp import (load_camb_grid_predictors,
                                           load_camb_grid, GridPredictors)
 import importlib.util
 import os
-import random
 
 USE_CAMB_SPLINE = False
 _camb_spline_predictors = {}
 #the 1D spline loader lives with the cache generator outside the package
 PRECOMPUTE_CAMB_1D_PATH = os.path.join(os.path.dirname(CAMB_SPLINES_DIR),
-                                       "camb_grid_generation", "precompute_camb_1d.py")
+                          "camb_grid_generation", "precompute_camb_1d.py")
 
 def _load_precompute_camb_1d():
     """camb_grid_generation/precompute_camb_1d.py, imported from its file. It is not part of
@@ -50,7 +50,7 @@ if USE_CAMB_GRID and USE_CAMB_SPLINE:
                      "does not")
 
 def get_camb_grid_predictors():
-    #single lazy singleton for the whole process: the ~2.3 GB of spline coefficients is
+    #lazy singleton for the whole process: the ~2.3 GB of spline coefficients is
     #read once, and the same two function objects are reused on every call because they
     #are passed as static jit args to _recompute_cosmo_matrices (fresh closures would
     #force a retrace on every Gibbs sweep)
@@ -112,8 +112,7 @@ def op_shared_matrix(op, pol):
 #independent draws, so the same helper serves the field AND the noise simulations
 def _field_matrices_from_teb_covar(covar, nside, key):
     key_t, key_e, key_b = jax.random.split(key, 3)
-    conditional_tt = jnp.maximum(
-        covar.matrix_TT - covar.matrix_TE**2 * reciprocal_matrix(covar.matrix_EE), 0.0)
+    conditional_tt = jnp.maximum(covar.matrix_TT - covar.matrix_TE**2 * reciprocal_matrix(covar.matrix_EE), 0.0)
     t_indep = field_from_covar_single_key(nside, conditional_tt, key_t)
     field_e = field_from_covar_single_key(nside, covar.matrix_EE, key_e)
     field_b = field_from_covar_single_key(nside, covar.matrix_BB, key_b)
@@ -190,17 +189,19 @@ def gibbs_sample_f(field_start, data_field, phi, args, rng_key):
 #sample the lensing potential phi
 @jax.jit
 def gibbs_sample_phi(mixed_phi, mixed_temp, data_field, rng_key,
-                     args, iter, num_burn_in_always_accept):
+                     args, iter, num_burn_in_always_accept,
+                     hmc_num_steps = DEFAULT_HMC_NUM_STEPS, 
+                     hmc_step_size = DEFAULT_HMC_STEP_SIZE):
 
     always_accept = (iter < num_burn_in_always_accept)
     mass_matrix = get_mass_matrix(args["phi_covariance"], args["quadratic_estimate"],
-                                      args["mixing_g"])
+                                  args["mixing_g"])
 
     mixed_phi, delta_h, accept = hmc_step(mixed_phi, always_accept, mixed_phi.nside, mass_matrix,
                                           mixed_temp, data_field, args["noise_covariance"], 
                                           args["phi_covariance"], args["field_covariance"], 
                                           args["mask"], args["beam"], args["mixing_d"], 
-                                          args["mixing_g"], rng_key)
+                                          args["mixing_g"], rng_key, hmc_num_steps, hmc_step_size)
     return mixed_phi, delta_h, accept
 
 #The mass matrix used in the HMC steps for sampling the lensing potential
@@ -212,7 +213,7 @@ def get_mass_matrix(cphi, nphi, mixing_g):
 def hmc_step(x, always_accept, nside, mass_matrix,
              mixed_field, data, noise_covariance, 
              phi_covariance, field_covariance, mask, beam, 
-             mixing_d, mixing_g, rng_key):
+             mixing_d, mixing_g, rng_key, hmc_num_steps, hmc_step_size):
     
     #generate a random kick in momentum space. the momentum is conjugate to (mixed) PHI,
     #so its template is x - using mixed_field would break for pol = "IP", where the
@@ -225,7 +226,9 @@ def hmc_step(x, always_accept, nside, mass_matrix,
     #as initial random momentum and current mixed phi value as the starting "position"
     delta_h, x_test, _ = symplectic_integrate(x, p, mixed_field, data, noise_covariance, 
                                               phi_covariance, field_covariance, mask, beam, 
-                                              mixing_d, mixing_g, mass_matrix)
+                                              mixing_d, mixing_g, mass_matrix,
+                                              num_steps = hmc_num_steps,
+                                              step_size = hmc_step_size)
     
     #Always accept if change in Hamiltonian is positive, otherwise accept probabilistically
     accept = jnp.logical_or(always_accept, jnp.log(jax.random.uniform(rng_key_2)) < delta_h)
@@ -252,7 +255,8 @@ def hmc_step(x, always_accept, nside, mass_matrix,
 def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance, 
                         phi_covariance, field_covariance, mask, beam, 
                         mixing_d, mixing_g, mass_matrix,
-                        num_steps = 10, step_size = 0.0175):
+                        num_steps = DEFAULT_HMC_NUM_STEPS, 
+                        step_size = DEFAULT_HMC_STEP_SIZE):
     
     #Get the mixed phi gradient at a certain mixed_phi value with all other
     #inputs held constant
@@ -285,7 +289,8 @@ def symplectic_integrate(x0, p0, mixed_field, data, noise_covariance,
     return delta_h, x, p
 
 #symmetric Gaussian random-walk Metropolis-within-Gibbs step for a single cosmological parameter
-def metropolis_sample_theta(eval_logpdf_grid, theta_name, theta_old, lo, hi, lcdm_acceptance, log_acceptance,
+def metropolis_sample_theta(eval_logpdf_grid, theta_name, theta_old, lo, hi, 
+                            lcdm_acceptance, log_acceptance,
                             proposal_sigma, rng_key, num_steps = 1):
     if proposal_sigma is None:
         raise ValueError("metropolis sampler requires a proposal_sigma for this parameter")
@@ -326,7 +331,7 @@ def prepare_rotation(rotation_matrix, rotated_proposal_sigmas, sampled_names):
         raise ValueError("reparameterize_lcdm = True requires at least one parameter with "
                          "should_sample = True")
 
-    #the rotation acts on the SAMPLED subspace only - N = the number of parameters with
+    #the rotation acts on the SAMPLED subspace only: N = the number of parameters with
     #should_sample = True, taken in PARAM_ORDER, so a rotation is (N, N) and not (5, 5)
     num_sampled = len(sampled_names)
     rotation = np.asarray(rotation_matrix, dtype = np.float64)
@@ -610,8 +615,8 @@ def make_eval_logpdf_batch(predictors,
 
                 g = get_g_matrix_lcdm(cphi, qe_scalar)
                 d_tt, d_te, d_ee, d_bb = get_d_teb_matrix(cf_tt, cf_te, cf_ee,
-                                                              cf_bb, cn_tt, cn_te,
-                                                              cn_ee, cn_bb)
+                                                          cf_bb, cn_tt, cn_te,
+                                                          cn_ee, cn_bb)
                
                 return mixed_logpdf(mixed_temp, mixed_phi, data_field,
                                     noise_covariance, _op(cphi),
@@ -734,7 +739,8 @@ def _recompute_cosmo_matrices(current_params, ell_grid,
         cfl = covar_matrix_from_cls(nside, pix_width, ell_grid, ells,
                                     cl_tt_lensed, origin_value = 0)
         qe = scalar_quadratic_estimate(cn_scalar, cf, cfl,
-                                       mask_matrix, beam_matrix, pix_width) / NPHI_FAC
+                                       mask_matrix, beam_matrix, 
+                                       pix_width) / NPHI_FAC
     else:
         qe = qe_scalar
 
@@ -934,7 +940,8 @@ def _replace_teb_blocks(op, tt, te, ee, bb):
 def _replace_eb_blocks(op, ee, bb):
     return op.replace(matrix_EE = ee, matrix_BB = bb)
 
-def add_starting_matrices_to_args(args, data_set, noise_level, param_init, current_params,
+def add_starting_matrices_to_args(args, data_set, noise_level, 
+                                  param_init, current_params,
                                   predictors, pol = "I"):
 
     #We can comfortably reuse the noise covariance, mask, and beam
@@ -1042,8 +1049,8 @@ def update_args_after_sample(current_params, predictors, args,
         args["mixing_d"] = _replace_eb_blocks(args["mixing_d"], d[0], d[1])
     else:
         args["field_covariance"] = args["field_covariance"].replace(scalar_matrix = cf)
-        args["mixing_d"] = args["mixing_d"].replace(scalar_matrix = (d))
-    args["mixing_g"] = args["mixing_g"].replace(scalar_matrix = (g))
+        args["mixing_d"] = args["mixing_d"].replace(scalar_matrix = d)
+    args["mixing_g"] = args["mixing_g"].replace(scalar_matrix = g)
     #with refresh_qe the returned qe is the freshly interpolated-lensed-Cl norm at the
     #new theta, so the phi mass matrix and G track theta; without it qe passes through
     args["quadratic_estimate"] = args["quadratic_estimate"].replace(scalar_matrix = qe)
@@ -1052,8 +1059,9 @@ def update_args_after_sample(current_params, predictors, args,
 #algorithm to jointly sample cosmological parameters
 def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, noise_level, 
                  advanced_logging, fixed_fields = False, phi_init = "MAP",
+                 hmc_num_steps = DEFAULT_HMC_NUM_STEPS, hmc_step_size = DEFAULT_HMC_STEP_SIZE,
                  iters_per_chain = 10_000, num_burn_in_fix_theta = 100, num_burn_in_always_accept = 0, 
-                 resume_chain_key = None, seed = None, map_idx = 1, sub_chain_idx = 1,
+                 resume_chain_dict = None, seed = None, map_idx = 1, sub_chain_idx = 1,
                  lmax = DEFAULT_MAX_ELL, metropolis_num_steps = 1, hpc_path = None,
                  reparameterize_lcdm = False, rotation_matrix = None,
                  rotated_proposal_sigmas = None):
@@ -1073,6 +1081,13 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
         raise ValueError(f"pol = '{pol}' requires USE_CAMB_GRID - the "
                          "1D CAMB caches have no EE/BB spectra")
     bb_is_zero = camb_grid_bb_is_zero() if USE_CAMB_GRID else True
+
+    #if a resume_chain_dict is specified (e.g. np.load of the npz run_single_lcdm_chain.py
+    #writes: one entry per parameter name, "phi_map" and "sub_key"), restart from its parameters
+    if resume_chain_dict is not None:
+        param_init = {}
+        for name in PARAM_ORDER:
+            param_init[name] = float(resume_chain_dict[name])
 
     #the sampled parameters, in PARAM_ORDER - this is the subspace the rotation acts on, so its
     #order is what fixes the meaning of each rotation_matrix column
@@ -1141,14 +1156,17 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
     #otherwise use machine entropy to generate a random number
     if seed is not None:
         sub_key = jax.random.PRNGKey(seed)
-    elif resume_chain_key is not None:
-        sub_key = resume_chain_key
+    elif resume_chain_dict is not None:
+        sub_key = jnp.asarray(resume_chain_dict["sub_key"])
     else:
         sub_key = jax.random.PRNGKey(np.random.randint(0, 2**31))
 
     #Setting the starting point in phi-space to be the MAP estimate (the mode) plus a random realization
-    #of the Hessian pre-conditioner empirically seems to decrease the burn-in time (DEFAULT)
-    if phi_init == "MAP":
+    #of the Hessian pre-conditioner empirically seems to decrease the burn-in time (DEFAULT).
+    #A resumed chain starts from its saved phi whatever phi_init says
+    if resume_chain_dict is not None:
+        phi = data_set.phi.replace(scalar_matrix = jnp.asarray(resume_chain_dict["phi_map"]))
+    elif phi_init == "MAP":
         _, phi_map = map_joint(data_set)
         phi = phi_map
     elif phi_init == "RNG":
@@ -1193,13 +1211,16 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
             #3. sample the lensing potential phi
             rng_key, sub_key = jax.random.split(sub_key)
             mixed_phi, delta_h, accept = gibbs_sample_phi(mixed_phi, mixed_temp, data_field, rng_key,
-                                                          args, iter, num_burn_in_always_accept)
+                                                          args, iter, num_burn_in_always_accept,
+                                                          hmc_num_steps = hmc_num_steps, 
+                                                          hmc_step_size = hmc_step_size)
             if advanced_logging["phi_acceptance"]:
                 phi_acceptance.append(int(accept))
                 print(f"Phi accept rate = {np.sum(np.array(phi_acceptance)) / len(phi_acceptance)}")
                 print(f"delta_H = {delta_h}")
         else:
-            mixed_temp, mixed_phi = mix(data_set.unlensed_field, data_set.phi, args["mixing_d"], args["mixing_g"])
+            mixed_temp, mixed_phi = mix(data_set.unlensed_field, data_set.phi, 
+                                        args["mixing_d"], args["mixing_g"])
 
         #4. sample your cosmo parameters
         if iter >= num_burn_in_fix_theta:
@@ -1259,8 +1280,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
                     current_params = current_params.at[theta_key_idx].set(theta_val)
 
             #5. recompute mixing and covariance matrices using the newly sampled parameter values
-            args = update_args_after_sample(current_params, predictors,
-                                            args, pol = pol)
+            args = update_args_after_sample(current_params, predictors, args, pol = pol)
 
         #6. unmix the fields using the updated version of the G & D matrices
         if not fixed_fields:
@@ -1280,7 +1300,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
             plt.ylabel("Mixed LogPDF Value")
             plt.legend()
             path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "cmb_lensing", "sample_lcdm_output", "logpdf_progress.png")
+                                "cmb_lensing", "sample_lcdm_output", "logpdf_progress.png")
             plt.savefig(path)
             plt.close() 
 
@@ -1297,7 +1317,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
             plt.ylabel("Standard Deviations")
             plt.legend()
             path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "cmb_lensing", "sample_lcdm_output", "lcdm_progress.png")
+                                "cmb_lensing", "sample_lcdm_output", "lcdm_progress.png")
             plt.savefig(path)
             plt.close()
         
@@ -1390,11 +1410,11 @@ if __name__ == "__main__":
             sampled_names = [n for n in PARAM_ORDER if should_sample[n]])
 
     #run the sampling algorithm.
-    param_distributions, _, _ = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 
-                                             should_sample, noise_level, advanced_logging, 
-                                             fixed_fields = False, phi_init = "ZEROES",
-                                             iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
-                                             seed = 67, reparameterize_lcdm = reparameterize_lcdm,
-                                             rotation_matrix = rotation, 
-                                             rotated_proposal_sigmas = rotated_sigmas)
+    param_vals, _, _ = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 
+                                    should_sample, noise_level, advanced_logging, 
+                                    fixed_fields = False, phi_init = "ZEROES",
+                                    iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
+                                    seed = 67, reparameterize_lcdm = reparameterize_lcdm,
+                                    rotation_matrix = rotation, 
+                                    rotated_proposal_sigmas = rotated_sigmas)
 

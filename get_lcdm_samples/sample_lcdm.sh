@@ -41,9 +41,12 @@ log_a_max=3.782861
 ns_min=0.867143
 ns_max=1.042186
 
+#other sampler hyper-parameters
 num_burn_in_fix_theta=100 
 iters_per_chain=3000
 num_burn_in_always_accept=0
+hmc_num_steps=10
+hmc_step_size=0.05
 
 #store all these common parameters in an 
 #array to pass to our slurm jobs
@@ -70,6 +73,8 @@ args=(
       "$num_burn_in_fix_theta"
       "$iters_per_chain"
       "$num_burn_in_always_accept"
+      "$hmc_num_steps"
+      "$hmc_step_size"
 )
 
 #draw a uniform random value in [min, max] using bash's $RANDOM (0..32767)
@@ -90,6 +95,8 @@ for ((map=1; map<=num_maps; map++)); do
         log_a_init=$(rand_uniform "$log_a_min" "$log_a_max")
         theta_MC_100_init=$(rand_uniform "$theta_MC_100_min" "$theta_MC_100_max")
         #random initializations for each parameter for each (map, phi) combination
-        sbatch run_single_lcdm_chain.sh "$map_seed" "$chain" "$ombh2_init" "$omch2_init" "$theta_MC_100_init" "$log_a_init" "$ns_init" "${args[@]}"
+        sbatch run_single_lcdm_chain.sh "$map_seed" \
+        "$chain" "$ombh2_init" "$omch2_init" "$theta_MC_100_init" \
+        "$log_a_init" "$ns_init" "${args[@]}"
     done
 done

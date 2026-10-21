@@ -20,4 +20,6 @@ python3 "$SLURM_SUBMIT_DIR/get_sampler_phi_noise_1_chain.py" \
     --noise_level "$5" \
     --l_knee "$6" \
     --num_sweeps "$7" \
-    --out_dir "$8"
+    --out_dir "$8" \
+    --hmc_step_size "$9" \
+    --hmc_num_steps "${10}"

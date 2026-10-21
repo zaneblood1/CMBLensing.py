@@ -14,6 +14,7 @@ jax.config.update("jax_enable_x64", True)
 from cmb_lensing.simulate import get_d_tt_matrix, get_g_matrix_lcdm
 from cmb_lensing.mixing import mix, unmix
 from cmb_lensing.fisher_forecast import prior_covariances
+from cmb_lensing.constants import DEFAULT_HMC_NUM_STEPS, DEFAULT_HMC_STEP_SIZE
 
 #fold_in data separating a chain's MCMC randomness from its data realization's. load_sim
 #starts from PRNGKey(map_seed) and splits off one subkey per draw (rng_key, subkey =
@@ -47,7 +48,8 @@ def mixed_theta_matrices(params, data_set, nside, pix_width, ell_grid, qe_frozen
     return cf_op, cphi_op, d_op, g_op
 
 def posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_draws, rng_key,
-                          on_draw = None, verbose = True):
+                          on_draw = None, verbose = True, hmc_step_size = DEFAULT_HMC_STEP_SIZE, 
+                          hmc_num_steps = DEFAULT_HMC_NUM_STEPS):
     """Draws of the mixed pair (f°, phi°) from p(f°, phi° | d, theta), theta held fixed.
 
     The same Gibbs sweep sample_lcdm.sample_joint runs, minus its theta step: f from its
@@ -89,7 +91,9 @@ def posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_draws, rng_k
         field = gibbs_sample_f(field_zeroes, data_set.data, phi, args, key_f)
         mixed_field, mixed_phi = mix(field, phi, d_fid, g_fid)
         mixed_phi, _, accept = gibbs_sample_phi(mixed_phi, mixed_field, data_set.data,
-                                                key_phi, args, sweep, 0)
+                                                key_phi, args, sweep, 0, 
+                                                hmc_num_steps = hmc_num_steps,
+                                                hmc_step_size = hmc_step_size)
         accepts.append(bool(accept))
         _, phi = unmix(mixed_field, mixed_phi, d_fid, g_fid)
         if on_draw is None:

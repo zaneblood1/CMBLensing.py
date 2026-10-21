@@ -2,6 +2,7 @@ from cmb_lensing.sample_lcdm import *
 from cmb_lensing.simulate import *
 import argparse
 import os
+from datetime import date
 
 #Parse the arguments of the slurm job
 parser = argparse.ArgumentParser()
@@ -13,6 +14,8 @@ parser.add_argument("--noise_level", type = float)
 parser.add_argument("--pol", type = str)
 parser.add_argument("--num_burn_in_fix_theta", type = int)
 parser.add_argument("--iters_per_chain", type = int)
+parser.add_argument("--hmc_step_size", type = float)
+parser.add_argument("--hmc_num_steps", type = int)
 parser.add_argument("--num_burn_in_always_accept", type = int)
 parser.add_argument("--ombh2_min", type = float)
 parser.add_argument("--omch2_min", type = float)
@@ -91,11 +94,21 @@ advanced_logging["plot_lcdm_sigmas"] = False
 #Plug the ground truth into sample_joint() to try and learn the LCDM distributions. The chains
 #go to lcdm_sampler_data/<experiment>/ next to this script, where chain_analysis.py reads them;
 #sample_joint appends to files there but does not create the directory
-hpc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lcdm_sampler_data",
-                        "joint_inference_08_24_26") + os.sep
+hpc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+           "lcdm_sampler_data",
+           f"joint_inference_{date.today().isoformat().replace("-", "_")}") + os.sep
 os.makedirs(hpc_path, exist_ok = True)
-_, phi, sub_key = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, args.noise_level, 
-                               advanced_logging, phi_init = "ZEROES", fixed_fields = False,
-                               iters_per_chain = args.iters_per_chain, num_burn_in_fix_theta = args.num_burn_in_fix_theta,
-                               map_idx = args.map_seed, sub_chain_idx = args.chain, seed = None,
-                               num_burn_in_always_accept = 0, hpc_path = hpc_path)
+params, phi, sub_key = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, args.noise_level, 
+                                    advanced_logging, phi_init = "ZEROES", fixed_fields = False,
+                                    hmc_step_size = args.hmc_step_size, hmc_num_steps = args.hmc_num_steps,
+                                    iters_per_chain = args.iters_per_chain, num_burn_in_fix_theta = args.num_burn_in_fix_theta,
+                                    map_idx = args.map_seed, sub_chain_idx = args.chain, seed = None,
+                                    num_burn_in_always_accept = 0, hpc_path = hpc_path)
+#the chain's final state, next to its histories: pass np.load(<this file>) to sample_joint's
+#resume_chain_dict to continue the chain (the data set is rebuilt from map_seed)
+data_dict = {}
+data_dict["phi_map"] = np.asarray(phi.scalar_matrix)
+data_dict["sub_key"] = np.asarray(sub_key)
+for name in PARAM_ORDER:
+    data_dict[name] = params[name][-1]
+np.savez(hpc_path + f"map_{args.map_seed}_chain_{args.chain}_data_dict.npz", **data_dict)

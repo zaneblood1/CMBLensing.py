@@ -48,7 +48,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 from cmb_lensing.matrix_operators import pinv
 from cmb_lensing.util import gen_ell_grid
-from cmb_lensing.constants import Basis, GROUND_TRUTH, PARAM_ORDER
+from cmb_lensing.constants import Basis, GROUND_TRUTH, PARAM_ORDER, DEFAULT_HMC_STEP_SIZE, DEFAULT_HMC_NUM_STEPS
 from cmb_lensing.fields import fourier
 from cmb_lensing.simulate import load_sim
 from cmb_lensing.fisher_forecast import camb_cls_at_params, load_sim_cosmology
@@ -89,6 +89,7 @@ def samples_name(realization_index):
 
 def run_job(out_dir, realization_index, map_seed, nside, theta_pix, noise_level,
             n_sweeps = DEFAULT_N_SWEEPS, l_knee = 0.0, param_ground = None,
+            hmc_step_size = DEFAULT_HMC_STEP_SIZE, hmc_num_steps = DEFAULT_HMC_NUM_STEPS,
             flush_every = DEFAULT_FLUSH_EVERY, verbose = True):
     """One chain of (f, phi) | d at the ground-truth theta, every phi sample written to disk.
     """
@@ -149,7 +150,8 @@ def run_job(out_dir, realization_index, map_seed, nside, theta_pix, noise_level,
                   f"sweep, phi acceptance {np.mean(accepts):.3f}", flush = True)
 
     posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_sweeps,
-                          chain_key(map_seed), on_draw = store, verbose = False)
+                          chain_key(map_seed), on_draw = store, verbose = False,
+                          hmc_step_size = hmc_step_size, hmc_num_steps = hmc_num_steps)
     del samples
     print(f"wrote {samples_path}\nwrote {sidecar_path}")
     return sidecar_path
@@ -226,11 +228,14 @@ def main():
     parser.add_argument("--burn_in", type = int, default = DEFAULT_BURN_IN)
     parser.add_argument("--seed_prefix", type = int, default = 1235)
     parser.add_argument("--out_dir", type = str, required = True)
+    parser.add_argument("--hmc_step_size", type = float, default = DEFAULT_HMC_STEP_SIZE)
+    parser.add_argument("--hmc_num_steps", type = int, default = DEFAULT_HMC_NUM_STEPS)
     args = parser.parse_args()
 
     for m in range(args.n_maps):
         run_job(args.out_dir, m, args.seed_prefix + m, args.nside, args.theta_pix,
-                args.noise_level, n_sweeps = args.n_sweeps, l_knee = args.l_knee)
+                args.noise_level, n_sweeps = args.n_sweeps, l_knee = args.l_knee,
+                hmc_step_size = args.hmc_step_size, hmc_num_steps = args.hmc_num_steps)
     out_path = os.path.join(args.out_dir, MERGED_NAME)
     np.savez(out_path, **merge_phi_noise(args.out_dir, args.burn_in))
     print(f"wrote {out_path}")

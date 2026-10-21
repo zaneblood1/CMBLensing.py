@@ -41,4 +41,6 @@ python3 "$SLURM_SUBMIT_DIR/run_single_lcdm_chain.py" \
     --pol "${26}" \
     --num_burn_in_fix_theta "${27}" \
     --iters_per_chain "${28}" \
-    --num_burn_in_always_accept "${29}"
+    --num_burn_in_always_accept "${29}" \
+    --hmc_num_steps "${30}" \
+    --hmc_step_size "${31}"

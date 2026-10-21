@@ -63,7 +63,6 @@ def beam_cls(beam_fwhm, ell):
 def noise_cls(lmax_prime, uk_arcmin_t, beam_fwhm=0, l_knee=100, alpha_knee=3):
     ell_prime = jnp.arange(2, lmax_prime)
     bls = beam_cls(beam_fwhm, ell_prime)
-    #NOTE temporarily remove 1/f noise for LCDM parameter inference
     nls = 1 + (l_knee / ell_prime)**alpha_knee
     cn_tt = jnp.nan_to_num(
         jnp.deg2rad(uk_arcmin_t / ARCMIN_PER_DEGREE)**2 * nls / bls,
@@ -241,7 +240,7 @@ def get_d_teb_matrix(cf_tt, cf_te, cf_ee, cf_bb, cn_tt, cn_te, cn_ee, cn_bb):
     sum_ee = cf_ee + pre_factor * identity + 2 * cn_ee
 
     ones = jnp.ones(cn_tt.shape)
-    d_tt, d_te, d_et, d_ee, _ = teb_matrix_mult(
+    d_tt, _, d_et, d_ee, _ = teb_matrix_mult(
         sum_tt, sum_te, sum_te, sum_ee, ones,
         cf_inv_tt, cf_inv_te, cf_inv_et, cf_inv_ee, ones
     )

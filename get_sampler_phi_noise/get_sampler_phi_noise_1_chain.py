@@ -28,10 +28,13 @@ parser.add_argument("--l_knee", type = float, default = 0.0)
 parser.add_argument("--num_sweeps", type = int, default = DEFAULT_N_SWEEPS)
 parser.add_argument("--flush_every", type = int, default = DEFAULT_FLUSH_EVERY)
 parser.add_argument("--out_dir", type = str, required = True)
+parser.add_argument("--hmc_step_size", type = float, required = True)
+parser.add_argument("--hmc_num_steps", type = int, required = True)
 args = parser.parse_args()
 
 #the index is in the filename and the seed is in the payload; the analysis rejects duplicate
 #seeds, so a mis-set seed_prefix cannot silently double count a realization
 run_job(args.out_dir, args.realization_index, args.map_seed, args.nside, args.theta_pix,
         args.noise_level, n_sweeps = args.num_sweeps, l_knee = args.l_knee,
+        hmc_step_size = args.hmc_step_size, hmc_num_steps = args.hmc_num_steps, 
         flush_every = args.flush_every)

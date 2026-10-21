@@ -32,6 +32,8 @@ nside=128
 theta_pix=2.5
 noise_level=5
 l_knee=0
+hmc_step_size=0.05
+hmc_num_steps=10
 
 #Gibbs sweeps per chain
 num_sweeps=6000
@@ -56,5 +58,5 @@ for ((m=0; m<num_maps; m++)); do
     map_seed=$((seed_prefix + m))
     sbatch --time="$chain_time" --mem-per-cpu="$chain_mem" \
         get_sampler_phi_noise_1_chain.sh "$m" "$map_seed" "$nside" "$theta_pix" \
-        "$noise_level" "$l_knee" "$num_sweeps" "$out_dir"
+        "$noise_level" "$l_knee" "$num_sweeps" "$out_dir" "$hmc_step_size" "$hmc_num_steps"
 done

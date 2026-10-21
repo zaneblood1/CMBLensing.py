@@ -1,9 +1,10 @@
 import os
-
 import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
+DEFAULT_HMC_STEP_SIZE = 0.05
+DEFAULT_HMC_NUM_STEPS = 10
 NPHI_FAC = 2
 ARCMIN_PER_DEGREE = 60
 INVERSE_LENSE = -1
@@ -72,8 +73,7 @@ CAMB_LMAX = DEFAULT_MAX_ELL
 #where the CAMB spline caches live: camb_splines/ at the repository root (the five 1D
 #camb_<param>_grid.npz of camb_grid_generation/precompute_camb_1d.py and the gitignored
 #~8 GB 5D camb_grid_spline.npz the sampler reads by default)
-CAMB_SPLINES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                "camb_splines")
+CAMB_SPLINES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "camb_splines")
 CAMB_GRID_PATH = os.path.join(CAMB_SPLINES_DIR, "camb_grid_spline.npz")
 
 #The default field and operator constants are defined for a square 256 x 256 map
