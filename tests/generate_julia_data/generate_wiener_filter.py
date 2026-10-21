@@ -2,11 +2,9 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from _preamble import init_julia
 
-
 def run(jl):
     jl.seval("""
-
-        #Wiener filtered maps
+        #Temperature-only Wiener filtered maps
         zero_f = zero(diag(temp_only_sim.ds.Cf))
         temporary_phi = temp_only_sim.ϕ
         ϕ = temp_only_sim.ϕ
@@ -26,12 +24,10 @@ def run(jl):
         npzwrite(FILE_PATH * "f_wf_f0p0_I.npz", f_wf_f0p0_I)
         f_wf_ffp0_I = transpose(f_wf_ffp0_I[:Il])
         npzwrite(FILE_PATH * "f_wf_ffp0_I.npz", f_wf_ffp0_I)
-
     """)
 
     jl.seval("""
-
-        #Wiener filtered maps
+        #Polarization-only Wiener filtered maps
         ϕ = polar_only_sim.ϕ
         f_wf_P, = argmaxf_logpdf(polar_only_sim.ds, (;ϕ); conjgrad_kwargs=(tol=1e-1,progress=false));
         f_wf_e_P = transpose(f_wf_P[:El])
@@ -65,11 +61,10 @@ def run(jl):
         f_wf_f0p0_b_P = transpose(f_wf_f0p0_P[:Bl])
         npzwrite(FILE_PATH * "f_wf_f0p0_e_P.npz", f_wf_f0p0_e_P)
         npzwrite(FILE_PATH * "f_wf_f0p0_b_P.npz", f_wf_f0p0_b_P)
-             
     """)
 
     jl.seval("""
-        #Wiener filtered maps
+        #Temperature + Polarization Wiener filtered maps
         ϕ = polar_and_temp_sim.ϕ
         f_wf_IP, = argmaxf_logpdf(polar_and_temp_sim.ds, (;ϕ); conjgrad_kwargs=(tol=1e-1,progress=false));
         f_wf_t_IP = transpose(f_wf_IP[:Il])
@@ -115,7 +110,7 @@ def run(jl):
         npzwrite(FILE_PATH * "f_wf_f0p0_b_IP.npz", f_wf_f0p0_b_IP)
     """)
 
-    print("Done generating wiener filter data!")
+    print("Done generating wiener filter data.")
 
 
 if __name__ == "__main__":

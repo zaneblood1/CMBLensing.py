@@ -5,10 +5,8 @@ from _preamble import init_julia
 
 def run(jl):
     jl.seval("""
-
         #Learned temperature only fields
         fJ, ϕJ, history = MAP_joint(temp_only_sim.ds, nsteps=30, progress=true);
-
         fJ_I = transpose(fJ[:Il])
         npzwrite(FILE_PATH * "fJ_I.npz", fJ_I)
         ϕJ_I = transpose(ϕJ[:Il])
@@ -17,9 +15,8 @@ def run(jl):
     """)
 
     jl.seval("""
-        #Learned fields
+        #Learned polarization-only fields
         fJ, ϕJ, history = MAP_joint(polar_only_sim.ds, nsteps=30, progress=true);
-
         fJ_e_P = transpose(fJ[:El])
         fJ_b_P = transpose(fJ[:Bl])
         npzwrite(FILE_PATH * "fJ_e_P.npz", fJ_e_P)
@@ -30,9 +27,8 @@ def run(jl):
 
     jl.seval("""
 
-        #Learned fields
+        #Learned temperature + polarization fields
         fJ, ϕJ, history = MAP_joint(polar_and_temp_sim.ds, nsteps=30, progress=true);
-
         fJ_t_IP = transpose(fJ[:Il])
         fJ_e_IP = transpose(fJ[:El])
         fJ_b_IP = transpose(fJ[:Bl])
@@ -43,7 +39,7 @@ def run(jl):
         npzwrite(FILE_PATH * "phiJ_IP.npz", ϕJ_IP)
     """)
 
-    print("Done generating MAP joint data!")
+    print("Done generating MAP joint data.")
 
 
 if __name__ == "__main__":

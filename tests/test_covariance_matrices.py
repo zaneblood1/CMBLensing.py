@@ -24,14 +24,19 @@ PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 #threshold values for unit tests
 MAX_NORM_DIFF = 1
 MIN_AVG_CORRELATION = 0
+CAMB_LMAX = 17_000
+CAMB_LMAX_PRIME = 5000
 
 #noise covariance, beam, mask, field covariance, quadratic estimate
-
 _DATASET_CACHE = {}
 
 def _get_dataset(pol):
     if pol not in _DATASET_CACHE:
-        _DATASET_CACHE[pol] = load_sim(N_SIDE, THETA_PIX, pol, master_seed=1)
+        _DATASET_CACHE[pol] = load_sim(N_SIDE, THETA_PIX, pol, master_seed=1, 
+                                       lmax = CAMB_LMAX, r=0.2, tau = 0.055, nt = -0.025,
+                                       k_pivot = 0.002, max_l_tensor = 2*CAMB_LMAX_PRIME,
+                                       max_eta_k_tensor = 4*CAMB_LMAX_PRIME, use_mask = True,
+                                       begin_ell_interp = CAMB_LMAX_PRIME)
     return _DATASET_CACHE[pol]
 
 def _plot_matrix_comparison(ground, predict, title, folder):

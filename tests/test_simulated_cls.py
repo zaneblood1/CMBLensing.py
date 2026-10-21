@@ -24,12 +24,16 @@ PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 #threshold values for unit tests
 MAX_NORM_DIFF = 1
 MIN_AVG_CORRELATION = 0
+CAMB_LMAX_PRIME = 5000
+CAMB_LMAX = 17_000
 
 def test_simulated_cls_intensity_only():
 
     #compute cls for temperature only
     batched_results = get_avg_cls(theta_pix = THETA_PIX_DEFAULT, num_trials = 100, pol = "I", nside = NSIDE_DEFAULT,
-                                  uk_arcmin_t = 10, lmax = 17000, delta_l = 50)
+                                  uk_arcmin_t = 10, delta_l = 50, lmax = CAMB_LMAX, r = 0.2, 
+                                  tau = 0.055, nt = -0.025, k_pivot = 0.002, max_l_tensor = 2*CAMB_LMAX_PRIME,
+                                  max_eta_k_tensor = 4*CAMB_LMAX_PRIME, use_mask = True, begin_ell_interp = CAMB_LMAX_PRIME)
 
     #load ground truth ell and cls
     ell_I = precision_load(GROUND_TRUTH + "ell_I.npz")
@@ -79,7 +83,9 @@ def test_simulated_cls_polarization_only():
 
     #compute cls for temperature only
     batched_results = get_avg_cls(theta_pix = THETA_PIX_DEFAULT, num_trials = 100, pol = "P", nside = NSIDE_DEFAULT,
-                                  uk_arcmin_t = 10, lmax = 17000, delta_l = 50)
+                                  uk_arcmin_t = 10, delta_l = 50, lmax = CAMB_LMAX, r = 0.2, 
+                                  tau = 0.055, nt = -0.025, k_pivot = 0.002, max_l_tensor = 2*CAMB_LMAX_PRIME,
+                                  max_eta_k_tensor = 4*CAMB_LMAX_PRIME, use_mask = True, begin_ell_interp = CAMB_LMAX_PRIME)
 
     #load ground truth ell and cls
     ell_P = precision_load(GROUND_TRUTH + "ell_P.npz")
@@ -156,7 +162,9 @@ def test_simulated_cls_intensity_and_polarization():
 
     #compute cls for temperature only
     batched_results = get_avg_cls(theta_pix = THETA_PIX_DEFAULT, num_trials = 100, pol = "IP", nside = NSIDE_DEFAULT,
-                                  uk_arcmin_t = 10, lmax = 17000, delta_l = 50)
+                                  uk_arcmin_t = 10, delta_l = 50, lmax = CAMB_LMAX, r = 0.2, 
+                                  tau = 0.055, nt = -0.025, k_pivot = 0.002, max_l_tensor = 2*CAMB_LMAX_PRIME,
+                                  max_eta_k_tensor = 4*CAMB_LMAX_PRIME, use_mask = True, begin_ell_interp = CAMB_LMAX_PRIME)
 
     #load ground truth ell and cls
     ell_IP = precision_load(GROUND_TRUTH + "ell_IP.npz")

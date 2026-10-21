@@ -28,7 +28,7 @@ def run(jl):
         end
     """)
 
-    print("Done generating logpdf data!")
+    print("Done generating logpdf data.")
 
 
 if __name__ == "__main__":

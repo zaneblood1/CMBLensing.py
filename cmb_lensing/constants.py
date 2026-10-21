@@ -11,6 +11,7 @@ INVERSE_LENSE = -1
 FORWARD_LENSE = +1
 BEAM_TRANSFER_SCALAR = 8*jnp.log(2)
 DEFAULT_MAX_ELL = 4000
+DEFAULT_MASK_ELL = 3000
 DEFAULT_MNU = 0.06
 DEFAULT_TAUREIO = 0.05
 DEFAULT_K_PIVOT = 0.05
@@ -25,6 +26,10 @@ DEFAULT_ELL_CUTOFF = 10_000
 #150 covers the whole box (theta_MC_100 reaches 1.22-1.27 at H0 = 150 across the omch2
 #range). CAMB ignores this whenever H0 is passed directly
 DEFAULT_THETA_H0_RANGE = [10, 150]
+
+#CAMB's tensor l and k*eta cutoffs (Yuuki's values; formerly 2 * lmax_prime and 4 * lmax_prime)
+DEFAULT_MAX_L_TENSOR = 600
+DEFAULT_MAX_ETA_K_TENSOR = 1200
 
 # ── The LCDM parameters ───────────────────────────────────────────────────
 

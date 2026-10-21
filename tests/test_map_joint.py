@@ -168,10 +168,6 @@ def test_map_joint_intensity_only():
     #compare percent difference between prediction and ground truth
     assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= MAX_NORM_DIFF
 
-    #also assert that the average cross correlation is greater than our threshold
-    #TODO handle NaN case here...
-    # assert jnp.mean(t_correlation_jp) > MIN_AVG_CORRELATION
-
 def test_map_joint_polarization_only():
 
     #load ground truth data matrices
@@ -384,11 +380,6 @@ def test_map_joint_polarization_only():
 
     #compare percent difference between prediction and ground truth
     assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= MAX_NORM_DIFF
-
-    #also assert that the average cross correlation is greater than our threshold
-    #TODO handle NaN case here...
-    # assert jnp.mean(ee_correlation_jp) > MIN_AVG_CORRELATION
-    # assert jnp.mean(bb_correlation_jp) > MIN_AVG_CORRELATION
 
 def test_map_joint_intensity_and_polarization():
 
@@ -674,8 +665,3 @@ def test_map_joint_intensity_and_polarization():
     #compare percent difference between prediction and ground truth
     assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= MAX_NORM_DIFF
 
-    #also assert that the average cross correlation is greater than our threshold
-    #TODO handle NaN case here...
-    # assert jnp.mean(tt_correlation_jp) > MIN_AVG_CORRELATION
-    # assert jnp.mean(ee_correlation_jp) > MIN_AVG_CORRELATION
-    # assert jnp.mean(bb_correlation_jp) > MIN_AVG_CORRELATION

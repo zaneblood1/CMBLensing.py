@@ -1,7 +1,6 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from _preamble import init_julia
-
 from generate_lensing import run as run_lensing
 from generate_logpdf import run as run_logpdf
 from generate_gradients import run as run_gradients
@@ -20,4 +19,4 @@ if __name__ == "__main__":
     run_map_joint(jl)
     run_simulated_cls(jl)
     run_covariance_matrices(jl)
-    print("\n=== All generators complete! ===")
+    print("\n=== All generators complete ===")

@@ -5,7 +5,7 @@ from _preamble import init_julia
 
 def run(jl):
     jl.seval("""
-        #Covariance matrices
+        #Temperature-only covariance matrices
         cn_I = transpose(temp_only_sim.ds.Cn.diag.arr)
         cf_I = transpose(temp_only_sim.ds.Cf.op.diag.arr)
         cphi_I = transpose(temp_only_sim.ds.Cϕ.op.diag.arr)
@@ -25,7 +25,7 @@ def run(jl):
     """)
 
     jl.seval("""
-        #Covariance matrices
+        #Polarization-only covariance matrices
         cn_ee_P = transpose(polar_only_sim.ds.Cn[:E].diag.arr)
         cn_bb_P = transpose(polar_only_sim.ds.Cn[:B].diag.arr)
         cf_ee_P = transpose(polar_only_sim.ds.Cf[:E].diag.arr)
@@ -53,7 +53,7 @@ def run(jl):
     """)
 
     jl.seval("""
-        #Covariance matrices
+        #Temperature + Polarization covariance matrices
         cn_ee_IP = transpose(polar_and_temp_sim.ds.Cn.ΣTE[4].diag.arr)
         cn_bb_IP = transpose(polar_and_temp_sim.ds.Cn.ΣB.diag.arr)
         cn_te_IP = transpose(polar_and_temp_sim.ds.Cn.ΣTE[2].diag.arr)
@@ -100,7 +100,7 @@ def run(jl):
         npzwrite(FILE_PATH * "b_tt_IP.npz", b_tt_IP)
     """)
 
-    print("Done generating covariance matrices data!")
+    print("Done generating covariance matrices data.")
 
 
 if __name__ == "__main__":

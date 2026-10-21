@@ -21,7 +21,7 @@ pytest
 pytest tests/test_lensing.py
 
 # Regenerate Julia ground-truth data before testing (requires juliacall + CMBLensing.jl;
-# first set PYTHON_JULIAPKG_PROJECT in tests/generate_julia_data/_preamble.py)
+# first export CMBLENSING_JL_PATH=/path/to/CMBLensing.jl)
 pytest --generate
 python tests/generate_julia_data/generate_all.py
 
@@ -398,7 +398,7 @@ runtime_comparison/python_performance_test.py ──► map_joint (Julia data vi
 
 ### Testing Approach
 
-Most tests are validation benchmarks comparing Python output against Julia (CMBLensing.jl) ground truth stored in `tests/ground_truth_data/*.npz`. They cover `load_sim`, lensing, logpdf, gradients, the Wiener filter and `map_joint`; **nothing tests the sampler**. Exceptions to the Julia pattern: `tests/test_camb_grid.py` checks the real 5D grid against direct CAMB (skipped when the grid file is absent). The forecast, the 1D spline interpolators, `delensed_covariance` and `sampler_phi_noise` are untested. Many Julia tests produce comparison plots in `tests/test_generated_figures/` rather than hard assertions — visual inspection via the HTML viewer (`tests/index.html`, served with e.g. VS Code Live Server) is the primary verification method. `conftest.py` maps each `test_*` module to its `generate_*` module for `--generate`; `_preamble.py` needs `PYTHON_JULIAPKG_PROJECT` pointed at a local CMBLensing.jl checkout (currently the placeholder `/<PATH_TO>/CMBLensing.jl`). `generate_simulated_cls.py` imports `cosmopower_jax` — known to be unusable for unlensed spectra. The full suite collects 49 tests.
+Most tests are validation benchmarks comparing Python output against Julia (CMBLensing.jl) ground truth stored in `tests/ground_truth_data/*.npz`. They cover `load_sim`, lensing, logpdf, gradients, the Wiener filter and `map_joint`; **nothing tests the sampler**. Exceptions to the Julia pattern: `tests/test_camb_grid.py` checks the real 5D grid against direct CAMB (skipped when the grid file is absent). The forecast, the 1D spline interpolators, `delensed_covariance` and `sampler_phi_noise` are untested. Many Julia tests produce comparison plots in `tests/test_generated_figures/` rather than hard assertions — visual inspection via the HTML viewer (`tests/index.html`, served with e.g. VS Code Live Server) is the primary verification method. `conftest.py` maps each `test_*` module to its `generate_*` module for `--generate`; `_preamble.py` sets `PYTHON_JULIAPKG_PROJECT` from the `CMBLENSING_JL_PATH` environment variable (a local CMBLensing.jl checkout), like `runtime_comparison/python_performance_test.py`. `generate_simulated_cls.py` imports `cosmopower_jax` — known to be unusable for unlensed spectra. The full suite collects 49 tests.
 
 ## Known issues (as of 2026-10-15 — delete entries as they are fixed)
 
@@ -407,7 +407,7 @@ Most tests are validation benchmarks comparing Python output against Julia (CMBL
 - `docs/sample_joint_tutorial.ipynb` is an empty placeholder.
 - **Realizations changed with the 2026-10-15 RNG rework:** `load_sim` now draws from one root key with a subkey split off per field instead of `split(PRNGKey(seed), 100)[i]`, so a seed no longer reproduces the realization any file written before that date was made from. Every job stores its own truth (phi_true, the covariances), so no merge is affected, but do not mix pre- and post-rework job files in one directory expecting matched seeds.
 - `get_delensed_field_covariance/delensed_field_covariance_data/lower_qe_bound/delensed_covariance_output_5uk_nphi_unlensedx2/` contains a stray nested copy of the 2.5 uK run that was NOT patched with `qe_filter`.
-- `tests/generate_julia_data/_preamble.py` carries the placeholder `PYTHON_JULIAPKG_PROJECT = "/<PATH_TO>/CMBLensing.jl"`, so `pytest --generate` needs it pointed at a real checkout first.
+- `pytest --generate` needs `CMBLENSING_JL_PATH` exported (read by `tests/generate_julia_data/_preamble.py`).
 - Nothing tests `sample_joint` or `precompute_camb_1d`. Smoke-testing the sampler locally: nside 64, `iters_per_chain = 2`, and for `pol = "IP"`/`"P"` inject stub predictors if memory is tight — a real-grid "IP" run holds ~9.1 GB of splines (tt / ee / te_rho / pp) and has run locally, though one nside 64 run once rebooted the 16 GB laptop under a `systemd-run` 11 GB cap.
 
 ## Numeric Precision

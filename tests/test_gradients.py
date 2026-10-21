@@ -691,7 +691,8 @@ def test_mixed_grad_phi_intensity_only():
 
     mixed_field, mixed_phi = mix(field, phi, mixing_d, mixing_g)
     mixed_grad_phi_predict = mixed_grad_phi_logpdf(mixed_field, mixed_phi, data, noise_covariance,
-                                                    phi_covariance, field_covariance, mask, beam, mixing_d, mixing_g)
+                                                    phi_covariance, field_covariance, mask, beam, 
+                                                    mixing_d, mixing_g)
 
     SUB_FOLDER = "gradients/intensity_only/mixed_grad_phi_logpdf/"
 

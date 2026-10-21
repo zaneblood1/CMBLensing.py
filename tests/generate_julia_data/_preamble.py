@@ -1,7 +1,7 @@
 import os
-os.environ["PYTHON_JULIAPKG_PROJECT"] = "/<PATH_TO>/CMBLensing.jl"
+#the CMBLensing.jl checkout is machine specific: export CMBLENSING_JL_PATH (as hpc_local.sh does)
+os.environ["PYTHON_JULIAPKG_PROJECT"] = os.environ["CMBLENSING_JL_PATH"]
 os.environ["PYTHON_JULIAPKG_OFFLINE"] = "yes"
-
 from cmb_lensing.constants import THETA_PIX_DEFAULT, NSIDE_DEFAULT
 
 def init_julia():

@@ -229,12 +229,6 @@ def test_wiener_filter_intensity_only():
     assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= MAX_NORM_DIFF
     assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= MAX_NORM_DIFF
 
-    #also assert that the average cross correlation is greater than our threshold
-    #TODO somehow fix the fact that these are becoming NaN
-    #assert jnp.mean(ffpp_cross_ffpp) > MIN_AVG_CORRELATION
-    #assert jnp.mean(ffp0_cross_ffp0) > MIN_AVG_CORRELATION
-    #assert jnp.mean(f0pp_cross_f0pp) > MIN_AVG_CORRELATION
-    #assert jnp.mean(f0p0_cross_f0p0) > MIN_AVG_CORRELATION
 
 def test_wiener_filter_polarization_only():
 
@@ -571,13 +565,6 @@ def test_wiener_filter_polarization_only():
     assert jnp.max(percent_diff_2d(wf_ffp0_ground, wf_ffp0_predict)) <= MAX_NORM_DIFF
     assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= MAX_NORM_DIFF
     assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= MAX_NORM_DIFF
-
-    #also assert that the average cross correlation is greater than our threshold
-    #TODO somehow fix the fact that these are becoming NaN
-    #assert jnp.mean(ffpp_cross_ee) > MIN_AVG_CORRELATION
-    #assert jnp.mean(ffp0_cross_ee) > MIN_AVG_CORRELATION
-    #assert jnp.mean(f0pp_cross_ee) > MIN_AVG_CORRELATION
-    #assert jnp.mean(f0p0_cross_ee) > MIN_AVG_CORRELATION
 
 def test_wiener_filter_intensity_and_polarization():
 
@@ -1038,10 +1025,3 @@ def test_wiener_filter_intensity_and_polarization():
     assert jnp.max(percent_diff_2d(wf_ffp0_ground, wf_ffp0_predict)) <= MAX_NORM_DIFF
     assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= MAX_NORM_DIFF
     assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= MAX_NORM_DIFF
-
-    #also assert that the average cross correlation is greater than our threshold
-    #TODO somehow fix the fact that these are becoming NaN
-    #assert jnp.mean(ffpp_cross_tt) > MIN_AVG_CORRELATION
-    #assert jnp.mean(ffp0_cross_tt) > MIN_AVG_CORRELATION
-    #assert jnp.mean(f0pp_cross_tt) > MIN_AVG_CORRELATION
-    #assert jnp.mean(f0p0_cross_tt) > MIN_AVG_CORRELATION

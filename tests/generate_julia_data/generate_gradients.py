@@ -6,7 +6,7 @@ from _preamble import init_julia
 def run(jl):
     jl.seval("""
 
-        #Gradients of the logpdf function
+        #Temperature-only gradients of the logpdf function
         gradf_I = transpose(CMBLensing.gradientf_logpdf(temp_only_sim.ds; temp_only_sim.f, temp_only_sim.ϕ)[:Il])
         npzwrite(FILE_PATH * "gradf_I.npz", gradf_I)
 
@@ -21,7 +21,7 @@ def run(jl):
 
     jl.seval("""
 
-        #Gradients of logpdf
+        #Polarization-only gradients of the logpdf function
         gradf_e_P = transpose(CMBLensing.gradientf_logpdf(polar_only_sim.ds; polar_only_sim.f, polar_only_sim.ϕ)[:El])
         gradf_b_P = transpose(CMBLensing.gradientf_logpdf(polar_only_sim.ds; polar_only_sim.f, polar_only_sim.ϕ)[:Bl])
         npzwrite(FILE_PATH * "gradf_e_P.npz", gradf_e_P)
@@ -38,7 +38,7 @@ def run(jl):
 
     jl.seval("""
 
-        #Gradients of logpdf
+        #Temperature + Polarization gradients of the logpdf function
         gradf_t_IP = transpose(CMBLensing.gradientf_logpdf(polar_and_temp_sim.ds; polar_and_temp_sim.f, polar_and_temp_sim.ϕ)[:Il])
         gradf_e_IP = transpose(CMBLensing.gradientf_logpdf(polar_and_temp_sim.ds; polar_and_temp_sim.f, polar_and_temp_sim.ϕ)[:El])
         gradf_b_IP = transpose(CMBLensing.gradientf_logpdf(polar_and_temp_sim.ds; polar_and_temp_sim.f, polar_and_temp_sim.ϕ)[:Bl])
@@ -55,7 +55,7 @@ def run(jl):
 
     """)
 
-    print("Done generating gradients data!")
+    print("Done generating gradient data.")
 
 
 if __name__ == "__main__":

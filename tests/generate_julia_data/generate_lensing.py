@@ -6,8 +6,6 @@ from _preamble import init_julia
 def run(jl):
     jl.seval("""
         #Write the Julia generated temperature only data to disk
-
-        #Fields
         phi_I = transpose((temp_only_sim.ϕ)[:Il])
         t_field_I = transpose((temp_only_sim.f)[:Il])
         t_lensed_field_I = transpose((temp_only_sim.ds.L(temp_only_sim.ϕ) * temp_only_sim.f)[:Il])
@@ -18,13 +16,10 @@ def run(jl):
         npzwrite(FILE_PATH * "t_lensed_field_I.npz", t_lensed_field_I)
         npzwrite(FILE_PATH * "t_adjoint_lensed_field_I.npz", t_adjoint_lensed_field_I)
         npzwrite(FILE_PATH * "data_t_field_I.npz", data_t_field_I)
-
     """)
 
     jl.seval("""
         #Write polarization only julia generated data to disk
-
-        #Fields
         phi_P = transpose((polar_only_sim.ϕ)[:Il])
         e_field_P = transpose((polar_only_sim.f)[:El])
         b_field_P = transpose((polar_only_sim.f)[:Bl])
@@ -45,13 +40,10 @@ def run(jl):
         npzwrite(FILE_PATH * "b_adjoint_lensed_field_P.npz", b_adjoint_lensed_field_P)
         npzwrite(FILE_PATH * "data_e_field_P.npz", data_e_field_P)
         npzwrite(FILE_PATH * "data_b_field_P.npz", data_b_field_P)
-
     """)
 
     jl.seval("""
         #Write the temperature and polarization combo data to disk
-
-        #Fields
         phi_IP = transpose((polar_and_temp_sim.ϕ)[:Il])
         t_field_IP = transpose((polar_and_temp_sim.f)[:Il])
         e_field_IP = transpose((polar_and_temp_sim.f)[:El])
@@ -80,10 +72,9 @@ def run(jl):
         npzwrite(FILE_PATH * "data_t_field_IP.npz", data_t_field_IP)
         npzwrite(FILE_PATH * "data_e_field_IP.npz", data_e_field_IP)
         npzwrite(FILE_PATH * "data_b_field_IP.npz", data_b_field_IP)
-
     """)
 
-    print("Done generating lensing data!")
+    print("Done generating lensing data.")
 
 
 if __name__ == "__main__":

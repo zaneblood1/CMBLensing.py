@@ -13,8 +13,10 @@ from cmb_lensing.lense_flow import *
 from cmb_lensing.dataset import *
 from cmb_lensing.statistics import *
 from cmb_lensing.constants import (DEFAULT_MAX_ELL, DEFAULT_A_LENSE, 
+                                   DEFAULT_MASK_ELL,
                                    DEFAULT_K_PIVOT, DEFAULT_MNU, 
-                                   DEFAULT_TAUREIO, DEFAULT_THETA_H0_RANGE)
+                                   DEFAULT_TAUREIO, DEFAULT_THETA_H0_RANGE,
+                                   DEFAULT_MAX_L_TENSOR, DEFAULT_MAX_ETA_K_TENSOR)
 
 _CAMB_COLS = {"TT": 0, "EE": 1, "BB": 2, "TE": 3}
 
@@ -472,7 +474,8 @@ def get_polar_qe_norm_at_position(tf2e, cf_ee, sigma_e, tf2b, cf_bb, sigma_b,
 # ── CAMB Interface ────────────────────────────────────────────────────────
 
 def camb_parameters(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-                    lmax_prime, k_pivot, Alens):
+                    lmax_prime, k_pivot, Alens, max_l_tensor = DEFAULT_MAX_L_TENSOR,
+                    max_eta_k_tensor = DEFAULT_MAX_ETA_K_TENSOR):
     """The CAMBparams every CAMB run in this codebase uses. Split out of _run_camb so a
     caller that needs CAMB's results object itself (fisher_forecast keeps it for
     get_partially_lensed_cls) sets up the run identically."""
@@ -482,8 +485,8 @@ def camb_parameters(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
         tau=tau, pivot_scalar=k_pivot, pivot_tensor=k_pivot, Alens=Alens,
         theta_H0_range=DEFAULT_THETA_H0_RANGE
     )
-    pars.max_l_tensor = 600 #NOTE switching to Yuuki's values from 2 * lmax_prime
-    pars.max_eta_k_tensor = 1200 #NOTE switching to Yuuki's values from 4 * lmax_prime
+    pars.max_l_tensor = max_l_tensor
+    pars.max_eta_k_tensor = max_eta_k_tensor
     pars.WantScalars = True
     pars.WantTensors = True
     pars.DoLensing = True
@@ -492,9 +495,10 @@ def camb_parameters(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
 
 
 def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-              lmax_prime, k_pivot, Alens):
+              lmax_prime, k_pivot, Alens, max_l_tensor = DEFAULT_MAX_L_TENSOR,
+              max_eta_k_tensor = DEFAULT_MAX_ETA_K_TENSOR):
     pars = camb_parameters(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-                           lmax_prime, k_pivot, Alens)
+                           lmax_prime, k_pivot, Alens, max_l_tensor, max_eta_k_tensor)
     results = camb.get_results(pars)
     power_spectra = results.get_cmb_power_spectra(pars, lmax=lmax_prime - 1, CMB_unit="muK")
     #columns 0..2 are PP, PT, PE. CMB_unit only scales the two cross columns (PP is
@@ -505,14 +509,15 @@ def _run_camb(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
 
 
 def _camb_callback_fn(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-                      lmax_prime, k_pivot, Alens):
+                      lmax_prime, k_pivot, Alens, max_l_tensor, max_eta_k_tensor):
     """Eagerly runs CAMB and returns flat arrays for use inside JIT via pure_callback."""
     lmax_prime = int(lmax_prime)
     try:
         power_spectra, lens_potential = _run_camb(
             H0, float(ombh2), float(omch2), float(cosmomc_theta),
             float(r), float(mnu), float(tau), float(As), float(nt), float(ns),
-            lmax_prime, float(k_pivot), float(Alens))
+            lmax_prime, float(k_pivot), float(Alens), int(max_l_tensor),
+            float(max_eta_k_tensor))
         unlensed_scalar = jnp.asarray(power_spectra["unlensed_scalar"], dtype=jnp.float64)
         tensor = jnp.asarray(power_spectra["tensor"], dtype=jnp.float64)
         total = jnp.asarray(power_spectra["total"], dtype=jnp.float64)
@@ -526,7 +531,8 @@ def _camb_callback_fn(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
 
 
 def _camb_via_callback(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-                       lmax_prime, k_pivot, Alens):
+                       lmax_prime, k_pivot, Alens, max_l_tensor = DEFAULT_MAX_L_TENSOR,
+                       max_eta_k_tensor = DEFAULT_MAX_ETA_K_TENSOR):
     """Calls CAMB through jax.pure_callback so the surrounding function can be JIT-ted."""
     result_shapes = (
         jax.ShapeDtypeStruct((lmax_prime, 4), jnp.float64),
@@ -537,7 +543,7 @@ def _camb_via_callback(H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
     return jax.pure_callback(
         _camb_callback_fn, result_shapes,
         H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-        lmax_prime, k_pivot, Alens,
+        lmax_prime, k_pivot, Alens, max_l_tensor, max_eta_k_tensor,
         vmap_method = 'sequential'
     )
 
@@ -793,9 +799,10 @@ def interpolate_cls(cls, lmax, lmax_prime):
 def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
              ombh2 = 0.0224567, omch2 = 0.118489, cosmomc_theta = 0.0104098,
              r = 0.0, mnu = DEFAULT_MNU, tau = DEFAULT_TAUREIO, As = jnp.exp(3.043) * 1e-10,
-             nt = 0, ns = 0.968602, lmax = 4000, l_knee = 100,
+             nt = 0, ns = 0.968602, lmax = 4000, begin_ell_interp = None, l_knee = 100,
              k_pivot = DEFAULT_K_PIVOT, Alens = DEFAULT_A_LENSE, nphi_fac = 2, a_phi = 1,
-             precomputed_cls = None):
+             precomputed_cls = None, max_l_tensor = DEFAULT_MAX_L_TENSOR,
+             max_eta_k_tensor = DEFAULT_MAX_ETA_K_TENSOR, use_mask = False):
     """Simulate a lensed CMB data set. See the module and CLAUDE.md for the pipeline.
 
     Randomness: one root key PRNGKey(master_seed), and every random field (phi, then the
@@ -814,12 +821,13 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
     unused when spectra are supplied - so passing a mismatched cache silently produces a
     data map inconsistent with its own labelled parameters. The lmax is checked.
     """
-    #NOTE changing k_pivot from Marius' choice to match Yuuki's emulator
-    lmax_prime = min(lmax, DEFAULT_MAX_ELL)
+
+    lmax_prime = min(lmax, DEFAULT_MAX_ELL) if begin_ell_interp is None else min(lmax, begin_ell_interp)
+
     if precomputed_cls is None:
         unlensed_scalar, tensor, total, lens_potential = _camb_via_callback(
             H0, ombh2, omch2, cosmomc_theta, r, mnu, tau, As, nt, ns,
-            lmax_prime, k_pivot, Alens
+            lmax_prime, k_pivot, Alens, max_l_tensor, max_eta_k_tensor
         )
         cls = _extract_all_cls(unlensed_scalar, tensor, total, lens_potential, lmax, lmax_prime)
     else:
@@ -904,9 +912,9 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
             field_t, field_e, field_b, phi, pix_width, nside, theta_pix
         )
 
-    #NOTE we have removed the mask for LCDM inference
-    mask = jnp.ones_like(get_mask(4000, nside, pix_width, ell_grid))
     beam = get_beam(nside, pix_width, ell_grid, lmax_prime)
+    #NOTE we have removed the mask for LCDM inference
+    mask = get_mask(DEFAULT_MASK_ELL, nside, pix_width, ell_grid) if use_mask else jnp.ones_like(beam)
 
     #Noise covariance and white noise (the TE noise Cls are identically zero, so
     #_covar_or_zeros keeps that block an exact zero matrix instead of NaN)
@@ -976,10 +984,18 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
         )
 
 def batch_simulated_trials(num_trials=10, nside=256, theta_pix=2,
-                           uk_arcmin_t=10, lmax=17_000, pol="I"):
+                           uk_arcmin_t=10, lmax=17_000, pol="I", r = 0.2, 
+                           tau = 0.055, nt = -0.025, k_pivot = 0.002, 
+                           max_l_tensor = DEFAULT_MAX_L_TENSOR,
+                           max_eta_k_tensor = DEFAULT_MAX_ETA_K_TENSOR, use_mask = True, 
+                           begin_ell_interp = None):
+    
     def parallel_sim(seed):
-        return load_sim(nside=nside, theta_pix=theta_pix, pol=pol,
-                        master_seed=seed, uk_arcmin_t=uk_arcmin_t, lmax=lmax)
+        return load_sim(nside = nside, theta_pix = theta_pix, pol = pol,
+                        master_seed = seed, uk_arcmin_t = uk_arcmin_t, lmax = lmax, 
+                        r = r, tau = tau, nt = nt, k_pivot = k_pivot, 
+                        max_l_tensor = max_l_tensor, max_eta_k_tensor = max_eta_k_tensor, 
+                        use_mask = use_mask, begin_ell_interp = begin_ell_interp)
 
     seeds = jnp.asarray([np.random.randint(0, 2**31) for _ in range(num_trials)])
     return jax.vmap(parallel_sim)(seeds)
@@ -1000,12 +1016,18 @@ def get_field_specs(pol):
 
 #Compute avg Cl^TT, Cl^DD, Cl^PP, Cl^LL over a large number of trials
 #to gauge whether our GRF maps are indeed following the correct statistics...
-def get_avg_cls(theta_pix, num_trials=100, pol="I", nside=256,
-                uk_arcmin_t=10, lmax=17000, delta_l=50):
+def get_avg_cls(theta_pix, num_trials = 100, pol = "I", nside = 256,
+                uk_arcmin_t = 10, lmax = 17_000, delta_l = 50, r = 0.2, 
+                tau = 0.055, nt = -0.025, k_pivot = 0.002, max_l_tensor = DEFAULT_MAX_L_TENSOR,
+                max_eta_k_tensor = DEFAULT_MAX_ETA_K_TENSOR, use_mask = True, 
+                begin_ell_interp = None):
+    
     trial_results = batch_simulated_trials(
-        num_trials=num_trials, nside=nside, theta_pix=theta_pix,
-        uk_arcmin_t=uk_arcmin_t, lmax=lmax, pol=pol
-    )
+        num_trials = num_trials, nside = nside, theta_pix = theta_pix,
+        uk_arcmin_t = uk_arcmin_t, lmax = lmax, pol = pol, r = r, tau = tau,
+        nt = nt, k_pivot = k_pivot, max_l_tensor = max_l_tensor, 
+        max_eta_k_tensor = max_eta_k_tensor, use_mask = use_mask, 
+        begin_ell_interp = begin_ell_interp)
 
     specs = get_field_specs(pol)
     results = {}

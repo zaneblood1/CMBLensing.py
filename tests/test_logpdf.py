@@ -22,8 +22,7 @@ with open(GROUND_TRUTH + "theta_pix.txt", "r") as file:
 PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 
 #threshold values for unit tests
-MAX_NORM_DIFF = 1
-MIN_AVG_CORRELATION = 0
+MAX_DIFF = 1
 
 def test_logpdf_intensity_only():
 
@@ -51,7 +50,7 @@ def test_logpdf_intensity_only():
                               field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_I.txt", "r") as file:
         logpdf_t_ground = float(file.read().strip())
-    assert abs(logpdf_t_predict - logpdf_t_ground) < 1
+    assert abs(logpdf_t_predict - logpdf_t_ground) < MAX_DIFF
 
 def test_logpdf_polarization_only():
     #load ground truth unlensed polarization fields, data fields, and phi field
@@ -102,7 +101,7 @@ def test_logpdf_polarization_only():
                               field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_P.txt", "r") as file:
         logpdf_eb_ground = float(file.read().strip())
-    assert abs(logpdf_eb_predict - logpdf_eb_ground) < 1
+    assert abs(logpdf_eb_predict - logpdf_eb_ground) < MAX_DIFF
 
 def test_logpdf_intensity_and_polarization():
     #load ground truth unlensed intensity and polarization fields, data fields, and phi field
@@ -177,4 +176,4 @@ def test_logpdf_intensity_and_polarization():
                                 field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_IP.txt", "r") as file:
         logpdf_teb_ground = float(file.read().strip())
-    assert abs(logpdf_teb_predict - logpdf_teb_ground) < 1
+    assert abs(logpdf_teb_predict - logpdf_teb_ground) < MAX_DIFF
