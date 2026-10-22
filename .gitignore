@@ -8,3 +8,6 @@ camb_splines/camb_grid_spline.npz
 .vscode
 #machine-specific HPC setup (conda, mail address, paths); see hpc_local.example.sh
 hpc_local.sh
+#mkdocs build output
+site/
+.cache/

@@ -1,0 +1,25 @@
+#Build the MkDocs site and publish it to the gh-pages branch on every push to master.
+#One-time setup on GitHub: Settings -> Pages -> Source "Deploy from a branch", branch gh-pages.
+name: docs
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      #the package itself is not installed: mkdocstrings reads the source statically and the
+      #notebooks are rendered, not executed
+      #mkdocs < 2: MkDocs 2.0 removes the plugin system the site relies on
+      - run: pip install "mkdocs>=1.6,<2" mkdocs-material "mkdocstrings[python]" mkdocs-jupyter
+      - run: mkdocs gh-deploy --force

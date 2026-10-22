@@ -1,0 +1,99 @@
+site_name: CMBLensing.py
+site_description: JAX port of CMBLensing.jl - CMB lensing simulation, MAP reconstruction and LCDM sampling
+site_url: https://zaneblood1.github.io/CMBLensing.py/
+repo_url: https://github.com/zaneblood1/CMBLensing.py
+repo_name: zaneblood1/CMBLensing.py
+edit_uri: edit/master/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - The CAMB Grid: getting-started/camb-grid.md
+      - HPC Setup: getting-started/hpc-setup.md
+  - Core concepts:
+      - Fields and Operators: concepts/fields.md
+      - Simulating Data: concepts/load-sim.md
+      - MAP Estimation: concepts/map-joint.md
+      - LCDM Sampling: concepts/sample-joint.md
+  - Tutorials:
+      - MAP Joint: map_joint_tutorial.ipynb
+      - Sample Joint: sample_joint_tutorial.ipynb
+  - Pipelines:
+      - Building the CAMB Grid: pipelines/camb-grid.md
+      - LCDM Sampling on the HPC: pipelines/lcdm-chains.md
+      - MAP Joint Phi Noise: pipelines/map-joint-phi-noise.md
+      - Sampler Phi Noise: pipelines/sampler-phi-noise.md
+      - Delensed Covariances: pipelines/delensed-covariance.md
+      - Chain Analysis: pipelines/chain-analysis.md
+  - Fisher Forecast: fisher-forecast.md
+  - Testing: testing.md
+
+plugins:
+  - search
+  - mkdocs-jupyter:
+      #the notebooks need real compute (and the sampler the 8 GB grid), so they are rendered
+      #with the outputs saved in them, never executed on the build machine
+      execute: false
+      include_source: true
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            #the docstrings are written for people, not parsers (e.g. "nside, theta_pix: ..."
+            #documents three arguments on one line), so do not warn about them
+            docstring_options:
+              warn_unknown_params: false
+              warn_missing_types: false
+            show_source: true
+            show_root_heading: true
+            show_signature_annotations: false
+            separate_signature: true
+            heading_level: 2
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js

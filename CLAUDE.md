@@ -68,9 +68,13 @@ python -m cmb_lensing.sampler_phi_noise --nside 64 --theta_pix 5 --n_maps 4 --n_
 # Per-mode map_joint N_phi at GROUND_TRUTH (get_map_joint_phi_noise/)
 bash get_map_joint_phi_noise.sh                                # one job per seed
 python merge_map_joint_phi_noise.py --noise_dir <scp'd out_dir>  # -> map_joint_phi_noise.npz ("nphi")
+
+# Docs site (MkDocs Material; pages in docs/, nav in mkdocs.yml; pip install -e ".[docs]")
+mkdocs serve                 # local preview at http://127.0.0.1:8000
+mkdocs build --strict        # what to check before pushing; notebooks are rendered, never executed
 ```
 
-No linter or formatter is configured. No CI pipeline exists.
+No linter or formatter is configured. The only CI is `.github/workflows/docs.yml`, which runs `mkdocs gh-deploy` on every push to master. MkDocs is pinned `< 2` (2.0 drops the plugin system). Docs pages are a user-facing digest of this file; keep them in step when a pipeline's commands or outputs change.
 
 ## Repository Layout
 
