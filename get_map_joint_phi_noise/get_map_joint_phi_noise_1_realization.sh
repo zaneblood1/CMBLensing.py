@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=00:20:00 #MEASURED ~2 min for one realization at nside 128 / 2.5' (load_sim +
+#SBATCH --time=00:30:00 #MEASURED ~2 min for one realization at nside 128 / 2.5' (load_sim +
 #map_joint), and map_joint scales roughly with the pixel count. This is a wide margin for a
 #slower node. Keep it short - 100 short jobs backfill far better than 100 long ones
 #SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1

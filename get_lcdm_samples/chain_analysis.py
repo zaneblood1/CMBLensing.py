@@ -40,6 +40,8 @@ T_BLOCKS = {"camb_delensed": "CAMB delensed T",
 FORECAST_CAMB_LMAX = 4000
 BUFFER = 1e-4
 GRID_SIZE = 1000
+#the multiplicative-mean plot's x range ends where the pdf drops below this fraction of its peak
+PDF_XLIM_THRESHOLD = 1e-3
 
 #thin each chain by its integrated autocorrelation time before the per-parameter plots
 SHOULD_THIN = True
@@ -142,6 +144,12 @@ def plot_marginals(chains, output_path, ground_truth, param_name):
     plt.close()
     return
 
+def significant_digits(value):
+    #digits of the shortest decimal that round-trips the float, leading and trailing zeros dropped
+    digits = np.format_float_positional(abs(value), trim = "-").replace(".", "")
+    digits = digits.lstrip("0").rstrip("0")
+    return max(1, len(digits))
+
 def plot_multiplicative_mean(chains, avg_sigma_single, output_path, ground_truth, param_name):
 
     #the normalized product of the per-map densities (a gaussian_kde for each chain)
@@ -164,23 +172,33 @@ def plot_multiplicative_mean(chains, avg_sigma_single, output_path, ground_truth
     multiplicative_std = np.sqrt(np.sum(dx[0] * multiplicative_pdf * (grid - multiplicative_mean)**2))
 
     plt.figure(figsize=(13, 5))
-    plt.plot(grid, multiplicative_pdf, label="Multiplicative Mean PDF", color = "blue")
+    plt.plot(grid, multiplicative_pdf, label="Combined Product Distribution", color = "blue")
     plt.axvline(ground_truth, label = f"Ground Truth = {ground_truth}", color = "green")
 
     #multiplicative estimators
-    plt.axvline(multiplicative_mode, label = f"Mult. Mode = {round(multiplicative_mode, 7)}", color = "orange")
-    plt.axvline(multiplicative_mean, label = f"Mult. Mean = {round(multiplicative_mean, 7)}", color = "pink")
+    #mode and mean printed to the fewer significant digits of themselves and the ground truth
+    truth_digits = significant_digits(ground_truth)
+    mode_digits = min(significant_digits(multiplicative_mode), truth_digits)
+    mean_digits = min(significant_digits(multiplicative_mean), truth_digits)
+    plt.axvline(multiplicative_mode, label = f"Mult. Mode = {multiplicative_mode:.{mode_digits}g}", color = "orange")
+    plt.axvline(multiplicative_mean, label = f"Mult. Mean = {multiplicative_mean:.{mean_digits}g}", color = "pink")
     plt.axvline(multiplicative_mean + multiplicative_std,
-                label = f"+/- 1 Mult. Std = {round(multiplicative_std, 7)}", color = "grey")
+                label = f"+/- 1 Mult. Std = {multiplicative_std:.2g}", color = "grey")
     plt.axvline(multiplicative_mean - multiplicative_std, color = "grey")
 
     product_z_score = (ground_truth - multiplicative_mean)/multiplicative_std
-    plt.plot([], [], label=f"Product Z-score = {product_z_score}")
+    plt.plot([], [], label = f"Product Z-score = {product_z_score:.2f}")
 
     std_err_z_score = (ground_truth - multiplicative_mean)/avg_sigma_single
-    plt.plot([], [], label=f"Std. Err. Z-score = {std_err_z_score}")
+    plt.plot([], [], label = f"Std. Err. Z-score = {std_err_z_score:.2f}")
 
-    plt.xlabel("Value"); plt.ylabel("Density")
+    #clip the x range to where the pdf is above a fraction of its peak (ground truth kept in view)
+    above = grid[multiplicative_pdf > PDF_XLIM_THRESHOLD * multiplicative_pdf.max()]
+    x_low = min(above.min(), ground_truth)
+    x_high = max(above.max(), ground_truth)
+    plt.xlim(x_low, x_high)
+
+    plt.xlabel(f"{param_name} Value"); plt.ylabel("Density")
     plt.title(f"{param_name} Combined Product Distribution")
     plt.legend(fontsize=7.5); plt.grid(alpha=0.2)
     plt.savefig(output_path + f"{param_name.lower()}_mean_distributions.png", dpi=150, bbox_inches="tight")
@@ -494,11 +512,10 @@ def forecast_title(nphi_source, t_block):
     return f"N_phi: {nphi_source}, T block: {T_BLOCKS[t_block]}"
 
 
-def ratio_text(numerator, denominator):
-    """numerator / denominator to 3 decimals, or inf when the denominator is not positive."""
-    if denominator <= 0:
-        return "$\\infty$"
-    return f"{numerator / denominator:.3f}"
+#the data each pol setting of the sampler sees, for the triangle plots' subtitle
+POL_DESCRIPTIONS = {"I": "Temperature Data",
+                    "P": "Polarization Data",
+                    "IP": "Temperature + Polarization Data"}
 
 def format_sigma(symbol, sigma, error = None):
     text = f"$\\sigma_{{{symbol}}}$ = {sigma:.3e}"
@@ -575,9 +592,8 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
     Everything is centred on the MEASURED means. A forecast is a curvature, not a location
     - it has a shape but no centre - so a common centre makes the plot a direct read of
     width and orientation, which is the only thing these matrices can be compared on. Each
-    diagonal panel is annotated with sigma_measured +/- its error, sigma_forecast and the
-    ratio sigma_measured / sigma_forecast with the ratios at sigma_measured +/- its error
-    (max / min): above 1 means the sampler is doing worse than the forecast says the data
+    diagonal panel is annotated with sigma_measured +/- its error, sigma_fisher and the
+    ratio sigma_measured / sigma_fisher: above 1 means the sampler is doing worse than the forecast says the data
     allows, near 1 means it is saturating it, below 1 means it is extracting information the
     forecast does not model (or the chain has not converged). Each vacant upper-triangle cell
     (row a, column b) reports the degeneracy angle of the lower panel it mirrors (row b,
@@ -598,8 +614,6 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
     measured_cov_sigma = np.asarray(measured_cov_sigma)
     means = np.asarray(means)
     n = len(param_names)
-    short, description = forecast_labels(nphi_source)
-    description += f", {T_BLOCKS[t_block]}"
     forecast_label = forecast_file_label(nphi_source, t_block)
 
     #(covariance, colour, filled, linestyle) - the central contours filled, the measured
@@ -619,9 +633,9 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
     #annotation line spacing in axes fraction: one text line over the panel's height (the
     #axes are forced square below, and constrained layout leaves them ~80% of their cell)
     line_step = 1.35 * ANNOTATION_FONTSIZE / (0.8 * PANEL_INCHES * 72)
-    #the diagonal's five-line text block sits above the Gaussians; raise the y limit so the
+    #the diagonal's three-line text block sits above the Gaussians; raise the y limit so the
     #unit-height curves stay entirely below it
-    text_fraction = 0.04 + 5 * line_step
+    text_fraction = 0.04 + 3 * line_step
     diag_ylim = 1.05 / (1 - text_fraction)
 
     print(f"Degeneracy angles vs {forecast_label}, degrees (major axis from +x as drawn, panel "
@@ -648,12 +662,12 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
                 #forecast ellipse aligns with an axis, so an exactly axis-aligned one gets no
                 #ratio at all
                 ratio = f"{measured_angle / angle:+.2f}" if angle != 0 else "undefined"
-                lines.append((f"{short}  {format_angle(angle)}   meas/{short} = {ratio}",
+                lines.append((f"fisher  {format_angle(angle)}   measured/fisher = {ratio}",
                               FORECAST_COLOUR))
                 difference = wrap_angle_difference(measured_angle - angle)
                 print(f"    x {param_names[i]}, y {param_names[j]}: measured "
                       f"{measured_angle:+.2f} +/- {measured_error:.2f}  {forecast_label} "
-                      f"{angle:+.2f} (meas - {forecast_label} = {difference:+.2f}, "
+                      f"{angle:+.2f} (measured - {forecast_label} = {difference:+.2f}, "
                       f"{difference / measured_error:+.2f} sigma)")
                 y_top = 0.5 + 0.5 * len(lines) * line_step
                 stacked_text(ax, lines, 0.5, y_top, line_step, ha = "center")
@@ -692,15 +706,14 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
             if i == j:
                 #sigma_measured +/- its error, the forecast's sigma and the ratio, in this
                 #parameter's own units
-                sigma_meas = np.sqrt(measured[i, i])
-                error_meas = measured_sigma_err[i]
-                sigma_fore = np.sqrt(forecast[i, i])
-                lines = [(format_sigma("meas", sigma_meas, error_meas), MEASURED_COLOUR),
-                         (format_sigma(short, sigma_fore), FORECAST_COLOUR),
-                         (f"$\\sigma_{{meas}}/\\sigma_{{{short}}}$ = "
-                          f"{sigma_meas / sigma_fore:.3f}", "black"),
-                         (f"max = {ratio_text(sigma_meas + error_meas, sigma_fore)}", "black"),
-                         (f"min = {ratio_text(sigma_meas - error_meas, sigma_fore)}", "black")]
+                sigma_measured = np.sqrt(measured[i, i])
+                error_measured = measured_sigma_err[i]
+                sigma_fisher = np.sqrt(forecast[i, i])
+                lines = [(format_sigma("\\rm measured", sigma_measured, error_measured),
+                          MEASURED_COLOUR),
+                         (format_sigma("\\rm fisher", sigma_fisher), FORECAST_COLOUR),
+                         (f"$\\sigma_{{\\rm measured}}/\\sigma_{{\\rm fisher}}$ = "
+                          f"{sigma_measured / sigma_fisher:.3f}", "black")]
                 stacked_text(ax, lines, 0.03, 0.97, line_step)
                 ax.set_ylim(0, diag_ylim)
                 ax.set_yticks([])
@@ -719,22 +732,20 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
             elif i != j:
                 ax.set_yticklabels([])
 
-    contours = ", ".join(f"{k}$\\sigma$" for k in sorted(sigmas))
     #the filled contours get a filled swatch, the dashed measured +/- limits a dashed line
     def filled_handle(colour, linestyle, label):
         return Patch(facecolor = to_rgba(colour, FILL_ALPHA), edgecolor = colour,
                      ls = linestyle, lw = 1.6, label = label)
-    handles = [filled_handle(MEASURED_COLOUR, "-", "measured (chains)"),
+    handles = [filled_handle(MEASURED_COLOUR, "-", "Sampler Data"),
                Line2D([0], [0], color = MEASURED_COLOUR, lw = 2, ls = "--",
-                      label = "measured $\\pm$ 1 jackknife"),
-               filled_handle(FORECAST_COLOUR, "-", f"Fisher forecast: {description}")]
+                      label = "Sampler Data $\\pm$ 1 Jackknife"),
+               filled_handle(FORECAST_COLOUR, "-", "Fisher")]
     #the upper triangle holds the degeneracy angles, so the legend goes below the grid, where
     #constrained layout reserves room for it (above, it collides with the suptitle)
     fig.legend(handles = handles, loc = "outside lower center", fontsize = 11, ncol = 3)
-    title = (f"Posterior vs Fisher Forecast ({forecast_title(nphi_source, t_block)}; "
-             f"Gaussian approximation, {contours})")
+    title = "Sampler Data v.s. Fisher Forecast"
     if None not in (nside, theta_pix, noise, pol):
-        title += (f"\n{pol}, {noise:g} $\\mu$K-arcmin, {theta_pix:g}' pixels, "
+        title += (f"\n{POL_DESCRIPTIONS[pol]}, {noise:g}$\\mu$K-arcmin, {theta_pix:g}' pixels, "
                   f"{nside}$^2$ pixels")
     fig.suptitle(title, fontsize = 13)
     plt.savefig(plot_dir + f"triangle_plot_{forecast_label}.png", dpi = 150,
@@ -1092,14 +1103,14 @@ if __name__ == "__main__":
     #sample_lcdm.sh
     nside = 128
     theta_pix = 2.5
-    noise = 2.5
+    noise = 5
     #"I", "P" or "IP", as pol in sample_lcdm.sh; only labels the triangle plots
     pol = "I"
     num_maps = 10
     num_chains = 5
-    default_burn_in = 1000
+    default_burn_in = 600
     map_pre_factor = 234567
-    file_name = "omch2_logA_theta_MC_100_joint_inference_09_02_26_low_noise"
+    file_name = "data_5uk"
 
     was_sampled = {}
     was_sampled["omch2"] = True
@@ -1113,10 +1124,10 @@ if __name__ == "__main__":
 
     #File paths to empirically generated phi noise matrices
     forecast_phi_noise = {
-        "map_joint": os.path.join(REPO_DIR, "get_map_joint_phi_noise",
-                                  "map_joint_phi_noise_output", "map_joint_phi_noise.npz"),
-        "sample_joint": os.path.join(REPO_DIR, "get_sampler_phi_noise",
-                                     "sampler_phi_noise_output", "sampler_phi_noise.npz"),
+        # "map_joint": os.path.join(REPO_DIR, "get_map_joint_phi_noise",
+        #                           "map_joint_phi_noise_output", "map_joint_phi_noise.npz"),
+        # "sample_joint": os.path.join(REPO_DIR, "get_sampler_phi_noise",
+        #                              "sampler_phi_noise_output", "sampler_phi_noise.npz"),
     }
 
     #File paths to empirically delensed temperature covariance matrices for a given phi noise matrix
@@ -1126,15 +1137,15 @@ if __name__ == "__main__":
         "qe_unlensed": os.path.join(covariance_data, "lower_qe_bound", 
                                     f"delensed_covariance_output_{noise}uk_lower_qe_bound",
                                     "delensed_covariance.npz"),
-        "qe_delensed": os.path.join(covariance_data, "upper_qe_bound",
-                                    f"delensed_covariance_output_{noise}uk_upper_qe_bound",
-                                    "delensed_covariance.npz"),
-        "map_joint": os.path.join(covariance_data, "empirical_map_joint_noise",
-                                  f"delensed_covariance_output_{noise}uk_map_joint",
-                                  "delensed_covariance.npz"),
-        "sample_joint": os.path.join(covariance_data, "empirical_sample_joint_noise",
-                                     f"delensed_covariance_output_{noise}uk_sample_joint",
-                                     "delensed_covariance.npz"),
+        # "qe_delensed": os.path.join(covariance_data, "upper_qe_bound",
+        #                             f"delensed_covariance_output_{noise}uk_upper_qe_bound",
+        #                             "delensed_covariance.npz"),
+        # "map_joint": os.path.join(covariance_data, "empirical_map_joint_noise",
+        #                           f"delensed_covariance_output_{noise}uk_map_joint",
+        #                           "delensed_covariance.npz"),
+        # "sample_joint": os.path.join(covariance_data, "empirical_sample_joint_noise",
+        #                              f"delensed_covariance_output_{noise}uk_sample_joint",
+        #                              "delensed_covariance.npz"),
     }
 
     main(file_name, num_maps, num_chains, map_pre_factor,

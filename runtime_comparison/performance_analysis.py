@@ -2,6 +2,7 @@ import os
 import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from cmb_lensing.statistics import primal_cross_correlation
 
 POLARITIES = ["I", "P", "IP"]
@@ -10,11 +11,12 @@ SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 TRIALS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 THETA_PIX = 2.5
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-RESULTS_DIR = os.path.join(BASE_DIR, "performance_results")
+#BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = "/media/zane-blood/KINGSTON/"
+RESULTS_DIR = os.path.join(BASE_DIR, "performance_results_3")
 JULIA_DIR = os.path.join(RESULTS_DIR, "julia_results")
 PYTHON_DIR = os.path.join(RESULTS_DIR, "python_results")
-ANALYSIS_DIR = os.path.join(RESULTS_DIR, "performance_analysis")
+ANALYSIS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "performance_analysis")
 
 NUM_SEEDS = len(SEEDS)
 NUM_TRIALS = len(TRIALS)
@@ -247,6 +249,14 @@ def average_cross_correlation(polarity, available_map_sizes):
     return components, js_jp_results, js_pp_results, pp_jp_results
 
 
+#Nside doubles per step, so a log2 axis spaces the map sizes evenly
+def set_map_size_axis(ax, map_sizes):
+    ax.set_xscale("log", base = 2)
+    ax.set_xticks(map_sizes)
+    ax.set_xticklabels([str(map_size) for map_size in map_sizes])
+    ax.tick_params(axis = "x", which = "minor", bottom = False, labelbottom = False)
+
+
 # --- Cached or uncached run time vs map size ---
 def plot_run_times(cached = True):
 
@@ -271,7 +281,7 @@ def plot_run_times(cached = True):
         ax.set_yscale('log')
         ax.set_title(f"{label} Run Time vs Map Size — Polarity: {polarity}")
         ax.legend()
-        ax.set_xticks(available_map_sizes)
+        set_map_size_axis(ax, available_map_sizes)
         fig.savefig(os.path.join(out_dir, f"{label.lower()}_run_time_{polarity}.png"), dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -318,6 +328,12 @@ def save_run_time_table(cached = True):
 
 
 # --- Fractional difference (sim vs prediction) vs map size ---
+#color marks the language, linestyle the field, so Julia and Python curves of one field share a linestyle
+LANGUAGE_COLORS = {"Julia": "#9558B2", "Python": "#3776AB"}
+LANGUAGE_MARKERS = {"Julia": "o", "Python": "s"}
+COMPONENT_LINESTYLES = {"t_field": "-", "e_field": "--", "b_field": ":", "phi": "-."}
+
+
 def plot_fractional_difference():
     out_dir = os.path.join(ANALYSIS_DIR, "perc_diff_vs_map_size")
     os.makedirs(out_dir, exist_ok=True)
@@ -326,20 +342,39 @@ def plot_fractional_difference():
         available_map_sizes = get_available_map_sizes(polarity)
         components, julia_means, julia_stds, python_means, python_stds = average_fractional_difference(polarity, available_map_sizes)
         x = np.array(available_map_sizes)
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize = (8, 5))
         for c in components:
-            jm, js = np.array(julia_means[c]), np.array(julia_stds[c])
-            pm, ps = np.array(python_means[c]), np.array(python_stds[c])
-            ax.plot(x, jm, "o-", label=f"Julia Pred vs Sim ({c})")
-            ax.fill_between(x, jm - js, jm + js, alpha=0.3)
-            ax.plot(x, pm, "o-", label=f"Python Pred vs Sim ({c})")
-            ax.fill_between(x, pm - ps, pm + ps, alpha=0.3)
+            ls = COMPONENT_LINESTYLES[c]
+            for language, means, stds in [("Julia", julia_means, julia_stds), ("Python", python_means, python_stds)]:
+                m, s = np.array(means[c]), np.array(stds[c])
+                color = LANGUAGE_COLORS[language]
+                #hollow Python markers so they stay visible on top of the Julia ones
+                ax.plot(x, m, linestyle = ls, marker = LANGUAGE_MARKERS[language], color = color,
+                        markerfacecolor = color if language == "Julia" else "none", markersize = 6, linewidth = 1.6)
+                ax.fill_between(x, m - s, m + s, color = color, alpha = 0.12, linewidth = 0)
         ax.set_xlabel("Map Size (Nside)")
-        ax.set_ylabel("Average Fractional Difference")
-        ax.set_title(f"Fractional Difference vs Map Size — Polarity: {polarity}")
-        ax.legend()
-        ax.set_xticks(available_map_sizes)
-        fig.savefig(os.path.join(out_dir, f"frac_diff_sim_vs_pred_{polarity}.png"), dpi=150, bbox_inches="tight")
+        ax.set_ylabel("Average Fractional Difference  $\\|$Sim $-$ Pred$\\|$ / $\\|$Sim$\\|$")
+        ax.set_title(f"Fractional Difference (Prediction vs Julia Sim) — Polarity: {polarity}")
+        set_map_size_axis(ax, available_map_sizes)
+        ax.grid(True, alpha = 0.3)
+
+        #two legends outside the axes: one for the language (color), one for the field (linestyle)
+        language_handles = []
+        for language in ["Julia", "Python"]:
+            color = LANGUAGE_COLORS[language]
+            language_handles.append(Line2D([], [], color = color, marker = LANGUAGE_MARKERS[language],
+                                           markerfacecolor = color if language == "Julia" else "none",
+                                           label = f"{language} Prediction"))
+        component_handles = []
+        for c in components:
+            component_handles.append(Line2D([], [], color = "0.3", linestyle = COMPONENT_LINESTYLES[c], label = COMPONENT_LABELS[c]))
+        language_legend = ax.legend(handles = language_handles, title = "Prediction", loc = "upper left", bbox_to_anchor = (1.02, 1.0), frameon = False)
+        ax.add_artist(language_legend)
+        field_legend = ax.legend(handles = component_handles, title = "Field", loc = "upper left", bbox_to_anchor = (1.02, 0.7), frameon = False, handlelength = 3)
+
+        #the tight bbox misses a legend added with add_artist unless it is listed here
+        fig.savefig(os.path.join(out_dir, f"frac_diff_sim_vs_pred_{polarity}.png"), dpi=150, bbox_inches="tight",
+                    bbox_extra_artists = [language_legend, field_legend])
         plt.close(fig)
 
 
@@ -361,7 +396,7 @@ def plot_julia_vs_python_diff():
         ax.set_ylabel("Average Fractional Difference")
         ax.set_title(f"Julia vs Python Prediction Difference — Polarity: {polarity}")
         ax.legend()
-        ax.set_xticks(available_map_sizes)
+        set_map_size_axis(ax, available_map_sizes)
         fig.savefig(os.path.join(out_dir, f"frac_diff_julia_vs_python_{polarity}.png"), dpi=150, bbox_inches="tight")
         plt.close(fig)
 
@@ -424,11 +459,11 @@ def plot_cross_correlations():
 
 
 if __name__ == "__main__":
-    plot_run_times(cached = True)
-    plot_run_times(cached = False)
-    save_run_time_table(cached = True)
-    save_run_time_table(cached = False)
+    #plot_run_times(cached = True)
+    #plot_run_times(cached = False)
+    #save_run_time_table(cached = True)
+    #save_run_time_table(cached = False)
     plot_fractional_difference()
-    plot_julia_vs_python_diff()
-    plot_cross_correlations()
+    #plot_julia_vs_python_diff()
+    #plot_cross_correlations()
     print("Analysis complete. Plots saved to:", ANALYSIS_DIR)

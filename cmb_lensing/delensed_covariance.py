@@ -55,7 +55,6 @@ from cmb_lensing.simulate import load_sim, covar_matrix_from_cls
 from cmb_lensing.constants import PARAM_ORDER, PARAM_SIGMA, DEFAULT_ELL_CUTOFF
 from cmb_lensing.fisher_forecast import (camb_cls_at_params, load_sim_cosmology,
                                          qe_reconstruction, check_box,
-                                         _check_centre, QE_FILTERS, QE_RESPONSE_SOURCES,
                                          DEFAULT_QE_RESPONSE, PARAM_RTOL)
 
 
@@ -198,7 +197,6 @@ def load_stored_nphi(path, nside, theta_pix, noise_level, l_knee, param_ground):
     if STORED_NPHI_KEY not in stored.files:
         raise ValueError(f"{path} has no `{STORED_NPHI_KEY}` matrix")
     check_box(stored, nside, theta_pix, noise_level, l_knee, path = path, what = "phi noise")
-    _check_centre(stored, param_ground, path, "phi noise")
     nphi = np.asarray(stored[STORED_NPHI_KEY], dtype = float)
     if nphi.shape != (nside, nside // 2 + 1):
         raise ValueError(f"{path}: `{STORED_NPHI_KEY}` has shape {nphi.shape}, expected the "
