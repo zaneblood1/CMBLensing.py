@@ -352,8 +352,8 @@ def plot_fractional_difference():
                 ax.plot(x, m, linestyle = ls, marker = LANGUAGE_MARKERS[language], color = color,
                         markerfacecolor = color if language == "Julia" else "none", markersize = 6, linewidth = 1.6)
                 ax.fill_between(x, m - s, m + s, color = color, alpha = 0.12, linewidth = 0)
-        ax.set_xlabel("Map Size (Nside)")
-        ax.set_ylabel("Average Fractional Difference  $\\|$Sim $-$ Pred$\\|$ / $\\|$Sim$\\|$")
+        ax.set_xlabel("Map Size (Pixels Per Side)")
+        ax.set_ylabel("Average Fractional Difference  $\\|$Sim $-$ Predict$\\|$ / $\\|$Sim$\\|$")
         ax.set_title(f"Fractional Difference (Prediction vs Julia Sim) — Polarity: {polarity}")
         set_map_size_axis(ax, available_map_sizes)
         ax.grid(True, alpha = 0.3)

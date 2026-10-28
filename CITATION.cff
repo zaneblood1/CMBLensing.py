@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the software and the Resnick High Performance Computing Center."
+references:
+  - type: misc
+    title: "Caltech Resnick High Performance Computing Center"
+    institution:
+      name: "California Institute of Technology"
+    url: "https://www.hpc.caltech.edu"
+    year: 2026
