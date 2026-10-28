@@ -401,15 +401,14 @@ def plot_annotated_heat_map(matrix, names, title, file_name, path):
     return
 
 def measured_errors(per_map_cov_mats):
-    """(cov_err, sigma_err, leave_one_out): the delete-one-MAP jackknife of the map-averaged
-    covariance.
+    """(cov_err, sigma_err): the delete-one-MAP jackknife of the map-averaged covariance.
 
-    With C_(m) the average leaving out map m (`leave_one_out`, the C_(m) stack), the widths
-    are recomputed as sigma_(m) = sqrt(C_(m),ii) and
+    With C_(m) the average leaving out map m, the widths are recomputed as
+    sigma_(m) = sqrt(C_(m),ii) and
         err_sigma^2 = (M - 1) / M * sum_m (sigma_(m) - mean_m sigma_(m))^2 ,
     the jackknife of the widths themselves (no linear propagation from C). err_C is the same
-    jackknife applied to each covariance element, for the dashed +/- contours, and
-    triangle_plot jackknifes the degeneracy angles over `leave_one_out`.
+    jackknife applied to each covariance element, for the dashed +/- contours and the error
+    on the off-diagonal measured / forecast covariance ratios.
     """
     num_maps = len(per_map_cov_mats)
     total = np.sum(per_map_cov_mats, axis = 0)
@@ -421,7 +420,7 @@ def measured_errors(per_map_cov_mats):
     sigmas_loo = np.sqrt(np.array([np.diag(cov_mat) for cov_mat in leave_one_out]))
     sigma_err = np.sqrt(factor * np.sum((sigmas_loo - np.mean(sigmas_loo, axis = 0))**2,
                                         axis = 0))
-    return cov_err, sigma_err, leave_one_out
+    return cov_err, sigma_err
 
 def plot_covariance_and_correlation(cov_mat, param_names, label, plot_dir, title = None):
     """covariance_matrix_<label>.png and correlation_matrix_<label>.png (every entry printed
@@ -449,11 +448,10 @@ def get_avg_covariance_matrix(raw_chains):
     of those means to the diagonal. The average is a single-realization posterior, which is what a
     Fisher forecast predicts.
 
-    Returns (avg_cov_mat, param_names, cov_err, leave_one_out, sigma_err), the last three
-    from measured_errors: cov_err the element-wise error of the averaged covariance (the
-    dashed contours), sigma_err the error of each width sqrt(C_ii), and leave_one_out the
-    delete-one-map stack of the averaged covariance, which triangle_plot turns into the
-    error on the measured degeneracy angles.
+    Returns (avg_cov_mat, param_names, cov_err, sigma_err), the last two from
+    measured_errors: cov_err the element-wise error of the averaged covariance (the dashed
+    contours and the off-diagonal ratio errors) and sigma_err the error of each width
+    sqrt(C_ii).
     """
     param_names = list(raw_chains.keys())
     num_maps = min(len(raw_chains[name]) for name in param_names)
@@ -467,7 +465,7 @@ def get_avg_covariance_matrix(raw_chains):
 
     per_map_cov_mats = np.array(per_map_cov_mats)
     avg_cov_mat = np.mean(per_map_cov_mats, axis = 0)
-    cov_err, sigma_err, leave_one_out = measured_errors(per_map_cov_mats)
+    cov_err, sigma_err = measured_errors(per_map_cov_mats)
     print(f"Averaged {num_maps} covariance matrices, one per map")
     print(f"Jackknife error (over maps) of the averaged covariance elements, "
           f"err_covar / |covar|:")
@@ -476,18 +474,29 @@ def get_avg_covariance_matrix(raw_chains):
           f"+/- {sigma_err} (jackknife)")
     print("Average Correlation matrix (rows / columns ordered as", param_names, ")")
     print(correlation_from_covariance(avg_cov_mat))
-    return avg_cov_mat, param_names, cov_err, leave_one_out, sigma_err
+    return avg_cov_mat, param_names, cov_err, sigma_err
 
 #Contour styling for the triangle plots, one per forecast: the chains always blue, the
 #forecast always red, each contour filled translucently under an opaque outline so the
 #overlap stays legible
-MEASURED_COLOUR = "tab:blue"
-FORECAST_COLOUR = "tab:red"
+#dark shades, so the coloured annotation text reads clearly on white
+MEASURED_COLOUR = "blue"
+FORECAST_COLOUR = "red"
 #face alpha of the filled contours / Gaussians
 FILL_ALPHA = 0.18
-#edge length of one triangle-plot panel, in inches
-PANEL_INCHES = 3.6
-ANNOTATION_FONTSIZE = 8.5
+#size of one triangle-plot panel, in inches (square panels, so the ellipses are not
+#stretched horizontally)
+PANEL_WIDTH = 3.3
+PANEL_HEIGHT = 3.3
+ANNOTATION_FONTSIZE = 12
+LABEL_FONTSIZE = 14
+TICK_FONTSIZE = 10
+#the parameters' symbols in the triangle plots (mathtext, without the enclosing $)
+PARAM_SYMBOLS = {"theta_MC_100": "100*\\theta_{\\rm MC}",
+                 "logA": "\\ln(A_s*10^{\\rm 10})",
+                 "ns": "n_s",
+                 "ombh2": "\\Omega_b h^2",
+                 "omch2": "\\Omega_c h^2"}
 #per forecast (fisher_forecast's nphi_source): the short symbol in the annotations and the
 #legend / title description
 FORECAST_LABELS = {
@@ -517,67 +526,36 @@ POL_DESCRIPTIONS = {"I": "Temperature Data",
                     "P": "Polarization Data",
                     "IP": "Temperature + Polarization Data"}
 
-def format_sigma(symbol, sigma, error = None):
-    text = f"$\\sigma_{{{symbol}}}$ = {sigma:.3e}"
-    if error is not None:
-        text += f" $\\pm$ {error:.1e}"
-    return text
+def param_symbol(name):
+    """A parameter's mathtext symbol, enclosed in $, or its plain name if it has none."""
+    if name in PARAM_SYMBOLS:
+        return f"${PARAM_SYMBOLS[name]}$"
+    return name
 
-def degeneracy_angle(block, scales):
-    """Major-axis angle in degrees, in (-90, 90], of a 2x2 (x, y) covariance block.
+def format_scaled(value, exponent, error = None):
+    """value (+/- error) as one mathtext mantissa times 10^exponent, e.g.
+    (3.268 +/- 0.043) x 10^-3, so a measured and a forecast number written at the same
+    exponent can be read against each other digit by digit."""
+    scale = 10.0**exponent
+    if error is None:
+        return f"${value / scale:.3f}\\times 10^{{{exponent}}}$"
+    return f"$({value / scale:.3f} \\pm {error / scale:.3f})\\times 10^{{{exponent}}}$"
 
-    The angle is measured counter-clockwise from +x AFTER dividing each axis by `scales`.
-    Any such angle depends on the axis scaling; triangle_plot passes each parameter's panel
-    half-width (the panels are square), so the number is the angle the ellipse is DRAWN at
-    and every matrix in a pair shares one scale. Caveat: the panel width follows the widest
-    matrix plotted, so adding a broader forecast changes every angle in that panel; compare
-    angles within one plot, and use the correlation coefficient for a scale-free number.
-
-    Scales that were tried and rejected: raw units and the fixed PARAM_SIGMA both put most
-    pairs at ~0 or ~90 degrees (PARAM_SIGMA is ~40x the posterior width in theta_MC_100 but
-    ~2x in omch2); each matrix's own sigmas give a unit-diagonal block whose major axis is
-    always exactly +/-45 degrees, i.e. only the sign of the correlation.
-    """
-    scaled = np.asarray(block) / np.outer(scales, scales)
-    return np.degrees(0.5 * np.arctan2(2 * scaled[0, 1], scaled[0, 0] - scaled[1, 1]))
-
-def wrap_angle_difference(difference):
-    """An angle difference in degrees folded into (-90, 90] - an axis has no direction, so a
-    major axis at +89 and one at -89 are 2 degrees apart, not 178."""
-    return -((-np.asarray(difference) + 90) % 180 - 90)
-
-def degeneracy_angle_error(leave_one_out, idx, scales, reference_angle):
-    """Delete-one jackknife error, in degrees, of degeneracy_angle on the (idx[0], idx[1]) pair.
-
-    `leave_one_out` is the stack of leave-one-map-out covariance matrices of the chains.
-    Each is turned into an angle at the SAME `scales` as the central value, so this is the
-    error of the angle as drawn with the panel scaling held fixed (the scaling's own
-    uncertainty is not included). The deviations are taken relative to `reference_angle` and
-    wrapped, so a pair sitting near +/-90 degrees does not pick up a spurious 180-degree
-    spread.
-    """
-    angles = np.array([degeneracy_angle(cov_mat[np.ix_(idx, idx)], scales)
-                       for cov_mat in leave_one_out])
-    deviations = wrap_angle_difference(angles - reference_angle)
-    n = len(deviations)
-    return np.sqrt((n - 1) / n * np.sum((deviations - np.mean(deviations))**2))
-
-def format_angle(angle, error = None):
-    text = f"{angle:+.1f}"
-    if error is not None:
-        text += f" $\\pm$ {error:.1f}"
-    return text + "$^\\circ$"
+def decimal_exponent(value):
+    return int(np.floor(np.log10(abs(value))))
 
 def stacked_text(ax, lines, x, y_top, line_step, ha = "left"):
-    """Write (text, colour) lines downward from y_top in axes coordinates."""
+    """Write (text, colour) lines downward from y_top in axes coordinates. The text is kept
+    out of constrained layout: it is placed inside the cells, and counting it as a
+    decoration collapses the axes."""
     for k, (text, colour) in enumerate(lines):
         ax.text(x, y_top - k * line_step, text, color = colour, transform = ax.transAxes,
-                fontsize = ANNOTATION_FONTSIZE, ha = ha, va = "top")
+                fontsize = ANNOTATION_FONTSIZE, ha = ha, va = "top", in_layout = False)
     return
 
 
 def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, param_names, means,
-                  measured_cov_sigma, measured_leave_one_out, measured_sigma_err, plot_dir,
+                  measured_cov_sigma, measured_sigma_err, plot_dir,
                   sigmas = (1,), nside = None, theta_pix = None, noise = None, pol = None):
     """Triangle plot of the sampled posterior (blue) against ONE Fisher forecast (red), the
     one with N_phi from `nphi_source` and the `t_block` temperature block (a T_BLOCKS key):
@@ -596,18 +574,17 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
     ratio sigma_measured / sigma_fisher: above 1 means the sampler is doing worse than the forecast says the data
     allows, near 1 means it is saturating it, below 1 means it is extracting information the
     forecast does not model (or the chain has not converged). Each vacant upper-triangle cell
-    (row a, column b) reports the degeneracy angle of the lower panel it mirrors (row b,
-    column a) for both, as drawn - see degeneracy_angle for the scaling and its caveat.
+    (row a, column b) reports the off-diagonal covariance C_ab of the lower panel it mirrors
+    (row b, column a), measured and forecast, and their ratio C_measured / C_fisher. Unlike
+    a degeneracy angle this does not depend on how the axes are scaled.
 
     `forecast_cov_mat` MUST already be permuted into param_names order - see
     get_forecasted_covariance, which does it. The forecast is exact given its model and
     carries no error bars; only the measured posterior does, all from the delete-one-map
     jackknife of measured_errors: `measured_cov_sigma` (the element-wise error of the
     averaged covariance) adds dashed (unfilled) blue lower / upper limits at
-    measured_cov_mat -/+ measured_cov_sigma, `measured_sigma_err` is each width's error, and
-    `measured_leave_one_out` gives every measured degeneracy angle a +/- error
-    (degeneracy_angle_error), with the printed per-pair angles quoting the measured -
-    forecast difference in units of it.
+    measured_cov_mat -/+ measured_cov_sigma and is the error of every off-diagonal ratio,
+    and `measured_sigma_err` is each width's error and that of the width ratio.
     """
     measured = np.asarray(measured_cov_mat)
     forecast = np.asarray(forecast_cov_mat)
@@ -625,54 +602,49 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
 
     #pad the axes out past the widest requested contour of the WIDER matrix, so whichever
     #one is broader still fits
-    pad = max(sigmas) + 1
+    pad = max(sigmas) + 0.8
     widest = np.maximum(np.sqrt(np.diag(measured + measured_cov_sigma)),
                         np.sqrt(np.diag(forecast)))
     limits = [(means[i] - pad * widest[i], means[i] + pad * widest[i]) for i in range(n)]
 
-    #annotation line spacing in axes fraction: one text line over the panel's height (the
-    #axes are forced square below, and constrained layout leaves them ~80% of their cell)
-    line_step = 1.35 * ANNOTATION_FONTSIZE / (0.8 * PANEL_INCHES * 72)
+    #annotation line spacing in axes fraction: one text line over the panel's height
+    #(constrained layout leaves the axes ~80% of their cell; mathtext sub / superscripts
+    #make the lines taller than the font size)
+    line_step = 1.5 * ANNOTATION_FONTSIZE / (0.8 * PANEL_HEIGHT * 72)
     #the diagonal's three-line text block sits above the Gaussians; raise the y limit so the
     #unit-height curves stay entirely below it
     text_fraction = 0.04 + 3 * line_step
     diag_ylim = 1.05 / (1 - text_fraction)
 
-    print(f"Degeneracy angles vs {forecast_label}, degrees (major axis from +x as drawn, panel "
-          f"scales held fixed; measured +/- delete-one-map jackknife):")
-    fig, axes = plt.subplots(n, n, figsize = (PANEL_INCHES * n, PANEL_INCHES * n),
+    print(f"Off-diagonal covariances vs {forecast_label} (measured +/- delete-one-map "
+          f"jackknife):")
+    fig, axes = plt.subplots(n, n, figsize = (PANEL_WIDTH * n, PANEL_HEIGHT * n),
                              squeeze = False, layout = "constrained")
     for i in range(n):
         for j in range(n):
             ax = axes[i, j]
-            #the upper triangle carries no panel, only the mirrored pair's degeneracy angles
+            #the upper triangle carries no panel, only the mirrored pair's covariances
             if j > i:
                 ax.axis("off")
-                #cell (i, j) mirrors the lower panel (j, i): x = param i, y = param j
-                scales = widest[[i, j]]
-                measured_angle = degeneracy_angle(measured[np.ix_([i, j], [i, j])], scales)
-                measured_error = degeneracy_angle_error(measured_leave_one_out, [i, j], scales,
-                                                        measured_angle)
-                lines = [("degeneracy angle", "black"),
-                         (f"x: {param_names[i]},  y: {param_names[j]}", "black"),
-                         (f"measured  {format_angle(measured_angle, measured_error)}",
-                          MEASURED_COLOUR)]
-                angle = degeneracy_angle(forecast[np.ix_([i, j], [i, j])], scales)
-                #signed ratio: negative when the two tilt opposite ways; it blows up as the
-                #forecast ellipse aligns with an axis, so an exactly axis-aligned one gets no
-                #ratio at all
-                ratio = f"{measured_angle / angle:+.2f}" if angle != 0 else "undefined"
-                lines.append((f"fisher  {format_angle(angle)}   measured/fisher = {ratio}",
-                              FORECAST_COLOUR))
-                difference = wrap_angle_difference(measured_angle - angle)
-                print(f"    x {param_names[i]}, y {param_names[j]}: measured "
-                      f"{measured_angle:+.2f} +/- {measured_error:.2f}  {forecast_label} "
-                      f"{angle:+.2f} (measured - {forecast_label} = {difference:+.2f}, "
-                      f"{difference / measured_error:+.2f} sigma)")
+                cov_measured = measured[i, j]
+                cov_error = measured_cov_sigma[i, j]
+                cov_fisher = forecast[i, j]
+                ratio = cov_measured / cov_fisher
+                ratio_error = cov_error / abs(cov_fisher)
+                exponent = decimal_exponent(cov_measured)
+                lines = [(f"Cov({param_symbol(param_names[i])}, "
+                          f"{param_symbol(param_names[j])})", "black"),
+                         (f"$C_{{\\rm measured}}$ = {format_scaled(cov_measured, exponent, cov_error)}",
+                          MEASURED_COLOUR),
+                         (f"$C_{{\\rm fisher}}$ = {format_scaled(cov_fisher, exponent)}", FORECAST_COLOUR),
+                         (f"$C_{{\\rm measured}}/C_{{\\rm fisher}}$ = {ratio:.3f} $\\pm$ "
+                          f"{ratio_error:.3f}", "black")]
+                print(f"    {param_names[i]}, {param_names[j]}: measured {cov_measured:+.4e} "
+                      f"+/- {cov_error:.2e}  {forecast_label} {cov_fisher:+.4e}  "
+                      f"measured / {forecast_label} = {ratio:.3f} +/- {ratio_error:.3f}")
                 y_top = 0.5 + 0.5 * len(lines) * line_step
                 stacked_text(ax, lines, 0.5, y_top, line_step, ha = "center")
                 continue
-            ax.set_box_aspect(1)
             for cov_mat, colour, filled, linestyle in layers:
                 if i == j:
                     sigma = np.sqrt(cov_mat[i, i])
@@ -709,11 +681,14 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
                 sigma_measured = np.sqrt(measured[i, i])
                 error_measured = measured_sigma_err[i]
                 sigma_fisher = np.sqrt(forecast[i, i])
-                lines = [(format_sigma("\\rm measured", sigma_measured, error_measured),
+                exponent = decimal_exponent(sigma_measured)
+                #the colour says which is measured (blue) and which forecast (red)
+                lines = [(f"$\\sigma_{{\\rm measured}}$ = {format_scaled(sigma_measured, exponent, error_measured)}",
                           MEASURED_COLOUR),
-                         (format_sigma("\\rm fisher", sigma_fisher), FORECAST_COLOUR),
+                         (f"$\\sigma_{{\\rm fisher}}$ = {format_scaled(sigma_fisher, exponent)}", FORECAST_COLOUR),
                          (f"$\\sigma_{{\\rm measured}}/\\sigma_{{\\rm fisher}}$ = "
-                          f"{sigma_measured / sigma_fisher:.3f}", "black")]
+                          f"{sigma_measured / sigma_fisher:.3f} $\\pm$ "
+                          f"{error_measured / sigma_fisher:.3f}", "black")]
                 stacked_text(ax, lines, 0.03, 0.97, line_step)
                 ax.set_ylim(0, diag_ylim)
                 ax.set_yticks([])
@@ -721,14 +696,15 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
                 ax.set_ylim(*limits[i])
             ax.set_xlim(*limits[j])
             ax.grid(alpha = 0.2)
-            ax.tick_params(labelsize = 8)
+            ax.tick_params(labelsize = TICK_FONTSIZE)
+            ax.locator_params(nbins = 4)
             if i == n - 1:
-                ax.set_xlabel(param_names[j])
+                ax.set_xlabel(param_symbol(param_names[j]), fontsize = LABEL_FONTSIZE)
                 plt.setp(ax.get_xticklabels(), rotation = 45, ha = "right")
             else:
                 ax.set_xticklabels([])
             if j == 0 and i != 0:
-                ax.set_ylabel(param_names[i])
+                ax.set_ylabel(param_symbol(param_names[i]), fontsize = LABEL_FONTSIZE)
             elif i != j:
                 ax.set_yticklabels([])
 
@@ -740,14 +716,14 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
                Line2D([0], [0], color = MEASURED_COLOUR, lw = 2, ls = "--",
                       label = "Sampler Data $\\pm$ 1 Jackknife"),
                filled_handle(FORECAST_COLOUR, "-", "Fisher")]
-    #the upper triangle holds the degeneracy angles, so the legend goes below the grid, where
+    #the upper triangle holds the covariances, so the legend goes below the grid, where
     #constrained layout reserves room for it (above, it collides with the suptitle)
-    fig.legend(handles = handles, loc = "outside lower center", fontsize = 11, ncol = 3)
+    fig.legend(handles = handles, loc = "outside lower center", fontsize = 12, ncol = 3)
     title = "Sampler Data v.s. Fisher Forecast"
     if None not in (nside, theta_pix, noise, pol):
         title += (f"\n{POL_DESCRIPTIONS[pol]}, {noise:g}$\\mu$K-arcmin, {theta_pix:g}' pixels, "
                   f"{nside}$^2$ pixels")
-    fig.suptitle(title, fontsize = 13)
+    fig.suptitle(title, fontsize = LABEL_FONTSIZE)
     plt.savefig(plot_dir + f"triangle_plot_{forecast_label}.png", dpi = 150,
                 bbox_inches = "tight")
     plt.close(fig)
@@ -799,13 +775,13 @@ def joint_param_analysis(all_chains, nside, theta_pix, noise, is_sampled, pol, f
 
     print("\n")
     print(f"Beginning joint parameter analysis")
-    (measured_cov_mat, param_names, measured_cov_sigma, measured_leave_one_out,
+    (measured_cov_mat, param_names, measured_cov_sigma,
      measured_sigma_err) = get_avg_covariance_matrix(all_chains)
     means = get_means_per_param(all_chains, param_names)
     plot_covariance_and_correlation(measured_cov_mat, param_names, EMPIRICAL_LABEL, fisher_dir,
                                     title = "Chains (empirical)")
     #both bounds: the measured posterior should sit BETWEEN them, in the widths and in the
-    #degeneracy directions alike
+    #off-diagonal covariances alike
     forecasts = {}
     for nphi_source in FORECAST_NPHI_SOURCES:
         if nphi_source in FILE_NPHI_SOURCES and nphi_source not in forecast_phi_noise:
@@ -825,7 +801,7 @@ def joint_param_analysis(all_chains, nside, theta_pix, noise, is_sampled, pol, f
         label = forecast_file_label(nphi_source, t_block)
         title = forecast_title(nphi_source, t_block)
         triangle_plot(measured_cov_mat, nphi_source, t_block, forecasted_cov_mat, param_names,
-                      means, measured_cov_sigma, measured_leave_one_out, measured_sigma_err,
+                      means, measured_cov_sigma, measured_sigma_err,
                       plot_dir, nside = nside, theta_pix = theta_pix, noise = noise, pol = pol)
         plot_covariance_and_correlation(forecasted_cov_mat, param_names, label, plot_dir,
                                         title = f"Forecast ({title})")
