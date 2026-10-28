@@ -11,6 +11,9 @@ from cmb_lensing.gradients import *
 from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
+import matplotlib
+matplotlib.use("Agg")
+from figure_utils import save_figure
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -51,7 +54,7 @@ def test_forward_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Lensed Field Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = lensed_t_ground
@@ -60,7 +63,7 @@ def test_forward_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Lensed Field Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = lensed_t_predict - lensed_t_ground
@@ -69,7 +72,7 @@ def test_forward_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Lensed Field Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_absolute_difference.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between lensed ground and predict
@@ -83,7 +86,7 @@ def test_forward_lensing_intensity_only():
     plt.xlabel("ell")
     plt.title("Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -118,7 +121,7 @@ def test_inverse_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Lensed Field Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_t_ground
@@ -127,7 +130,7 @@ def test_inverse_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Lensed Field Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_t_predict - unlensed_t_ground
@@ -136,7 +139,7 @@ def test_inverse_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Lensed Field Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_absolute_difference.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between unlensed ground and predict
@@ -149,7 +152,7 @@ def test_inverse_lensing_intensity_only():
     plt.legend()
     plt.xlabel("ell")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -184,7 +187,7 @@ def test_adjoint_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = adjoint_lensed_t_ground
@@ -193,7 +196,7 @@ def test_adjoint_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = adjoint_lensed_t_predict - adjoint_lensed_t_ground
@@ -202,7 +205,7 @@ def test_adjoint_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_absolute_difference.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between adjoint lensed ground and predict
@@ -215,7 +218,7 @@ def test_adjoint_lensing_intensity_only():
     plt.xlabel("ell")
     plt.title("Adjoint Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -250,7 +253,7 @@ def test_inverse_adjoint_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_t_ground
@@ -259,7 +262,7 @@ def test_inverse_adjoint_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_t_predict - unlensed_t_ground
@@ -268,7 +271,7 @@ def test_inverse_adjoint_lensing_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_absolute_difference.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between unlensed ground and prediction
@@ -281,7 +284,7 @@ def test_inverse_adjoint_lensing_intensity_only():
     plt.xlabel("ell")
     plt.title("Inverse Adjoint Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -322,14 +325,14 @@ def test_forward_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Lensed Field Prediction: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Prediction: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_prediction_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Lensed Field Prediction: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Prediction: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_prediction_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = lensed_qu_ground
@@ -338,14 +341,14 @@ def test_forward_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Lensed Field Ground: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Ground: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_ground_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Lensed Field Ground: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Ground: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_ground_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = lensed_qu_predict - lensed_qu_ground
@@ -354,14 +357,14 @@ def test_forward_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Lensed Field Absolute Difference: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Absolute Difference: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_absolute_difference_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Lensed Field Absolute Difference: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Absolute Difference: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_absolute_difference_u_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between lensed ground and predict
@@ -377,7 +380,7 @@ def test_forward_lensing_polarization_only():
     plt.xlabel("ell")
     plt.title("Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -422,14 +425,14 @@ def test_inverse_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Lensed Field Prediction: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Prediction: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_prediction_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Lensed Field Prediction: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Prediction: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_prediction_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_qu_ground
@@ -438,14 +441,14 @@ def test_inverse_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Lensed Field Ground: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Ground: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_ground_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Lensed Field Ground: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Ground: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_ground_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_qu_predict - unlensed_qu_ground
@@ -454,14 +457,14 @@ def test_inverse_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Lensed Field Absolute Difference: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Absolute Difference: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_absolute_difference_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Lensed Field Absolute Difference: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Absolute Difference: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_absolute_difference_u_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between unlensed ground and predict
@@ -477,7 +480,7 @@ def test_inverse_lensing_polarization_only():
     plt.xlabel("ell")
     plt.title("Inverse Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -522,14 +525,14 @@ def test_adjoint_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Prediction: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Prediction: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_prediction_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Prediction: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Prediction: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_prediction_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = adjoint_lensed_qu_ground
@@ -538,14 +541,14 @@ def test_adjoint_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Ground: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Ground: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_ground_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Ground: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Ground: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_ground_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = adjoint_lensed_qu_predict - adjoint_lensed_qu_ground
@@ -554,14 +557,14 @@ def test_adjoint_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Absolute Difference: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Absolute Difference: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_absolute_difference_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Absolute Difference: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Absolute Difference: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_absolute_difference_u_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between adjoint lensed ground and predict
@@ -577,7 +580,7 @@ def test_adjoint_lensing_polarization_only():
     plt.xlabel("ell")
     plt.title("Adjoint Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -622,14 +625,14 @@ def test_inverse_adjoint_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Prediction: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Prediction: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_prediction_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Prediction: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Prediction: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_prediction_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_qu_ground
@@ -638,14 +641,14 @@ def test_inverse_adjoint_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Ground: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Ground: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_ground_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Ground: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Ground: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_ground_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_qu_predict - unlensed_qu_ground
@@ -654,14 +657,14 @@ def test_inverse_adjoint_lensing_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Absolute Difference: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Absolute Difference: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_absolute_difference_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Absolute Difference: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Absolute Difference: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_absolute_difference_u_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between unlensed ground and predict
@@ -677,7 +680,7 @@ def test_inverse_adjoint_lensing_polarization_only():
     plt.xlabel("ell")
     plt.title("Inverse Adjoint Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -728,21 +731,21 @@ def test_forward_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Lensed Field Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Lensed Field Prediction: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Prediction: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_prediction_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Lensed Field Prediction: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Prediction: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_prediction_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = lensed_tqu_ground
@@ -751,21 +754,21 @@ def test_forward_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Lensed Field Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Lensed Field Ground: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Ground: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_ground_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Lensed Field Ground: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Ground: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_ground_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = lensed_tqu_predict - lensed_tqu_ground
@@ -774,21 +777,21 @@ def test_forward_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Lensed Field Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Lensed Field Absolute Difference: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Absolute Difference: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_absolute_difference_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Lensed Field Absolute Difference: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Absolute Difference: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_absolute_difference_u_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between lensed ground and predict
@@ -806,7 +809,7 @@ def test_forward_lensing_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -857,21 +860,21 @@ def test_inverse_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Lensed Field Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Lensed Field Prediction: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Prediction: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_prediction_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Lensed Field Prediction: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Prediction: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_prediction_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_tqu_ground
@@ -880,21 +883,21 @@ def test_inverse_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Lensed Field Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Lensed Field Ground: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Ground: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_ground_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Lensed Field Ground: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Ground: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_ground_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_tqu_predict - unlensed_tqu_ground
@@ -903,21 +906,21 @@ def test_inverse_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Lensed Field Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Lensed Field Absolute Difference: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Absolute Difference: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_absolute_difference_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Lensed Field Absolute Difference: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Absolute Difference: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_absolute_difference_u_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between unlensed ground and predict
@@ -935,7 +938,7 @@ def test_inverse_lensing_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Inverse Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -986,21 +989,21 @@ def test_adjoint_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Prediction: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Prediction: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_prediction_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Prediction: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Prediction: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_prediction_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = adjoint_lensed_tqu_ground
@@ -1009,21 +1012,21 @@ def test_adjoint_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Ground: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Ground: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_ground_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Ground: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Ground: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_ground_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = adjoint_lensed_tqu_predict - adjoint_lensed_tqu_ground
@@ -1032,21 +1035,21 @@ def test_adjoint_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Absolute Difference: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Absolute Difference: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_absolute_difference_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Adjoint Lensed Field Absolute Difference: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Absolute Difference: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_absolute_difference_u_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between adjoint lensed ground and predict
@@ -1064,7 +1067,7 @@ def test_adjoint_lensing_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Adjoint Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Adjoint Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "adjoint_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -1115,21 +1118,21 @@ def test_inverse_adjoint_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Prediction: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Prediction: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_prediction_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Prediction: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Prediction: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_prediction_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_tqu_ground
@@ -1138,21 +1141,21 @@ def test_inverse_adjoint_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Ground: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Ground: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_ground_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Ground: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Ground: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_ground_u_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = unlensed_tqu_predict - unlensed_tqu_ground
@@ -1161,21 +1164,21 @@ def test_inverse_adjoint_lensing_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Absolute Difference: Q Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Absolute Difference: Q Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_absolute_difference_q_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Inverse Adjoint Lensed Field Absolute Difference: U Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Absolute Difference: U Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_absolute_difference_u_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between unlensed ground and predict
@@ -1193,7 +1196,7 @@ def test_inverse_adjoint_lensing_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Inverse Adjoint Lensed Field Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Inverse Adjoint Lensed Field Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "inverse_adjoint_lensed_field_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth

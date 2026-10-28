@@ -11,6 +11,7 @@ from cmb_lensing.gradients import *
 from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
+from figure_utils import save_figure
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -79,7 +80,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffpp_ground
@@ -88,7 +89,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffpp_predict - wf_ffpp_ground
@@ -97,7 +98,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_absolute_difference.png", bbox_inches="tight")
     plt.close()
     ell, ffpp_cross_ffpp = primal_cross_correlation(_cc_ffpp_f1.scalar_matrix, _cc_ffpp_f2.scalar_matrix, THETA_PIX)
     plt.figure()
@@ -106,7 +107,7 @@ def test_wiener_filter_intensity_only():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = F, Phi = Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/intensity_only/nonzero_f_zero_phi/"
@@ -117,7 +118,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffp0_ground
@@ -126,7 +127,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffp0_predict - wf_ffp0_ground
@@ -135,7 +136,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_absolute_difference.png", bbox_inches="tight")
     plt.close()
     ell, ffp0_cross_ffp0 = primal_cross_correlation(_cc_ffp0_f1.scalar_matrix, _cc_ffp0_f2.scalar_matrix, THETA_PIX)
     plt.figure()
@@ -144,7 +145,7 @@ def test_wiener_filter_intensity_only():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = F, Phi = 0 Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/intensity_only/zero_f_nonzero_phi/"
@@ -155,7 +156,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0pp_ground
@@ -164,7 +165,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0pp_predict - wf_f0pp_ground
@@ -173,7 +174,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_absolute_difference.png", bbox_inches="tight")
     plt.close()
     ell, f0pp_cross_f0pp = primal_cross_correlation(_cc_f0pp_f1.scalar_matrix, _cc_f0pp_f2.scalar_matrix, THETA_PIX)
     plt.figure()
@@ -182,7 +183,7 @@ def test_wiener_filter_intensity_only():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/intensity_only/zero_f_zero_phi/"
@@ -193,7 +194,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0p0_ground
@@ -202,7 +203,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0p0_predict - wf_f0p0_ground
@@ -211,7 +212,7 @@ def test_wiener_filter_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_absolute_difference.png", bbox_inches="tight")
     plt.close()
     ell, f0p0_cross_f0p0 = primal_cross_correlation(_cc_f0p0_f1.scalar_matrix, _cc_f0p0_f2.scalar_matrix, THETA_PIX)
     plt.figure()
@@ -220,7 +221,7 @@ def test_wiener_filter_intensity_only():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -324,14 +325,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffpp_ground
@@ -340,14 +341,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffpp_predict - wf_ffpp_ground
@@ -356,14 +357,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
     ell, ffpp_cross_ee = primal_cross_correlation(_cc_ffpp_f1.polar_matrix_1, _cc_ffpp_f2.polar_matrix_1, THETA_PIX)
     ell, ffpp_cross_bb = primal_cross_correlation(_cc_ffpp_f1.polar_matrix_2, _cc_ffpp_f2.polar_matrix_2, THETA_PIX)
@@ -374,7 +375,7 @@ def test_wiener_filter_polarization_only():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = F, Phi = Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/polarization_only/nonzero_f_zero_phi/"
@@ -385,14 +386,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffp0_ground
@@ -401,14 +402,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffp0_predict - wf_ffp0_ground
@@ -417,14 +418,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
     ell, ffp0_cross_ee = primal_cross_correlation(_cc_ffp0_f1.polar_matrix_1, _cc_ffp0_f2.polar_matrix_1, THETA_PIX)
     ell, ffp0_cross_bb = primal_cross_correlation(_cc_ffp0_f1.polar_matrix_2, _cc_ffp0_f2.polar_matrix_2, THETA_PIX)
@@ -435,7 +436,7 @@ def test_wiener_filter_polarization_only():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = F, Phi = 0 Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/polarization_only/zero_f_nonzero_phi/"
@@ -446,14 +447,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0pp_ground
@@ -462,14 +463,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0pp_predict - wf_f0pp_ground
@@ -478,14 +479,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
     ell, f0pp_cross_ee = primal_cross_correlation(_cc_f0pp_f1.polar_matrix_1, _cc_f0pp_f2.polar_matrix_1, THETA_PIX)
     ell, f0pp_cross_bb = primal_cross_correlation(_cc_f0pp_f1.polar_matrix_2, _cc_f0pp_f2.polar_matrix_2, THETA_PIX)
@@ -496,7 +497,7 @@ def test_wiener_filter_polarization_only():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/polarization_only/zero_f_zero_phi/"
@@ -507,14 +508,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0p0_ground
@@ -523,14 +524,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0p0_predict - wf_f0p0_ground
@@ -539,14 +540,14 @@ def test_wiener_filter_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
     ell, f0p0_cross_ee = primal_cross_correlation(_cc_f0p0_f1.polar_matrix_1, _cc_f0p0_f2.polar_matrix_1, THETA_PIX)
     ell, f0p0_cross_bb = primal_cross_correlation(_cc_f0p0_f1.polar_matrix_2, _cc_f0p0_f2.polar_matrix_2, THETA_PIX)
@@ -557,7 +558,7 @@ def test_wiener_filter_polarization_only():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -692,21 +693,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffpp_ground
@@ -715,21 +716,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffpp_predict - wf_ffpp_ground
@@ -738,21 +739,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = Phi Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
     ell, ffpp_cross_tt = primal_cross_correlation(_cc_ffpp_f1.scalar_matrix, _cc_ffpp_f2.scalar_matrix, THETA_PIX)
     ell, ffpp_cross_ee = primal_cross_correlation(_cc_ffpp_f1.polar_matrix_1, _cc_ffpp_f2.polar_matrix_1, THETA_PIX)
@@ -765,7 +766,7 @@ def test_wiener_filter_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = F, Phi = Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/intensity_and_polarization/nonzero_f_zero_phi/"
@@ -776,21 +777,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffp0_ground
@@ -799,21 +800,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_ffp0_predict - wf_ffp0_ground
@@ -822,21 +823,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = F, Phi = 0 Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
     ell, ffp0_cross_tt = primal_cross_correlation(_cc_ffp0_f1.scalar_matrix, _cc_ffp0_f2.scalar_matrix, THETA_PIX)
     ell, ffp0_cross_ee = primal_cross_correlation(_cc_ffp0_f1.polar_matrix_1, _cc_ffp0_f2.polar_matrix_1, THETA_PIX)
@@ -849,7 +850,7 @@ def test_wiener_filter_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = F, Phi = 0 Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = F, Phi = 0 Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_f_phi_0_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/intensity_and_polarization/zero_f_nonzero_phi/"
@@ -860,21 +861,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0pp_ground
@@ -883,21 +884,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0pp_predict - wf_f0pp_ground
@@ -906,21 +907,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
     ell, f0pp_cross_tt = primal_cross_correlation(_cc_f0pp_f1.scalar_matrix, _cc_f0pp_f2.scalar_matrix, THETA_PIX)
     ell, f0pp_cross_ee = primal_cross_correlation(_cc_f0pp_f1.polar_matrix_1, _cc_f0pp_f2.polar_matrix_1, THETA_PIX)
@@ -933,7 +934,7 @@ def test_wiener_filter_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = 0, Phi = Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "wiener_filter/intensity_and_polarization/zero_f_zero_phi/"
@@ -944,21 +945,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0p0_ground
@@ -967,21 +968,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = wf_f0p0_predict - wf_f0p0_ground
@@ -990,21 +991,21 @@ def test_wiener_filter_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
     ell, f0p0_cross_tt = primal_cross_correlation(_cc_f0p0_f1.scalar_matrix, _cc_f0p0_f2.scalar_matrix, THETA_PIX)
     ell, f0p0_cross_ee = primal_cross_correlation(_cc_f0p0_f1.polar_matrix_1, _cc_f0p0_f2.polar_matrix_1, THETA_PIX)
@@ -1017,7 +1018,7 @@ def test_wiener_filter_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Wiener Filter @ F = 0, Phi = 0 Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Wiener Filter @ F = 0, Phi = 0 Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "wiener_filter_f_0_phi_0_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth

@@ -12,6 +12,7 @@ from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
 from cmb_lensing.mixing import *
+from figure_utils import save_figure
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -59,7 +60,7 @@ def test_gradf_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad F Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = gradf_ground
@@ -68,7 +69,7 @@ def test_gradf_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad F Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = gradf_predict - gradf_ground
@@ -77,7 +78,7 @@ def test_gradf_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad F Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_absolute_difference.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between ground and predict
@@ -91,7 +92,7 @@ def test_gradf_intensity_only():
     plt.xlabel("ell")
     plt.title("Grad F Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -148,14 +149,14 @@ def test_gradf_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Grad F Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Grad F Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = gradf_eb_ground
@@ -164,14 +165,14 @@ def test_gradf_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Grad F Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Grad F Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = gradf_eb_predict - gradf_eb_ground
@@ -180,14 +181,14 @@ def test_gradf_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Grad F Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Grad F Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between ground and predict
@@ -202,7 +203,7 @@ def test_gradf_polarization_only():
     plt.xlabel("ell")
     plt.title("Grad F Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -286,21 +287,21 @@ def test_gradf_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad F Prediction: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Prediction: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_prediction_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Grad F Prediction: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Prediction: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_prediction_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Grad F Prediction: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Prediction: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_prediction_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = gradf_teb_ground
@@ -309,21 +310,21 @@ def test_gradf_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad F Ground: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Ground: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_ground_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Grad F Ground: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Ground: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_ground_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Grad F Ground: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Ground: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_ground_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = gradf_teb_predict - gradf_teb_ground
@@ -332,21 +333,21 @@ def test_gradf_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad F Absolute Difference: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Absolute Difference: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_absolute_difference_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Grad F Absolute Difference: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Absolute Difference: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_absolute_difference_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Grad F Absolute Difference: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Absolute Difference: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_absolute_difference_b_mode.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between ground and predict
@@ -364,7 +365,7 @@ def test_gradf_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Grad F Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad F Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_f_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -414,7 +415,7 @@ def test_grad_phi_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = grad_phi_ground
@@ -423,7 +424,7 @@ def test_grad_phi_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = grad_phi_predict - grad_phi_ground
@@ -432,7 +433,7 @@ def test_grad_phi_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_absolute_difference.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between ground and predict
@@ -446,7 +447,7 @@ def test_grad_phi_intensity_only():
     plt.xlabel("ell")
     plt.title("Grad Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -504,7 +505,7 @@ def test_grad_phi_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = grad_phi_ground
@@ -513,7 +514,7 @@ def test_grad_phi_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = grad_phi_predict - grad_phi_ground
@@ -522,7 +523,7 @@ def test_grad_phi_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_absolute_difference.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between ground and predict
@@ -536,7 +537,7 @@ def test_grad_phi_polarization_only():
     plt.xlabel("ell")
     plt.title("Grad Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -618,7 +619,7 @@ def test_grad_phi_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Prediction")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Prediction.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_prediction.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = grad_phi_ground
@@ -627,7 +628,7 @@ def test_grad_phi_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = grad_phi_predict - grad_phi_ground
@@ -636,7 +637,7 @@ def test_grad_phi_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Grad Phi Absolute Difference")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Absolute Difference.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_absolute_difference.png", bbox_inches="tight")
     plt.close()
 
     #plot the cross correlation between ground and predict
@@ -650,7 +651,7 @@ def test_grad_phi_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Grad Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Grad Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "grad_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -702,7 +703,7 @@ def test_mixed_grad_phi_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Predict")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Predict.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_predict.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = mixed_grad_phi_ground
@@ -711,7 +712,7 @@ def test_mixed_grad_phi_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = mixed_grad_phi_predict - mixed_grad_phi_ground
@@ -720,7 +721,7 @@ def test_mixed_grad_phi_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Diff")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Diff.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_diff.png", bbox_inches="tight")
     plt.close()
 
     _cc_f1 = fourier(mixed_grad_phi_ground) if mixed_grad_phi_ground.basis != Basis.FOURIER else mixed_grad_phi_ground
@@ -732,7 +733,7 @@ def test_mixed_grad_phi_intensity_only():
     plt.xlabel("ell")
     plt.title("Mixed Grad Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -809,7 +810,7 @@ def test_mixed_grad_phi_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Predict")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Predict.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_predict.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = mixed_grad_phi_ground
@@ -818,7 +819,7 @@ def test_mixed_grad_phi_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = mixed_grad_phi_predict - mixed_grad_phi_ground
@@ -827,7 +828,7 @@ def test_mixed_grad_phi_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Diff")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Diff.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_diff.png", bbox_inches="tight")
     plt.close()
 
     _cc_f1 = fourier(mixed_grad_phi_ground) if mixed_grad_phi_ground.basis != Basis.FOURIER else mixed_grad_phi_ground
@@ -839,7 +840,7 @@ def test_mixed_grad_phi_polarization_only():
     plt.xlabel("ell")
     plt.title("Mixed Grad Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -945,7 +946,7 @@ def test_mixed_grad_phi_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Predict")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Predict.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_predict.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = mixed_grad_phi_ground
@@ -954,7 +955,7 @@ def test_mixed_grad_phi_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Ground")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Ground.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_ground.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = mixed_grad_phi_predict - mixed_grad_phi_ground
@@ -963,7 +964,7 @@ def test_mixed_grad_phi_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Mixed Grad Phi Diff")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Diff.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_diff.png", bbox_inches="tight")
     plt.close()
 
     _cc_f1 = fourier(mixed_grad_phi_ground) if mixed_grad_phi_ground.basis != Basis.FOURIER else mixed_grad_phi_ground
@@ -975,7 +976,7 @@ def test_mixed_grad_phi_intensity_and_polarization():
     plt.xlabel("ell")
     plt.title("Mixed Grad Phi Cross Correlation")
     plt.ylim([-2, 2])
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Mixed Grad Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mixed_grad_phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth

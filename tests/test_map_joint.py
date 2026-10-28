@@ -11,6 +11,7 @@ from cmb_lensing.gradients import *
 from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
+from figure_utils import save_figure
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -81,7 +82,7 @@ def test_map_joint_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Python MLE Phi")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Phi.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_phi.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = julia_phi_predict
@@ -90,7 +91,7 @@ def test_map_joint_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Julia MLE Phi")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Phi.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_phi.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = python_phi_predict - julia_phi_predict
@@ -99,7 +100,7 @@ def test_map_joint_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("MLE Phi Diff")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Phi Diff.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_phi_diff.png", bbox_inches="tight")
     plt.close()
     _cc_f1 = fourier(julia_phi_predict) if julia_phi_predict.basis != Basis.FOURIER else julia_phi_predict
     _cc_f2 = fourier(simulated_phi) if simulated_phi.basis != Basis.FOURIER else simulated_phi
@@ -116,7 +117,7 @@ def test_map_joint_intensity_only():
     plt.plot(ell, phi_correlation_jp, label = "Julia x Python")
     plt.title("Phi Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "map_joint/intensity_only/fields/"
@@ -127,7 +128,7 @@ def test_map_joint_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Python MLE Field: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Field: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_field_temperature.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = julia_field_predict
@@ -136,7 +137,7 @@ def test_map_joint_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Julia MLE Field: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Field: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_field_temperature.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = python_field_predict - julia_field_predict
@@ -145,7 +146,7 @@ def test_map_joint_intensity_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("MLE Field Diff: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Field Diff: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_field_diff_temperature.png", bbox_inches="tight")
     plt.close()
     _cc_f1 = fourier(julia_field_predict) if julia_field_predict.basis != Basis.FOURIER else julia_field_predict
     _cc_f2 = fourier(simulated_field) if simulated_field.basis != Basis.FOURIER else simulated_field
@@ -162,7 +163,7 @@ def test_map_joint_intensity_only():
     plt.plot(ell, t_correlation_jp, label = "Julia x Python")
     plt.title("Temperature Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Temperature Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "temperature_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -255,7 +256,7 @@ def test_map_joint_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Python MLE Phi")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Phi.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_phi.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = julia_phi_predict
@@ -264,7 +265,7 @@ def test_map_joint_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Julia MLE Phi")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Phi.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_phi.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = python_phi_predict - julia_phi_predict
@@ -273,7 +274,7 @@ def test_map_joint_polarization_only():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("MLE Phi Diff")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Phi Diff.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_phi_diff.png", bbox_inches="tight")
     plt.close()
     _cc_f1 = fourier(julia_phi_predict) if julia_phi_predict.basis != Basis.FOURIER else julia_phi_predict
     _cc_f2 = fourier(simulated_phi) if simulated_phi.basis != Basis.FOURIER else simulated_phi
@@ -290,7 +291,7 @@ def test_map_joint_polarization_only():
     plt.plot(ell, phi_correlation_jp, label = "Julia x Python")
     plt.title("Phi Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "map_joint/polarization_only/fields/"
@@ -301,14 +302,14 @@ def test_map_joint_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Python MLE Field: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Field: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_field_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Python MLE Field: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Field: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_field_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = julia_field_predict
@@ -317,14 +318,14 @@ def test_map_joint_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Julia MLE Field: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Field: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_field_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Julia MLE Field: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Field: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_field_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = python_field_predict - julia_field_predict
@@ -333,14 +334,14 @@ def test_map_joint_polarization_only():
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("MLE Field Diff: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Field Diff: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_field_diff_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("MLE Field Diff: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Field Diff: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_field_diff_b_mode.png", bbox_inches="tight")
     plt.close()
     _cc_f1 = fourier(julia_field_predict) if julia_field_predict.basis != Basis.FOURIER else julia_field_predict
     _cc_f2 = fourier(simulated_field) if simulated_field.basis != Basis.FOURIER else simulated_field
@@ -366,7 +367,7 @@ def test_map_joint_polarization_only():
     plt.plot(ell, ee_correlation_jp, label = "Julia x Python EE")
     plt.title("E Mode Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "E Mode Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "e_mode_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
@@ -375,7 +376,7 @@ def test_map_joint_polarization_only():
     plt.plot(ell, bb_correlation_jp, label = "Julia x Python BB")
     plt.title("B Mode Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "B Mode Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "b_mode_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth
@@ -499,7 +500,7 @@ def test_map_joint_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Python MLE Phi")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Phi.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_phi.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = julia_phi_predict
@@ -508,7 +509,7 @@ def test_map_joint_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Julia MLE Phi")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Phi.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_phi.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = python_phi_predict - julia_phi_predict
@@ -517,7 +518,7 @@ def test_map_joint_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("MLE Phi Diff")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Phi Diff.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_phi_diff.png", bbox_inches="tight")
     plt.close()
     _cc_f1 = fourier(julia_phi_predict) if julia_phi_predict.basis != Basis.FOURIER else julia_phi_predict
     _cc_f2 = fourier(simulated_phi) if simulated_phi.basis != Basis.FOURIER else simulated_phi
@@ -534,7 +535,7 @@ def test_map_joint_intensity_and_polarization():
     plt.plot(ell, phi_correlation_jp, label = "Julia x Python")
     plt.title("Phi Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Phi Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "phi_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     SUB_FOLDER = "map_joint/intensity_and_polarization/fields/"
@@ -545,21 +546,21 @@ def test_map_joint_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Python MLE Field: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Field: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_field_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Python MLE Field: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Field: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_field_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Python MLE Field: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Python MLE Field: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "python_mle_field_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = julia_field_predict
@@ -568,21 +569,21 @@ def test_map_joint_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("Julia MLE Field: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Field: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_field_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("Julia MLE Field: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Field: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_field_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("Julia MLE Field: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Julia MLE Field: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "julia_mle_field_b_mode.png", bbox_inches="tight")
     plt.close()
 
     _plot_field = python_field_predict - julia_field_predict
@@ -591,21 +592,21 @@ def test_map_joint_intensity_and_polarization():
     plt.imshow(_plot_field.scalar_matrix, cmap="coolwarm")
     plt.title("MLE Field Diff: Temperature")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Field Diff: Temperature.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_field_diff_temperature.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_1, cmap="coolwarm")
     plt.title("MLE Field Diff: E Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Field Diff: E Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_field_diff_e_mode.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
     plt.imshow(_plot_field.polar_matrix_2, cmap="coolwarm")
     plt.title("MLE Field Diff: B Mode")
     plt.colorbar()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "MLE Field Diff: B Mode.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "mle_field_diff_b_mode.png", bbox_inches="tight")
     plt.close()
     _cc_f1 = fourier(julia_field_predict) if julia_field_predict.basis != Basis.FOURIER else julia_field_predict
     _cc_f2 = fourier(simulated_field) if simulated_field.basis != Basis.FOURIER else simulated_field
@@ -641,7 +642,7 @@ def test_map_joint_intensity_and_polarization():
     plt.plot(ell, tt_correlation_jp, label = "Julia x Python TT")
     plt.title("Temperature Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Temperature Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "temperature_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
@@ -650,7 +651,7 @@ def test_map_joint_intensity_and_polarization():
     plt.plot(ell, ee_correlation_jp, label = "Julia x Python EE")
     plt.title("E Mode Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "E Mode Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "e_mode_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     plt.figure()
@@ -659,7 +660,7 @@ def test_map_joint_intensity_and_polarization():
     plt.plot(ell, bb_correlation_jp, label = "Julia x Python BB")
     plt.title("B Mode Cross Correlation")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "B Mode Cross Correlation.png", bbox_inches="tight")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "b_mode_cross_correlation.png", bbox_inches="tight")
     plt.close()
 
     #compare percent difference between prediction and ground truth

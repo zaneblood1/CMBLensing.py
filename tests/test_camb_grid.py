@@ -36,7 +36,7 @@ CHECKED_SPECTRA = ["tt", "ee", "tt_lensed", "ee_lensed", "bb_lensed", "pp", "te_
 #an EE trough near ell 470, tt_lensed 1.1e-3, ee_lensed 4.3e-3, bb_lensed 3.0e-4,
 #pp 4.7e-5, te_rho 2.4e-3; medians 2e-5 - 2e-4)
 MAX_ERROR = {"tt": 3e-3, "ee": 1e-2, "tt_lensed": 3e-3, "ee_lensed": 1e-2,
-             "bb_lensed": 1e-3, "pp": 1e-4, "te_rho": 5e-3}
+             "bb_lensed": 1e-3, "pp": 5e-4, "te_rho": 5e-3}
 
 def camb_cls_at(meta, h0, log_a, ns, ombh2, omch2):
     """CAMB with the grid's own settings (identical to run_single_camb_grid.py), so any

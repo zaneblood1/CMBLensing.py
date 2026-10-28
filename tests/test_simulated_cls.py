@@ -11,6 +11,7 @@ from cmb_lensing.gradients import *
 from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
+from figure_utils import save_figure
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -49,7 +50,7 @@ def test_simulated_cls_intensity_only():
     plt.plot(batched_results["phi"][0], jnp.log(batched_results["phi"][1]), label = "Python")
     plt.title("Simulated Cl_PP Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_PP Julia v.s. JAX (I).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_pp_julia_v_s_jax_i.png")
     plt.close()
 
     plt.figure()
@@ -57,7 +58,7 @@ def test_simulated_cls_intensity_only():
     plt.plot(batched_results["unlensed_t"][0], jnp.log(batched_results["unlensed_t"][1]), label = "Python")
     plt.title("Simulated Cl_TT Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_TT Julia v.s. JAX (I).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_tt_julia_v_s_jax_i.png")
     plt.close()
 
     plt.figure()
@@ -65,7 +66,7 @@ def test_simulated_cls_intensity_only():
     plt.plot(batched_results["lensed_t"][0], jnp.log(batched_results["lensed_t"][1]), label = "Python")
     plt.title("Simulated Cl_LL Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_LL Julia v.s. JAX (I).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_ll_julia_v_s_jax_i.png")
     plt.close()
 
     plt.figure()
@@ -73,7 +74,7 @@ def test_simulated_cls_intensity_only():
     plt.plot(batched_results["data_t"][0], jnp.log(batched_results["data_t"][1]), label = "Python")
     plt.title("Simulated Cl_DD Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_DD Julia v.s. JAX (I).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_dd_julia_v_s_jax_i.png")
     plt.close()
 
     #there is no 'test' in this case we simply just inspect the plots by eye
@@ -104,7 +105,7 @@ def test_simulated_cls_polarization_only():
     plt.plot(batched_results["phi"][0], jnp.log(batched_results["phi"][1]), label = "Python")
     plt.title("Simulated Cl_PP Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_PP Julia v.s. JAX (P).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_pp_julia_v_s_jax_p.png")
     plt.close()
 
     plt.figure()
@@ -112,7 +113,7 @@ def test_simulated_cls_polarization_only():
     plt.plot(batched_results["unlensed_e"][0], jnp.log(batched_results["unlensed_e"][1]), label = "Python")
     plt.title("Simulated Cl_EE Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_EE Julia v.s. JAX (P).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_ee_julia_v_s_jax_p.png")
     plt.close()
 
     plt.figure()
@@ -120,7 +121,7 @@ def test_simulated_cls_polarization_only():
     plt.plot(batched_results["lensed_e"][0], jnp.log(batched_results["lensed_e"][1]), label = "Python")
     plt.title("Simulated Lensed Cl_EE Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Lensed Cl_EE Julia v.s. JAX (P).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_lensed_cl_ee_julia_v_s_jax_p.png")
     plt.close()
 
     plt.figure()
@@ -128,7 +129,7 @@ def test_simulated_cls_polarization_only():
     plt.plot(batched_results["unlensed_b"][0], jnp.log(batched_results["unlensed_b"][1]), label = "Python")
     plt.title("Simulated Cl_BB Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_BB Julia v.s. JAX (P).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_bb_julia_v_s_jax_p.png")
     plt.close()
 
     plt.figure()
@@ -136,7 +137,7 @@ def test_simulated_cls_polarization_only():
     plt.plot(batched_results["lensed_b"][0], jnp.log(batched_results["lensed_b"][1]), label = "Python")
     plt.title("Simulated Lensed Cl_BB Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Lensed Cl_BB Julia v.s. JAX (P).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_lensed_cl_bb_julia_v_s_jax_p.png")
     plt.close()
 
     plt.figure()
@@ -144,7 +145,7 @@ def test_simulated_cls_polarization_only():
     plt.plot(batched_results["data_e"][0], jnp.log(batched_results["data_e"][1]), label = "Python")
     plt.title("Simulated E mode Cl_DD Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated E mode Cl_DD Julia v.s. JAX (P).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_e_mode_cl_dd_julia_v_s_jax_p.png")
     plt.close()
 
     plt.figure()
@@ -152,7 +153,7 @@ def test_simulated_cls_polarization_only():
     plt.plot(batched_results["data_b"][0], jnp.log(batched_results["data_b"][1]), label = "Python")
     plt.title("Simulated B mode Cl_DD Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated B mode Cl_DD Julia v.s. JAX (P).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_b_mode_cl_dd_julia_v_s_jax_p.png")
     plt.close()
 
     #there is no 'test' in this case we simply just inspect the plots by eye
@@ -186,7 +187,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["phi"][0], jnp.log(batched_results["phi"][1]), label = "Python")
     plt.title("Simulated Cl_PP Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_PP Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_pp_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -194,7 +195,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["unlensed_t"][0], jnp.log(batched_results["unlensed_t"][1]), label = "Python")
     plt.title("Simulated Cl_TT Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_TT Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_tt_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -202,7 +203,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["lensed_t"][0], jnp.log(batched_results["lensed_t"][1]), label = "Python")
     plt.title("Simulated Lensed Cl_TT Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Lensed Cl_TT Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_lensed_cl_tt_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -210,7 +211,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["unlensed_e"][0], jnp.log(batched_results["unlensed_e"][1]), label = "Python")
     plt.title("Simulated Cl_EE Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_EE Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_ee_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -218,7 +219,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["lensed_e"][0], jnp.log(batched_results["lensed_e"][1]), label = "Python")
     plt.title("Simulated Lensed Cl_EE Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Lensed Cl_EE Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_lensed_cl_ee_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -226,7 +227,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["unlensed_b"][0], jnp.log(batched_results["unlensed_b"][1]), label = "Python")
     plt.title("Simulated Cl_BB Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Cl_BB Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_cl_bb_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -234,7 +235,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["lensed_b"][0], jnp.log(batched_results["lensed_b"][1]), label = "Python")
     plt.title("Simulated Lensed Cl_BB Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Lensed Cl_BB Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_lensed_cl_bb_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -242,7 +243,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["data_t"][0], jnp.log(batched_results["data_t"][1]), label = "Python")
     plt.title("Simulated Temperature Cl_DD Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated Temperature Cl_DD Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_temperature_cl_dd_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -250,7 +251,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["data_e"][0], jnp.log(batched_results["data_e"][1]), label = "Python")
     plt.title("Simulated E mode Cl_DD Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated E mode Cl_DD Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_e_mode_cl_dd_julia_v_s_jax_ip.png")
     plt.close()
 
     plt.figure()
@@ -258,7 +259,7 @@ def test_simulated_cls_intensity_and_polarization():
     plt.plot(batched_results["data_b"][0], jnp.log(batched_results["data_b"][1]), label = "Python")
     plt.title("Simulated B mode Cl_DD Julia v.s. JAX")
     plt.legend()
-    plt.savefig(FIGURE_PATH + SUB_FOLDER + "Simulated B mode Cl_DD Julia v.s. JAX (IP).png")
+    save_figure(FIGURE_PATH + SUB_FOLDER + "simulated_b_mode_cl_dd_julia_v_s_jax_ip.png")
     plt.close()
 
     #there is no 'test' in this case we simply just inspect the plots by eye

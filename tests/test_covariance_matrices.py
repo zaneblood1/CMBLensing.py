@@ -11,6 +11,9 @@ from cmb_lensing.gradients import *
 from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
+from figure_utils import save_figure
+import matplotlib
+matplotlib.use("Agg")
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -40,7 +43,6 @@ def _get_dataset(pol):
     return _DATASET_CACHE[pol]
 
 def _plot_matrix_comparison(ground, predict, title, folder):
-    os.makedirs(folder, exist_ok=True)
     ground_abs = jnp.abs(ground)
     predict_abs = jnp.abs(predict)
     diff_abs = jnp.abs(ground - predict)
@@ -49,21 +51,21 @@ def _plot_matrix_comparison(ground, predict, title, folder):
     plt.imshow(ground_abs, cmap="coolwarm")
     plt.title(f"{title} Ground")
     plt.colorbar()
-    plt.savefig(os.path.join(folder, f"{title} Ground.png"))
+    save_figure(os.path.join(folder, f"{title} Ground.png"))
     plt.close()
 
     plt.figure()
     plt.imshow(predict_abs, cmap="coolwarm")
     plt.title(f"{title} Prediction")
     plt.colorbar()
-    plt.savefig(os.path.join(folder, f"{title} Prediction.png"))
+    save_figure(os.path.join(folder, f"{title} Prediction.png"))
     plt.close()
 
     plt.figure()
     plt.imshow(diff_abs, cmap="coolwarm")
     plt.title(f"{title} Absolute Difference")
     plt.colorbar()
-    plt.savefig(os.path.join(folder, f"{title} Absolute Difference.png"))
+    save_figure(os.path.join(folder, f"{title} Absolute Difference.png"))
     plt.close()
 
 # ── Noise Covariance ────────────────────────────────────────────────────
