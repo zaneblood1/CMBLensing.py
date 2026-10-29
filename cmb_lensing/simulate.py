@@ -803,23 +803,68 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
              k_pivot = DEFAULT_K_PIVOT, Alens = DEFAULT_A_LENSE, nphi_fac = 2, a_phi = 1,
              precomputed_cls = None, max_l_tensor = DEFAULT_MAX_L_TENSOR,
              max_eta_k_tensor = DEFAULT_MAX_ETA_K_TENSOR, use_mask = False):
-    """Simulate a lensed CMB data set. See the module and CLAUDE.md for the pipeline.
+    """Simulate a lensed CMB data set on a flat nside x nside sky patch.
+
+    Runs CAMB for the requested cosmology, builds the field, phi and noise covariances in
+    Fourier space, draws the unlensed field(s), phi and the noise, lenses the field with
+    LenseFlow and returns everything in one data set object. CAMB runs inside
+    `jax.pure_callback`, so a CAMB failure gives NaN spectra rather than an exception.
 
     Randomness: one root key PRNGKey(master_seed), and every random field (phi, then the
     unlensed field(s), then the noise) splits its own subkey off it in that fixed order
     (field_from_covar). So the realization at a seed depends on the cosmology only through
     the covariances the white noise is scaled by.
 
-    `precomputed_cls` optionally supplies the CAMB spectra instead of running CAMB, for
-    callers that build many realizations at ONE cosmology and would otherwise pay for an
-    identical CAMB evaluation every time (delensed_covariance and sampler_phi_noise
-    do this). It must be a dict in _extract_all_cls's format - the output of
-    fisher_forecast.camb_cls_at_params is one, since CAMB_LMAX equals DEFAULT_MAX_ELL.
+    Args:
+        nside: Number of pixels on a side.
+        theta_pix: Pixel width in arcmin.
+        pol: "I" (temperature only), "P" (E/B polarization only) or "IP" (both).
+        master_seed: Root seed of every random draw.
+        uk_arcmin_t: White noise level in temperature, in uK-arcmin. The polarization
+            noise is sqrt(2) higher.
+        H0: Hubble constant. Leave as None to set the expansion through `cosmomc_theta`.
+        ombh2: Physical baryon density.
+        omch2: Physical cold dark matter density.
+        cosmomc_theta: CosmoMC's approximation to the angular size of the sound horizon
+            (the sampler's theta_MC_100 divided by 100).
+        r: Tensor-to-scalar ratio.
+        mnu: Sum of the neutrino masses in eV.
+        tau: Optical depth to reionization.
+        As: Primordial scalar amplitude (the sampler's logA is log(1e10 As)).
+        nt: Tensor spectral index.
+        ns: Scalar spectral index.
+        lmax: Largest multipole of the spectra.
+        begin_ell_interp: Optional multipole past which the spectra are extrapolated
+            rather than taken from CAMB.
+        l_knee: Knee of the 1/f noise term. 0 gives pure white noise, as every sampler
+            entry point uses.
+        k_pivot: Pivot scale of the primordial spectra, in 1/Mpc.
+        Alens: CAMB's lensing amplitude.
+        nphi_fac: Factor the quadratic-estimate noise is divided by (CMBLensing.jl's
+            preconditioning heuristic).
+        a_phi: Amplitude multiplying the phi covariance.
+        precomputed_cls: Optional dict of CAMB spectra to use instead of running CAMB, for
+            callers that build many realizations at one cosmology. It must be in
+            `_extract_all_cls`'s format (e.g. the output of
+            `fisher_forecast.camb_cls_at_params`) and must belong to the same cosmology as
+            the keyword arguments, which are then unused.
+        max_l_tensor: CAMB's largest multipole for the tensor spectra.
+        max_eta_k_tensor: CAMB's largest k * eta for the tensor spectra.
+        use_mask: Apply a sky mask. False (the default) uses a mask of all ones.
 
-    CALLER'S RESPONSIBILITY: the spectra must correspond to the SAME cosmology as the
-    keyword arguments. Nothing here can verify that - the cosmology keywords are simply
-    unused when spectra are supplied - so passing a mismatched cache silently produces a
-    data map inconsistent with its own labelled parameters. The lmax is checked.
+    Returns:
+        A `DataSetT` (pol = "I"), `DataSetEB` (pol = "P") or `DataSetTEB` (pol = "IP")
+        holding the fields (`unlensed_field`, `lensed_field`, `phi`, `data`) and the
+        operators (`field_covariance`, `phi_covariance`, `noise_covariance`, `mask`,
+        `beam`, `mixing_d`, `mixing_g`, `quadratic_estimate`, ...). All fields are in
+        Fourier space.
+
+    Example:
+        ```python
+        from cmb_lensing.simulate import load_sim
+        data_set = load_sim(nside = 128, theta_pix = 2.5, pol = "IP", master_seed = 67,
+                            uk_arcmin_t = 5, l_knee = 0)
+        ```
     """
 
     lmax_prime = min(lmax, DEFAULT_MAX_ELL) if begin_ell_interp is None else min(lmax, begin_ell_interp)

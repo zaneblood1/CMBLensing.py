@@ -50,6 +50,13 @@ nav:
       - Delensed Covariances: pipelines/delensed-covariance.md
       - Chain Analysis: pipelines/chain-analysis.md
   - Fisher Forecast: fisher-forecast.md
+  - API Reference:
+      - api/index.md
+      - Simulating Data: api/simulate.md
+      - MAP Estimation: api/map-joint.md
+      - LCDM Sampling: api/sample-joint.md
+      - Fields, Operators and Data Sets: api/fields.md
+      - Fisher Forecast: api/fisher-forecast.md
   - Testing: testing.md
 
 plugins:

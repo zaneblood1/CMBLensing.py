@@ -832,20 +832,34 @@ def band_index(ell_grid, edges, use):
 
 def band_harmonic(matrix, index, n_band):
     """The INFORMATION-weighted band value 1 / <1/N> over the band's finite positive modes
-    (the mean that commutes with averaging Fisher information), and the mode count."""
+    (the mean that commutes with averaging Fisher information), and the mode count. Each
+    rfft entry is weighted by w_k (2 in the bulk, 1 on the self-conjugate columns), the
+    number of full-plane modes it stands for, as in fisher_forecast.radial_cl_profile.
+
+    The harmonic mean is dominated by the LOWEST noise modes, the arithmetic mean by the
+    LARGEST. E.g. two modes with N = 1 and N = 100 carry information 1/1 + 1/100 = 1.01:
+    the harmonic mean 2 / 1.01 = 1.98 gives back 2 / 1.98 = 1.01, while the arithmetic mean
+    50.5 implies 2 / 50.5 = 0.04, as if the band held almost no information. The QE's
+    diverged modes and an empirical file's poorly measured modes would drag an arithmetic
+    band mean up the same way."""
+    dof = np.asarray(fourier_weights(matrix.shape[0]))
     inside = (index >= 0) & np.isfinite(matrix) & (matrix > 0)
-    total = np.bincount(index[inside], weights = 1.0 / matrix[inside], minlength = n_band)
-    count = np.bincount(index[inside], minlength = n_band)
+    weight = dof[inside]
+    total = np.bincount(index[inside], weights = weight / matrix[inside], minlength = n_band)
+    count = np.bincount(index[inside], weights = weight, minlength = n_band)
     with np.errstate(divide = "ignore", invalid = "ignore"):
         return np.where(count > 0, count / total, np.nan), count
 
 def band_median(matrix, index, n_band):
-    """Median over each band's finite modes (NaN for an empty band)."""
+    """Median over each band's finite modes (NaN for an empty band), each rfft entry counted
+    w_k times (2 in the bulk, 1 on the self-conjugate columns) like band_harmonic, i.e. the
+    median over the full-plane modes."""
+    dof = np.asarray(fourier_weights(matrix.shape[0])).astype(int)
     values = np.full(n_band, np.nan)
     for b in range(n_band):
-        inside = matrix[(index == b) & np.isfinite(matrix)]
-        if inside.size:
-            values[b] = np.median(inside)
+        inside = (index == b) & np.isfinite(matrix)
+        if inside.any():
+            values[b] = np.median(np.repeat(matrix[inside], dof[inside]))
     return values
 
 def qe_noise_matrices(params, nside, theta_pix, noise_level, l_knee, beam_fwhm):

@@ -24,6 +24,15 @@ class DataSet:
 #Temperature only data set
 @struct.dataclass
 class DataSetT(DataSet):
+    """Temperature-only data set, returned by `load_sim(..., pol = "I")`.
+
+    Fields (`FlatS0`, Fourier space): `data`, `unlensed_field`, `lensed_field`, `phi`.
+    Operators (`DiagonalScalar`): `field_covariance` (unlensed, scalar + tensor),
+    `lensed_field_covariance`, `scalar_field_covariance`, `tensor_field_covariance`,
+    `phi_covariance`, `unscaled_phi_covariance` (before `a_phi`), `noise_covariance`, `mask`,
+    `beam`, `quadratic_estimate` (the QE noise, used as N_phi), and the mixing matrices
+    `mixing_d` / `mixing_g`.
+    """
 
     #diagonal matrix operators
     noise_covariance: DiagonalScalar = flax.struct.field(default_factory = lambda: DiagonalScalar())
@@ -48,6 +57,12 @@ class DataSetT(DataSet):
 #Polarization only data set
 @struct.dataclass
 class DataSetEB(DataSet):
+    """Polarization-only data set, returned by `load_sim(..., pol = "P")`.
+
+    Same attributes as `DataSetT`, but the fields other than `phi` are `FlatS2` (E/B) and the
+    field operators are `DiagonalEB`. `phi`, `phi_covariance`, `quadratic_estimate` and
+    `mixing_g` stay scalar.
+    """
 
     #block diagonal matrix operators
     noise_covariance: DiagonalEB = flax.struct.field(default_factory = lambda: DiagonalEB())
@@ -73,6 +88,12 @@ class DataSetEB(DataSet):
 #Full temperature and polarization parametrization data set
 @struct.dataclass
 class DataSetTEB(DataSet):
+    """Temperature + polarization data set, returned by `load_sim(..., pol = "IP")`.
+
+    Same attributes as `DataSetT`, but the fields other than `phi` are `FlatS02` (T, E, B)
+    and the field operators are `BlockTEB`, carrying the TE correlation. `phi`,
+    `phi_covariance`, `quadratic_estimate` and `mixing_g` stay scalar.
+    """
 
     noise_covariance: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())
     mixing_d: BlockTEB = flax.struct.field(default_factory = lambda: BlockTEB())

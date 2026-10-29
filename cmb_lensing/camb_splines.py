@@ -9,7 +9,6 @@ compute nodes often have no internet):
 
 import os
 from huggingface_hub import hf_hub_download
-
 from cmb_lensing.constants import CAMB_SPLINES_DIR, CAMB_SPLINES_REPO, CAMB_SPLINE_FILES
 
 def camb_spline_file(filename):

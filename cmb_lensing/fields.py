@@ -79,6 +79,20 @@ class Field:
 
 @struct.dataclass
 class FlatS0(Field):
+    """A spin-0 field on a flat nside x nside patch: temperature, or the lensing potential phi.
+
+    Supports +, -, * and / with another `FlatS0` or a scalar, element by element.
+
+    Attributes:
+        scalar_matrix: The field, an (nside, nside//2+1) rfft2 array in Fourier space or an
+            (nside, nside) real array in map space.
+        basis: `Basis.FOURIER` or `Basis.MAP`. Convert with `fourier()` / `map()`.
+        nside: Number of pixels on a side.
+        theta_pix: Pixel width in arcmin.
+        pix_width: Pixel width in radians.
+        fourier_weights: Weight of each rfft2 mode in inner products (2 in the bulk, 1 on
+            the self-conjugate columns).
+    """
 
     scalar_matrix: jnp.ndarray = flax.struct.field(default_factory = lambda: FOURIER_MATRIX_DEFAULT.copy())
     parametrization: int = flax.struct.field(default_factory = lambda: Parametrization.T)
@@ -92,6 +106,21 @@ class FlatS0(Field):
 
 @struct.dataclass
 class FlatS2(Field):
+    """A spin-2 (polarization) field on a flat patch, stored as E/B or Q/U.
+
+    Supports the same element-wise arithmetic as `FlatS0`. Convert between the
+    parametrizations with `qu2eb()` / `eb2qu()`.
+
+    Attributes:
+        polar_matrix_1: E (or Q) component.
+        polar_matrix_2: B (or U) component.
+        parametrization: `Parametrization.EB` or `Parametrization.QU`.
+        basis: `Basis.FOURIER` or `Basis.MAP`.
+        nside: Number of pixels on a side.
+        theta_pix: Pixel width in arcmin.
+        pix_width: Pixel width in radians.
+        fourier_weights: Weight of each rfft2 mode in inner products.
+    """
 
     polar_matrix_1: jnp.ndarray = flax.struct.field(default_factory = lambda: FOURIER_MATRIX_DEFAULT.copy())
     polar_matrix_2: jnp.ndarray = flax.struct.field(default_factory = lambda: FOURIER_MATRIX_DEFAULT.copy())
@@ -106,6 +135,21 @@ class FlatS2(Field):
 
 @struct.dataclass
 class FlatS02(Field):
+    """A temperature + polarization field on a flat patch: T together with E/B (or Q/U).
+
+    Supports the same element-wise arithmetic as `FlatS0`.
+
+    Attributes:
+        scalar_matrix: T component.
+        polar_matrix_1: E (or Q) component.
+        polar_matrix_2: B (or U) component.
+        parametrization: `Parametrization.EB` or `Parametrization.QU`.
+        basis: `Basis.FOURIER` or `Basis.MAP`.
+        nside: Number of pixels on a side.
+        theta_pix: Pixel width in arcmin.
+        pix_width: Pixel width in radians.
+        fourier_weights: Weight of each rfft2 mode in inner products.
+    """
 
     scalar_matrix: jnp.ndarray = flax.struct.field(default_factory = lambda: FOURIER_MATRIX_DEFAULT.copy())
     polar_matrix_1: jnp.ndarray = flax.struct.field(default_factory = lambda: FOURIER_MATRIX_DEFAULT.copy())

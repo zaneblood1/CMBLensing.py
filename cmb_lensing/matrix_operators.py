@@ -44,6 +44,18 @@ class FieldOperator:
     
 @struct.dataclass
 class DiagonalScalar(FieldOperator):
+    """An operator diagonal in Fourier space acting on `FlatS0` fields (e.g. C_TT, C_phi).
+
+    `operator * field` multiplies mode by mode. Operators also combine with each other and
+    with scalars through +, - and *; `pinv` and `log_det` are defined for them.
+
+    Attributes:
+        scalar_matrix: The diagonal, an (nside, nside//2+1) array on the rfft2 grid.
+        nside: Number of pixels on a side.
+        theta_pix: Pixel width in arcmin.
+        pix_width: Pixel width in radians.
+        fourier_weights: Weight of each rfft2 mode.
+    """
 
     scalar_matrix: jnp.ndarray = flax.struct.field(default_factory = lambda: FOURIER_MATRIX_DEFAULT.copy())
 
@@ -64,6 +76,17 @@ class DiagonalScalar(FieldOperator):
 
 @struct.dataclass
 class DiagonalEB(FieldOperator):
+    """An operator acting on `FlatS2` fields, diagonal in Fourier space with separate E and B
+    blocks (no EB coupling).
+
+    Attributes:
+        matrix_EE: E block, an (nside, nside//2+1) array on the rfft2 grid.
+        matrix_BB: B block.
+        nside: Number of pixels on a side.
+        theta_pix: Pixel width in arcmin.
+        pix_width: Pixel width in radians.
+        fourier_weights: Weight of each rfft2 mode.
+    """
 
     #NOTE these matrices have the following 2 x 2 block diagonal format
     #[EE 0 ]
@@ -91,6 +114,23 @@ class DiagonalEB(FieldOperator):
     
 @struct.dataclass
 class BlockTEB(FieldOperator):
+    """An operator acting on `FlatS02` fields: per Fourier mode a 2 x 2 T/E block plus an
+    independent B block.
+
+    Products with another `BlockTEB` are matrix products of the T/E blocks, so they do not
+    commute. `pinv` and `log_det` use Schur complements.
+
+    Attributes:
+        matrix_TT: TT block, an (nside, nside//2+1) array on the rfft2 grid.
+        matrix_TE: TE block.
+        matrix_ET: ET block.
+        matrix_EE: EE block.
+        matrix_BB: BB block.
+        nside: Number of pixels on a side.
+        theta_pix: Pixel width in arcmin.
+        pix_width: Pixel width in radians.
+        fourier_weights: Weight of each rfft2 mode.
+    """
 
     #NOTE these matrices have the following 3 x 3 block diagonal format
     #[TT TE 0 ]

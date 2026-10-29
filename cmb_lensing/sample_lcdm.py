@@ -1066,8 +1066,64 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
                  lmax = DEFAULT_MAX_ELL, metropolis_num_steps = 1, hpc_path = None,
                  reparameterize_lcdm = False, rotation_matrix = None,
                  rotated_proposal_sigmas = None):
+    """Gibbs-sample the joint posterior P(f, phi, theta | d) of the field, the lensing potential
+    and the five LCDM parameters.
 
-    #polarization mode follows the dataset 
+    Each iteration draws f from its conditional, takes one HMC step on the mixed phi, then one
+    random-walk Metropolis move per sampled parameter on the mixed logpdf, and recomputes the
+    covariance and mixing matrices at the accepted parameters. The parameters are named as in
+    `constants.PARAM_ORDER`: "theta_MC_100", "logA", "ns", "ombh2", "omch2". The spectra come
+    from the 5D CAMB grid (the default) or the 1D CAMB splines, set by the module switches
+    `USE_CAMB_GRID` / `USE_CAMB_SPLINE`.
+
+    Args:
+        data_set: The data, a `DataSetT`, `DataSetEB` or `DataSetTEB` (e.g. from
+            `load_sim`). Its type sets the polarization mode.
+        param_init: {name: value} starting point, all five parameters.
+        proposal_sigmas: {name: width} of the Gaussian Metropolis proposal per parameter.
+            The parameters are updated in this dict's order. Tune toward ~44 % acceptance.
+        param_ranges: {name: (low, high)}; proposals outside the range are rejected.
+        should_sample: {name: bool}; parameters set to False stay at `param_init`.
+        noise_level: White noise level of the data in uK-arcmin.
+        advanced_logging: {"phi_acceptance", "lcdm_acceptance", "plot_log_pdf",
+            "plot_lcdm_sigmas": bool}. The first two print running acceptance rates, the
+            last two overwrite progress plots in `cmb_lensing/sample_lcdm_output/` (which
+            must exist) every iteration.
+        fixed_fields: Debugging option: hold f and phi at the data set's true fields and
+            sample theta only.
+        phi_init: Starting phi: "MAP" (the `map_joint` estimate, default), "RNG" (a draw
+            from the phi step's inverse mass matrix) or anything else for zero.
+        hmc_num_steps: Leapfrog steps per phi HMC step.
+        hmc_step_size: Leapfrog step size. Tune toward ~65 % phi acceptance.
+        iters_per_chain: Number of Gibbs iterations.
+        num_burn_in_fix_theta: Iterations before the parameters start to move.
+        num_burn_in_always_accept: Iterations for which every phi HMC step is accepted.
+        resume_chain_dict: Restart a saved chain: a dict with one entry per parameter name,
+            "phi_map" and "sub_key" (e.g. `np.load` of the npz `run_single_lcdm_chain.py`
+            writes). Overrides `param_init` and `phi_init`.
+        seed: Seed of the chain's random numbers. None draws one at random.
+        map_idx: Data-map index used in the history file names.
+        sub_chain_idx: Chain index used in the history file names.
+        lmax: Largest multipole of the spectra.
+        metropolis_num_steps: Metropolis moves per parameter per iteration.
+        hpc_path: If set, every iteration appends each sampled parameter's latest value to
+            `{hpc_path}{name}_map_{map_idx}_chain_{sub_chain_idx}_history.txt`.
+        reparameterize_lcdm: Make the Metropolis moves along the axes of
+            theta' = rotation_matrix @ theta instead of along the parameters themselves.
+            Requires the 5D grid.
+        rotation_matrix: (N, N) rotation over the N sampled parameters, taken in
+            `PARAM_ORDER`. Used only with `reparameterize_lcdm`.
+        rotated_proposal_sigmas: {name: width} of the proposal along each rotated axis, in
+            the order of the rotation's rows. Used only with `reparameterize_lcdm`.
+
+    Returns:
+        (param_vals, phi, sub_key): param_vals is a dict of per-parameter lists of the
+        chain's values (starting with `param_init`), phi the final lensing potential and
+        sub_key the final random key, which together with the last parameter values let a
+        chain be resumed.
+    """
+
+    #polarization mode follows the dataset
     if isinstance(data_set, DataSetTEB):
         pol = "IP"
     elif isinstance(data_set, DataSetEB):
