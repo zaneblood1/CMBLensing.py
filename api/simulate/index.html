@@ -1,0 +1,2562 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="JAX port of CMBLensing.jl - CMB lensing simulation, MAP reconstruction and LCDM sampling">
+      
+      
+      
+        <link rel="canonical" href="https://zaneblood1.github.io/CMBLensing.py/api/simulate/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../map-joint/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Simulating Data - CMBLensing.py</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#simulating-data" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="CMBLensing.py" class="md-header__button md-logo" aria-label="CMBLensing.py" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CMBLensing.py
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Simulating Data
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/zaneblood1/CMBLensing.py" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zaneblood1/CMBLensing.py
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="CMBLensing.py" class="md-nav__button md-logo" aria-label="CMBLensing.py" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    CMBLensing.py
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/zaneblood1/CMBLensing.py" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zaneblood1/CMBLensing.py
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/camb-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The CAMB Grid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/hpc-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Core concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fields and Operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/load-sim/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/map-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/sample-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../map_joint_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Joint
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sample_joint_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Joint
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipelines
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Pipelines
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/camb-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building the CAMB Grid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/lcdm-chains/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling on the HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/map-joint-phi-noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Joint Phi Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/sampler-phi-noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampler Phi Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/delensed-covariance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Delensed Covariances
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/chain-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fisher-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fisher Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Data
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.simulate.load_sim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_sim
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../map-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sample-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fields, Operators and Data Sets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fisher-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fisher Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.simulate.load_sim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_sim
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="simulating-data">Simulating Data<a class="headerlink" href="#simulating-data" title="Permanent link">&para;</a></h1>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="cmb_lensing.simulate.load_sim" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">cmb_lensing.simulate.load_sim</span>
+
+
+<a href="#cmb_lensing.simulate.load_sim" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_sim</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">pol</span><span class="p">,</span> <span class="n">master_seed</span><span class="p">,</span> <span class="n">uk_arcmin_t</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">H0</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ombh2</span><span class="o">=</span><span class="mf">0.0224567</span><span class="p">,</span> <span class="n">omch2</span><span class="o">=</span><span class="mf">0.118489</span><span class="p">,</span> <span class="n">cosmomc_theta</span><span class="o">=</span><span class="mf">0.0104098</span><span class="p">,</span> <span class="n">r</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">mnu</span><span class="o">=</span><span class="n">DEFAULT_MNU</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">DEFAULT_TAUREIO</span><span class="p">,</span> <span class="n">As</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="mf">3.043</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1e-10</span><span class="p">,</span> <span class="n">nt</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ns</span><span class="o">=</span><span class="mf">0.968602</span><span class="p">,</span> <span class="n">lmax</span><span class="o">=</span><span class="mi">4000</span><span class="p">,</span> <span class="n">begin_ell_interp</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">l_knee</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">k_pivot</span><span class="o">=</span><span class="n">DEFAULT_K_PIVOT</span><span class="p">,</span> <span class="n">Alens</span><span class="o">=</span><span class="n">DEFAULT_A_LENSE</span><span class="p">,</span> <span class="n">nphi_fac</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">a_phi</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">precomputed_cls</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_l_tensor</span><span class="o">=</span><span class="n">DEFAULT_MAX_L_TENSOR</span><span class="p">,</span> <span class="n">max_eta_k_tensor</span><span class="o">=</span><span class="n">DEFAULT_MAX_ETA_K_TENSOR</span><span class="p">,</span> <span class="n">use_mask</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Simulate a lensed CMB data set on a flat nside x nside sky patch.</p>
+<p>Runs CAMB for the requested cosmology, builds the field, phi and noise covariances in
+Fourier space, draws the unlensed field(s), phi and the noise, lenses the field with
+LenseFlow and returns everything in one data set object. CAMB runs inside
+<code>jax.pure_callback</code>, so a CAMB failure gives NaN spectra rather than an exception.</p>
+<p>Randomness: one root key PRNGKey(master_seed), and every random field (phi, then the
+unlensed field(s), then the noise) splits its own subkey off it in that fixed order
+(field_from_covar). So the realization at a seed depends on the cosmology only through
+the covariances the white noise is scaled by.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>nside</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of pixels on a side.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>theta_pix</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pixel width in arcmin.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>pol</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>"I" (temperature only), "P" (E/B polarization only) or "IP" (both).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>master_seed</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Root seed of every random draw.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>uk_arcmin_t</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>White noise level in temperature, in uK-arcmin. The polarization
+noise is sqrt(2) higher.</p>
+              </div>
+            </td>
+            <td>
+                  <code>3</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>H0</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Hubble constant. Leave as None to set the expansion through <code>cosmomc_theta</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ombh2</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Physical baryon density.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.0224567</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>omch2</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Physical cold dark matter density.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.118489</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>cosmomc_theta</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>CosmoMC's approximation to the angular size of the sound horizon
+(the sampler's theta_MC_100 divided by 100).</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.0104098</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>r</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tensor-to-scalar ratio.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>mnu</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Sum of the neutrino masses in eV.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_MNU">DEFAULT_MNU</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>tau</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optical depth to reionization.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_TAUREIO">DEFAULT_TAUREIO</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>As</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Primordial scalar amplitude (the sampler's logA is log(1e10 As)).</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.statistics.jnp.exp">exp</span>(3.043) * 1e-10</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>nt</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tensor spectral index.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ns</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Scalar spectral index.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.968602</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>lmax</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Largest multipole of the spectra.</p>
+              </div>
+            </td>
+            <td>
+                  <code>4000</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>begin_ell_interp</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional multipole past which the spectra are extrapolated
+rather than taken from CAMB.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>l_knee</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Knee of the 1/f noise term. 0 gives pure white noise, as every sampler
+entry point uses.</p>
+              </div>
+            </td>
+            <td>
+                  <code>100</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>k_pivot</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pivot scale of the primordial spectra, in 1/Mpc.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_K_PIVOT">DEFAULT_K_PIVOT</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>Alens</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>CAMB's lensing amplitude.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_A_LENSE">DEFAULT_A_LENSE</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>nphi_fac</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Factor the quadratic-estimate noise is divided by (CMBLensing.jl's
+preconditioning heuristic).</p>
+              </div>
+            </td>
+            <td>
+                  <code>2</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>a_phi</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Amplitude multiplying the phi covariance.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>precomputed_cls</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional dict of CAMB spectra to use instead of running CAMB, for
+callers that build many realizations at one cosmology. It must be in
+<code>_extract_all_cls</code>'s format (e.g. the output of
+<code>fisher_forecast.camb_cls_at_params</code>) and must belong to the same cosmology as
+the keyword arguments, which are then unused.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_l_tensor</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>CAMB's largest multipole for the tensor spectra.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_MAX_L_TENSOR">DEFAULT_MAX_L_TENSOR</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_eta_k_tensor</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>CAMB's largest k * eta for the tensor spectra.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_MAX_ETA_K_TENSOR">DEFAULT_MAX_ETA_K_TENSOR</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>use_mask</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Apply a sky mask. False (the default) uses a mask of all ones.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>DataSetT</code> (pol = "I"), <code>DataSetEB</code> (pol = "P") or <code>DataSetTEB</code> (pol = "IP")</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>holding the fields (<code>unlensed_field</code>, <code>lensed_field</code>, <code>phi</code>, <code>data</code>) and the</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>operators (<code>field_covariance</code>, <code>phi_covariance</code>, <code>noise_covariance</code>, <code>mask</code>,</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>beam</code>, <code>mixing_d</code>, <code>mixing_g</code>, <code>quadratic_estimate</code>, ...). All fields are in</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Fourier space.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<details class="example" open>
+  <summary>Example</summary>
+  <div class="highlight"><pre><span></span><code><a id="cmb_lensing.simulate.load_sim--__codelineno-0-1" name="cmb_lensing.simulate.load_sim--__codelineno-0-1" href="#cmb_lensing.simulate.load_sim--__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cmb_lensing.simulate</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_sim</span>
+<a id="cmb_lensing.simulate.load_sim--__codelineno-0-2" name="cmb_lensing.simulate.load_sim--__codelineno-0-2" href="#cmb_lensing.simulate.load_sim--__codelineno-0-2"></a><span class="n">data_set</span> <span class="o">=</span> <span class="n">load_sim</span><span class="p">(</span><span class="n">nside</span> <span class="o">=</span> <span class="mi">128</span><span class="p">,</span> <span class="n">theta_pix</span> <span class="o">=</span> <span class="mf">2.5</span><span class="p">,</span> <span class="n">pol</span> <span class="o">=</span> <span class="s2">"IP"</span><span class="p">,</span> <span class="n">master_seed</span> <span class="o">=</span> <span class="mi">67</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--__codelineno-0-3" name="cmb_lensing.simulate.load_sim--__codelineno-0-3" href="#cmb_lensing.simulate.load_sim--__codelineno-0-3"></a>                    <span class="n">uk_arcmin_t</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="n">l_knee</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+</details>
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>cmb_lensing/simulate.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-799"> 799</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-800"> 800</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-801"> 801</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-802"> 802</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-803"> 803</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-804"> 804</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-805"> 805</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-806"> 806</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-807"> 807</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-808"> 808</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-809"> 809</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-810"> 810</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-811"> 811</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-812"> 812</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-813"> 813</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-814"> 814</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-815"> 815</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-816"> 816</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-817"> 817</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-818"> 818</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-819"> 819</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-820"> 820</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-821"> 821</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-822"> 822</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-823"> 823</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-824"> 824</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-825"> 825</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-826"> 826</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-827"> 827</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-828"> 828</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-829"> 829</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-830"> 830</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-831"> 831</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-832"> 832</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-833"> 833</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-834"> 834</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-835"> 835</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-836"> 836</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-837"> 837</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-838"> 838</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-839"> 839</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-840"> 840</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-841"> 841</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-842"> 842</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-843"> 843</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-844"> 844</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-845"> 845</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-846"> 846</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-847"> 847</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-848"> 848</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-849"> 849</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-850"> 850</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-851"> 851</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-852"> 852</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-853"> 853</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-854"> 854</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-855"> 855</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-856"> 856</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-857"> 857</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-858"> 858</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-859"> 859</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-860"> 860</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-861"> 861</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-862"> 862</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-863"> 863</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-864"> 864</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-865"> 865</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-866"> 866</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-867"> 867</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-868"> 868</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-869"> 869</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-870"> 870</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-871"> 871</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-872"> 872</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-873"> 873</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-874"> 874</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-875"> 875</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-876"> 876</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-877"> 877</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-878"> 878</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-879"> 879</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-880"> 880</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-881"> 881</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-882"> 882</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-883"> 883</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-884"> 884</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-885"> 885</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-886"> 886</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-887"> 887</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-888"> 888</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-889"> 889</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-890"> 890</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-891"> 891</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-892"> 892</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-893"> 893</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-894"> 894</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-895"> 895</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-896"> 896</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-897"> 897</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-898"> 898</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-899"> 899</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-900"> 900</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-901"> 901</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-902"> 902</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-903"> 903</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-904"> 904</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-905"> 905</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-906"> 906</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-907"> 907</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-908"> 908</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-909"> 909</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-910"> 910</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-911"> 911</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-912"> 912</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-913"> 913</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-914"> 914</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-915"> 915</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-916"> 916</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-917"> 917</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-918"> 918</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-919"> 919</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-920"> 920</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-921"> 921</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-922"> 922</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-923"> 923</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-924"> 924</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-925"> 925</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-926"> 926</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-927"> 927</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-928"> 928</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-929"> 929</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-930"> 930</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-931"> 931</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-932"> 932</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-933"> 933</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-934"> 934</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-935"> 935</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-936"> 936</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-937"> 937</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-938"> 938</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-939"> 939</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-940"> 940</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-941"> 941</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-942"> 942</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-943"> 943</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-944"> 944</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-945"> 945</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-946"> 946</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-947"> 947</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-948"> 948</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-949"> 949</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-950"> 950</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-951"> 951</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-952"> 952</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-953"> 953</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-954"> 954</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-955"> 955</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-956"> 956</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-957"> 957</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-958"> 958</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-959"> 959</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-960"> 960</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-961"> 961</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-962"> 962</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-963"> 963</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-964"> 964</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-965"> 965</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-966"> 966</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-967"> 967</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-968"> 968</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-969"> 969</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-970"> 970</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-971"> 971</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-972"> 972</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-973"> 973</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-974"> 974</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-975"> 975</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-976"> 976</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-977"> 977</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-978"> 978</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-979"> 979</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-980"> 980</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-981"> 981</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-982"> 982</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-983"> 983</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-984"> 984</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-985"> 985</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-986"> 986</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-987"> 987</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-988"> 988</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-989"> 989</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-990"> 990</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-991"> 991</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-992"> 992</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-993"> 993</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-994"> 994</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-995"> 995</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-996"> 996</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-997"> 997</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-998"> 998</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-999"> 999</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1000">1000</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1001">1001</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1002">1002</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1003">1003</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1004">1004</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1005">1005</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1006">1006</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1007">1007</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1008">1008</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1009">1009</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1010">1010</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1011">1011</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1012">1012</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1013">1013</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1014">1014</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1015">1015</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1016">1016</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1017">1017</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1018">1018</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1019">1019</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1020">1020</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1021">1021</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1022">1022</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1023">1023</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1024">1024</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1025">1025</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1026">1026</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1027">1027</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1028">1028</a></span>
+<span class="normal"><a href="#cmb_lensing.simulate.load_sim--source--__codelineno-0-1029">1029</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-799" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-799"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_sim</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">pol</span><span class="p">,</span> <span class="n">master_seed</span><span class="p">,</span> <span class="n">uk_arcmin_t</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">H0</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-800" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-800"></a>             <span class="n">ombh2</span> <span class="o">=</span> <span class="mf">0.0224567</span><span class="p">,</span> <span class="n">omch2</span> <span class="o">=</span> <span class="mf">0.118489</span><span class="p">,</span> <span class="n">cosmomc_theta</span> <span class="o">=</span> <span class="mf">0.0104098</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-801" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-801"></a>             <span class="n">r</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">mnu</span> <span class="o">=</span> <span class="n">DEFAULT_MNU</span><span class="p">,</span> <span class="n">tau</span> <span class="o">=</span> <span class="n">DEFAULT_TAUREIO</span><span class="p">,</span> <span class="n">As</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="mf">3.043</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1e-10</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-802" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-802"></a>             <span class="n">nt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">ns</span> <span class="o">=</span> <span class="mf">0.968602</span><span class="p">,</span> <span class="n">lmax</span> <span class="o">=</span> <span class="mi">4000</span><span class="p">,</span> <span class="n">begin_ell_interp</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">l_knee</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-803" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-803"></a>             <span class="n">k_pivot</span> <span class="o">=</span> <span class="n">DEFAULT_K_PIVOT</span><span class="p">,</span> <span class="n">Alens</span> <span class="o">=</span> <span class="n">DEFAULT_A_LENSE</span><span class="p">,</span> <span class="n">nphi_fac</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">a_phi</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-804" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-804"></a>             <span class="n">precomputed_cls</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">max_l_tensor</span> <span class="o">=</span> <span class="n">DEFAULT_MAX_L_TENSOR</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-805" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-805"></a>             <span class="n">max_eta_k_tensor</span> <span class="o">=</span> <span class="n">DEFAULT_MAX_ETA_K_TENSOR</span><span class="p">,</span> <span class="n">use_mask</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-806" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-806"></a><span class="w">    </span><span class="sd">"""Simulate a lensed CMB data set on a flat nside x nside sky patch.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-807" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-807"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-808" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-808"></a><span class="sd">    Runs CAMB for the requested cosmology, builds the field, phi and noise covariances in</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-809" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-809"></a><span class="sd">    Fourier space, draws the unlensed field(s), phi and the noise, lenses the field with</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-810" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-810"></a><span class="sd">    LenseFlow and returns everything in one data set object. CAMB runs inside</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-811" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-811"></a><span class="sd">    `jax.pure_callback`, so a CAMB failure gives NaN spectra rather than an exception.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-812" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-812"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-813" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-813"></a><span class="sd">    Randomness: one root key PRNGKey(master_seed), and every random field (phi, then the</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-814" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-814"></a><span class="sd">    unlensed field(s), then the noise) splits its own subkey off it in that fixed order</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-815" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-815"></a><span class="sd">    (field_from_covar). So the realization at a seed depends on the cosmology only through</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-816" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-816"></a><span class="sd">    the covariances the white noise is scaled by.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-817" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-817"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-818" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-818"></a><span class="sd">    Args:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-819" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-819"></a><span class="sd">        nside: Number of pixels on a side.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-820" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-820"></a><span class="sd">        theta_pix: Pixel width in arcmin.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-821" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-821"></a><span class="sd">        pol: "I" (temperature only), "P" (E/B polarization only) or "IP" (both).</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-822" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-822"></a><span class="sd">        master_seed: Root seed of every random draw.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-823" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-823"></a><span class="sd">        uk_arcmin_t: White noise level in temperature, in uK-arcmin. The polarization</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-824" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-824"></a><span class="sd">            noise is sqrt(2) higher.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-825" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-825"></a><span class="sd">        H0: Hubble constant. Leave as None to set the expansion through `cosmomc_theta`.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-826" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-826"></a><span class="sd">        ombh2: Physical baryon density.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-827" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-827"></a><span class="sd">        omch2: Physical cold dark matter density.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-828" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-828"></a><span class="sd">        cosmomc_theta: CosmoMC's approximation to the angular size of the sound horizon</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-829" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-829"></a><span class="sd">            (the sampler's theta_MC_100 divided by 100).</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-830" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-830"></a><span class="sd">        r: Tensor-to-scalar ratio.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-831" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-831"></a><span class="sd">        mnu: Sum of the neutrino masses in eV.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-832" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-832"></a><span class="sd">        tau: Optical depth to reionization.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-833" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-833"></a><span class="sd">        As: Primordial scalar amplitude (the sampler's logA is log(1e10 As)).</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-834" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-834"></a><span class="sd">        nt: Tensor spectral index.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-835" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-835"></a><span class="sd">        ns: Scalar spectral index.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-836" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-836"></a><span class="sd">        lmax: Largest multipole of the spectra.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-837" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-837"></a><span class="sd">        begin_ell_interp: Optional multipole past which the spectra are extrapolated</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-838" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-838"></a><span class="sd">            rather than taken from CAMB.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-839" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-839"></a><span class="sd">        l_knee: Knee of the 1/f noise term. 0 gives pure white noise, as every sampler</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-840" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-840"></a><span class="sd">            entry point uses.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-841" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-841"></a><span class="sd">        k_pivot: Pivot scale of the primordial spectra, in 1/Mpc.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-842" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-842"></a><span class="sd">        Alens: CAMB's lensing amplitude.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-843" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-843"></a><span class="sd">        nphi_fac: Factor the quadratic-estimate noise is divided by (CMBLensing.jl's</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-844" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-844"></a><span class="sd">            preconditioning heuristic).</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-845" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-845"></a><span class="sd">        a_phi: Amplitude multiplying the phi covariance.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-846" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-846"></a><span class="sd">        precomputed_cls: Optional dict of CAMB spectra to use instead of running CAMB, for</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-847" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-847"></a><span class="sd">            callers that build many realizations at one cosmology. It must be in</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-848" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-848"></a><span class="sd">            `_extract_all_cls`'s format (e.g. the output of</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-849" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-849"></a><span class="sd">            `fisher_forecast.camb_cls_at_params`) and must belong to the same cosmology as</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-850" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-850"></a><span class="sd">            the keyword arguments, which are then unused.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-851" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-851"></a><span class="sd">        max_l_tensor: CAMB's largest multipole for the tensor spectra.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-852" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-852"></a><span class="sd">        max_eta_k_tensor: CAMB's largest k * eta for the tensor spectra.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-853" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-853"></a><span class="sd">        use_mask: Apply a sky mask. False (the default) uses a mask of all ones.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-854" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-854"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-855" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-855"></a><span class="sd">    Returns:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-856" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-856"></a><span class="sd">        A `DataSetT` (pol = "I"), `DataSetEB` (pol = "P") or `DataSetTEB` (pol = "IP")</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-857" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-857"></a><span class="sd">        holding the fields (`unlensed_field`, `lensed_field`, `phi`, `data`) and the</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-858" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-858"></a><span class="sd">        operators (`field_covariance`, `phi_covariance`, `noise_covariance`, `mask`,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-859" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-859"></a><span class="sd">        `beam`, `mixing_d`, `mixing_g`, `quadratic_estimate`, ...). All fields are in</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-860" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-860"></a><span class="sd">        Fourier space.</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-861" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-861"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-862" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-862"></a><span class="sd">    Example:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-863" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-863"></a><span class="sd">        ```python</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-864" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-864"></a><span class="sd">        from cmb_lensing.simulate import load_sim</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-865" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-865"></a><span class="sd">        data_set = load_sim(nside = 128, theta_pix = 2.5, pol = "IP", master_seed = 67,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-866" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-866"></a><span class="sd">                            uk_arcmin_t = 5, l_knee = 0)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-867" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-867"></a><span class="sd">        ```</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-868" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-868"></a><span class="sd">    """</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-869" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-869"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-870" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-870"></a>    <span class="n">lmax_prime</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">lmax</span><span class="p">,</span> <span class="n">DEFAULT_MAX_ELL</span><span class="p">)</span> <span class="k">if</span> <span class="n">begin_ell_interp</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">min</span><span class="p">(</span><span class="n">lmax</span><span class="p">,</span> <span class="n">begin_ell_interp</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-871" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-871"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-872" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-872"></a>    <span class="k">if</span> <span class="n">precomputed_cls</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-873" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-873"></a>        <span class="n">unlensed_scalar</span><span class="p">,</span> <span class="n">tensor</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">lens_potential</span> <span class="o">=</span> <span class="n">_camb_via_callback</span><span class="p">(</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-874" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-874"></a>            <span class="n">H0</span><span class="p">,</span> <span class="n">ombh2</span><span class="p">,</span> <span class="n">omch2</span><span class="p">,</span> <span class="n">cosmomc_theta</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">mnu</span><span class="p">,</span> <span class="n">tau</span><span class="p">,</span> <span class="n">As</span><span class="p">,</span> <span class="n">nt</span><span class="p">,</span> <span class="n">ns</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-875" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-875"></a>            <span class="n">lmax_prime</span><span class="p">,</span> <span class="n">k_pivot</span><span class="p">,</span> <span class="n">Alens</span><span class="p">,</span> <span class="n">max_l_tensor</span><span class="p">,</span> <span class="n">max_eta_k_tensor</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-876" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-876"></a>        <span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-877" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-877"></a>        <span class="bp">cls</span> <span class="o">=</span> <span class="n">_extract_all_cls</span><span class="p">(</span><span class="n">unlensed_scalar</span><span class="p">,</span> <span class="n">tensor</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">lens_potential</span><span class="p">,</span> <span class="n">lmax</span><span class="p">,</span> <span class="n">lmax_prime</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-878" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-878"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-879" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-879"></a>        <span class="bp">cls</span> <span class="o">=</span> <span class="n">_validate_precomputed_cls</span><span class="p">(</span><span class="n">precomputed_cls</span><span class="p">,</span> <span class="n">lmax</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-880" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-880"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-881" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-881"></a>    <span class="n">ell_grid</span><span class="p">,</span> <span class="n">pix_width</span> <span class="o">=</span> <span class="n">gen_ell_grid</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-882" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-882"></a>    <span class="c1">#one root key; every draw below splits its own subkey off it (field_from_covar). The draw</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-883" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-883"></a>    <span class="c1">#ORDER (phi, the field(s), the noise) is fixed and independent of the cosmology, so two</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-884" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-884"></a>    <span class="c1">#calls at the same seed share every white-noise realization - the common random numbers</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-885" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-885"></a>    <span class="c1">#delensed_covariance.py's stencil relies on</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-886" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-886"></a>    <span class="n">rng_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="n">master_seed</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-887" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-887"></a>    <span class="n">ells</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">lmax</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-888" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-888"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-889" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-889"></a>    <span class="c1">#ells arrays matched to the cls lengths: the emulator override returns ells</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-890" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-890"></a>    <span class="c1">#2..lmax inclusive while the CAMB dl2cl path returns 2..lmax-1</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-891" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-891"></a>    <span class="n">phi_ells</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span> <span class="o">+</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">"phi"</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-892" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-892"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-893" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-893"></a>    <span class="c1">#Lensing potential</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-894" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-894"></a>    <span class="n">unscaled_cphi</span> <span class="o">=</span> <span class="n">covar_matrix_from_cls</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-895" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-895"></a>                                          <span class="n">phi_ells</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-896" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-896"></a>                                          <span class="bp">cls</span><span class="p">[</span><span class="s2">"phi"</span><span class="p">],</span> <span class="n">origin_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-897" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-897"></a>    <span class="n">cphi</span> <span class="o">=</span> <span class="n">a_phi</span> <span class="o">*</span> <span class="n">unscaled_cphi</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-898" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-898"></a>    <span class="n">phi</span><span class="p">,</span> <span class="n">rng_key</span> <span class="o">=</span> <span class="n">field_from_covar</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">cphi</span><span class="p">,</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-899" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-899"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-900" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-900"></a>    <span class="c1">#Unlensed field covariances (scalar + tensor). Unlensed scalar BB (identically zero</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-901" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-901"></a>    <span class="c1">#at r = 0) cannot go through the log-interpolating covariance builder (log(0) -&gt; NaN)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-902" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-902"></a>    <span class="c1">#so _covar_or_zeros maps it to an exactly zero matrix. TE crosses zero, so it is</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-903" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-903"></a>    <span class="c1">#built from the correlation ratio rho = Cl_TE / sqrt(Cl_TT * Cl_EE) instead</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-904" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-904"></a>    <span class="c1">#(te_covar_from_rho): linear interpolation of rho onto the ell grid, scaled by</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-905" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-905"></a>    <span class="c1">#sqrt(cf_tt * cf_ee), which keeps the T/E block positive semi-definite by</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-906" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-906"></a>    <span class="c1">#construction and matched to the sampler's grid-spline TE path</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-907" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-907"></a>    <span class="n">cf</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-908" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-908"></a>    <span class="n">cf_scalar</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-909" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-909"></a>    <span class="n">cf_tensor</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-910" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-910"></a>    <span class="n">pol_comps</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"TT"</span><span class="p">,)</span> <span class="k">if</span> <span class="n">pol</span> <span class="o">==</span> <span class="s2">"I"</span> <span class="k">else</span> <span class="p">(</span><span class="s2">"TT"</span><span class="p">,</span> <span class="s2">"EE"</span><span class="p">,</span> <span class="s2">"BB"</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-911" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-911"></a>    <span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="n">pol_comps</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-912" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-912"></a>        <span class="n">scalar_ells</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span> <span class="o">+</span> <span class="bp">cls</span><span class="p">[</span><span class="sa">f</span><span class="s2">"scalar_</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">"</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-913" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-913"></a>        <span class="n">cf_scalar</span><span class="p">[</span><span class="n">comp</span><span class="p">]</span> <span class="o">=</span> <span class="n">_covar_or_zeros</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-914" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-914"></a>                                          <span class="n">scalar_ells</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-915" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-915"></a>                                          <span class="bp">cls</span><span class="p">[</span><span class="sa">f</span><span class="s2">"scalar_</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">"</span><span class="p">],</span> <span class="n">origin_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-916" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-916"></a>        <span class="n">cf_tensor</span><span class="p">[</span><span class="n">comp</span><span class="p">]</span> <span class="o">=</span> <span class="n">_covar_or_zeros</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">,</span> <span class="n">ells</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-917" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-917"></a>                                          <span class="bp">cls</span><span class="p">[</span><span class="sa">f</span><span class="s2">"tensor_</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">"</span><span class="p">],</span> <span class="n">origin_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-918" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-918"></a>        <span class="n">cf</span><span class="p">[</span><span class="n">comp</span><span class="p">]</span> <span class="o">=</span> <span class="n">cf_scalar</span><span class="p">[</span><span class="n">comp</span><span class="p">]</span> <span class="o">+</span> <span class="n">cf_tensor</span><span class="p">[</span><span class="n">comp</span><span class="p">]</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-919" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-919"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">!=</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-920" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-920"></a>        <span class="n">scalar_ells</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span> <span class="o">+</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">"scalar_TE"</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-921" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-921"></a>        <span class="n">rho_te</span> <span class="o">=</span> <span class="n">te_rho_from_cls</span><span class="p">(</span><span class="bp">cls</span><span class="p">[</span><span class="s2">"scalar_TE"</span><span class="p">],</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">"scalar_TT"</span><span class="p">],</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">"scalar_EE"</span><span class="p">])</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-922" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-922"></a>        <span class="n">cf</span><span class="p">[</span><span class="s2">"TE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">cf_scalar</span><span class="p">[</span><span class="s2">"TE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">te_covar_from_rho</span><span class="p">(</span><span class="n">rho_te</span><span class="p">,</span> <span class="n">scalar_ells</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-923" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-923"></a>                                                       <span class="n">cf</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">])</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-924" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-924"></a>        <span class="n">cf_tensor</span><span class="p">[</span><span class="s2">"TE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nside</span><span class="p">,</span> <span class="n">nside</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-925" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-925"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-926" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-926"></a>    <span class="c1">#Lensed field covariances (TE via the same correlation-ratio route)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-927" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-927"></a>    <span class="n">cfl</span> <span class="o">=</span> <span class="p">{</span><span class="n">comp</span><span class="p">:</span> <span class="n">covar_matrix_from_cls</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">,</span> <span class="n">ells</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-928" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-928"></a>                                       <span class="bp">cls</span><span class="p">[</span><span class="sa">f</span><span class="s2">"total_</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">"</span><span class="p">],</span> <span class="n">origin_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-929" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-929"></a>           <span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"TT"</span><span class="p">,</span> <span class="s2">"EE"</span><span class="p">,</span> <span class="s2">"BB"</span><span class="p">)}</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-930" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-930"></a>    <span class="n">rho_te_lensed</span> <span class="o">=</span> <span class="n">te_rho_from_cls</span><span class="p">(</span><span class="bp">cls</span><span class="p">[</span><span class="s2">"total_TE"</span><span class="p">],</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">"total_TT"</span><span class="p">],</span> <span class="bp">cls</span><span class="p">[</span><span class="s2">"total_EE"</span><span class="p">])</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-931" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-931"></a>    <span class="n">cfl</span><span class="p">[</span><span class="s2">"TE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">te_covar_from_rho</span><span class="p">(</span><span class="n">rho_te_lensed</span><span class="p">,</span> <span class="n">ells</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">,</span> <span class="n">cfl</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">cfl</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">])</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-932" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-932"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-933" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-933"></a>    <span class="c1">#Unlensed random fields. T and E are drawn CORRELATED to match the model's TE block:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-934" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-934"></a>    <span class="c1">#E ~ N(0, C_EE), then T = (C_TE / C_EE) E + t_indep with</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-935" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-935"></a>    <span class="c1">#t_indep ~ N(0, C_TT - C_TE^2 / C_EE), which gives exactly</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-936" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-936"></a>    <span class="c1">#Cov = [[C_TT, C_TE], [C_TE, C_EE]] (the conditional variance is</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-937" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-937"></a>    <span class="c1">#C_TT (1 - rho^2) &gt;= 0 by the |rho| &lt;= 1 construction; the maximum(0) guards</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-938" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-938"></a>    <span class="c1">#round-off only). The B draw against a zero covariance gives an exactly zero field</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-939" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-939"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">==</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-940" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-940"></a>        <span class="n">field_t</span><span class="p">,</span> <span class="n">rng_key</span> <span class="o">=</span> <span class="n">field_from_covar</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-941" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-941"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-942" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-942"></a>        <span class="n">conditional_tt</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-943" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-943"></a>            <span class="n">cf</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">]</span> <span class="o">-</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"TE"</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">reciprocal_matrix</span><span class="p">(</span><span class="n">cf</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">]),</span> <span class="mf">0.0</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-944" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-944"></a>        <span class="n">t_indep</span><span class="p">,</span> <span class="n">rng_key</span> <span class="o">=</span> <span class="n">field_from_covar</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">conditional_tt</span><span class="p">,</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-945" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-945"></a>        <span class="n">field_e</span><span class="p">,</span> <span class="n">rng_key</span> <span class="o">=</span> <span class="n">field_from_covar</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">],</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-946" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-946"></a>        <span class="n">field_b</span><span class="p">,</span> <span class="n">rng_key</span> <span class="o">=</span> <span class="n">field_from_covar</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"BB"</span><span class="p">],</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-947" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-947"></a>        <span class="n">te_ratio</span> <span class="o">=</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"TE"</span><span class="p">]</span> <span class="o">*</span> <span class="n">reciprocal_matrix</span><span class="p">(</span><span class="n">cf</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">])</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-948" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-948"></a>        <span class="n">field_t</span> <span class="o">=</span> <span class="n">jfft</span><span class="o">.</span><span class="n">irfft2</span><span class="p">(</span><span class="n">te_ratio</span> <span class="o">*</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">field_e</span><span class="p">))</span> <span class="o">+</span> <span class="n">t_indep</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-949" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-949"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-950" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-950"></a>    <span class="c1">#Lensing</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-951" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-951"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">==</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-952" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-952"></a>        <span class="n">lensed_t</span> <span class="o">=</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">primal_lense_flow</span><span class="p">(</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-953" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-953"></a>            <span class="n">field_t</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="n">FORWARD_LENSE</span><span class="p">,</span> <span class="n">adjoint</span><span class="o">=</span><span class="kc">False</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-954" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-954"></a>        <span class="p">))</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-955" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-955"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-956" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-956"></a>        <span class="n">lensed_t</span><span class="p">,</span> <span class="n">lensed_e</span><span class="p">,</span> <span class="n">lensed_b</span> <span class="o">=</span> <span class="n">_lens_fields</span><span class="p">(</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-957" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-957"></a>            <span class="n">field_t</span><span class="p">,</span> <span class="n">field_e</span><span class="p">,</span> <span class="n">field_b</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-958" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-958"></a>        <span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-959" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-959"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-960" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-960"></a>    <span class="n">beam</span> <span class="o">=</span> <span class="n">get_beam</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">,</span> <span class="n">lmax_prime</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-961" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-961"></a>    <span class="c1">#NOTE we have removed the mask for LCDM inference</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-962" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-962"></a>    <span class="n">mask</span> <span class="o">=</span> <span class="n">get_mask</span><span class="p">(</span><span class="n">DEFAULT_MASK_ELL</span><span class="p">,</span> <span class="n">nside</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">)</span> <span class="k">if</span> <span class="n">use_mask</span> <span class="k">else</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">beam</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-963" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-963"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-964" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-964"></a>    <span class="c1">#Noise covariance and white noise (the TE noise Cls are identically zero, so</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-965" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-965"></a>    <span class="c1">#_covar_or_zeros keeps that block an exact zero matrix instead of NaN)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-966" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-966"></a>    <span class="n">n_tt</span><span class="p">,</span> <span class="n">n_te</span><span class="p">,</span> <span class="n">n_ee</span><span class="p">,</span> <span class="n">n_bb</span> <span class="o">=</span> <span class="n">noise_cls</span><span class="p">(</span><span class="n">lmax_prime</span><span class="p">,</span> <span class="n">uk_arcmin_t</span><span class="p">,</span> <span class="n">l_knee</span> <span class="o">=</span> <span class="n">l_knee</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-967" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-967"></a>    <span class="n">ell_prime</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">lmax_prime</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-968" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-968"></a>    <span class="n">cn</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-969" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-969"></a>    <span class="k">for</span> <span class="n">comp</span><span class="p">,</span> <span class="n">ncl</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">((</span><span class="s2">"TT"</span><span class="p">,</span> <span class="s2">"TE"</span><span class="p">,</span> <span class="s2">"EE"</span><span class="p">,</span> <span class="s2">"BB"</span><span class="p">),</span> <span class="p">(</span><span class="n">n_tt</span><span class="p">,</span> <span class="n">n_te</span><span class="p">,</span> <span class="n">n_ee</span><span class="p">,</span> <span class="n">n_bb</span><span class="p">)):</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-970" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-970"></a>        <span class="n">cn</span><span class="p">[</span><span class="n">comp</span><span class="p">]</span> <span class="o">=</span> <span class="n">_covar_or_zeros</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">ell_grid</span><span class="p">,</span> <span class="n">ell_prime</span><span class="p">,</span> <span class="n">ncl</span><span class="p">,</span> <span class="n">origin_value</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-971" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-971"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-972" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-972"></a>    <span class="n">wn_t</span><span class="p">,</span> <span class="n">rng_key</span> <span class="o">=</span> <span class="n">field_from_covar</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">cn</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-973" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-973"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">!=</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-974" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-974"></a>        <span class="n">wn_e</span><span class="p">,</span> <span class="n">rng_key</span> <span class="o">=</span> <span class="n">field_from_covar</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">cn</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">],</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-975" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-975"></a>        <span class="n">wn_b</span><span class="p">,</span> <span class="n">rng_key</span> <span class="o">=</span> <span class="n">field_from_covar</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">cn</span><span class="p">[</span><span class="s2">"BB"</span><span class="p">],</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-976" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-976"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-977" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-977"></a>    <span class="c1">#Data = Mask * Beam * Lensed + Noise</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-978" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-978"></a>    <span class="n">data_t</span> <span class="o">=</span> <span class="n">mask</span> <span class="o">*</span> <span class="n">beam</span> <span class="o">*</span> <span class="n">lensed_t</span> <span class="o">+</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">wn_t</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-979" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-979"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">!=</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-980" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-980"></a>        <span class="n">data_e</span> <span class="o">=</span> <span class="n">mask</span> <span class="o">*</span> <span class="n">beam</span> <span class="o">*</span> <span class="n">lensed_e</span> <span class="o">+</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">wn_e</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-981" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-981"></a>        <span class="n">data_b</span> <span class="o">=</span> <span class="n">mask</span> <span class="o">*</span> <span class="n">beam</span> <span class="o">*</span> <span class="n">lensed_b</span> <span class="o">+</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">wn_b</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-982" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-982"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-983" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-983"></a>    <span class="c1">#Convert unlensed fields to Fourier space</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-984" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-984"></a>    <span class="n">field_t</span> <span class="o">=</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">field_t</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-985" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-985"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">!=</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-986" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-986"></a>        <span class="n">field_e</span><span class="p">,</span> <span class="n">field_b</span> <span class="o">=</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">field_e</span><span class="p">),</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">field_b</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-987" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-987"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-988" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-988"></a>    <span class="c1">#D matrix (full T/E block including TE; see get_d_teb_matrix for the identity B</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-989" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-989"></a>    <span class="c1">#block at r = 0)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-990" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-990"></a>    <span class="n">d_tt</span> <span class="o">=</span> <span class="n">get_d_tt_matrix</span><span class="p">(</span><span class="n">cf</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">cn</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">])</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-991" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-991"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">!=</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-992" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-992"></a>        <span class="n">d_tt</span><span class="p">,</span> <span class="n">d_te</span><span class="p">,</span> <span class="n">d_ee</span><span class="p">,</span> <span class="n">d_bb</span> <span class="o">=</span> <span class="n">get_d_teb_matrix</span><span class="p">(</span><span class="n">cf</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"TE"</span><span class="p">],</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">],</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"BB"</span><span class="p">],</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-993" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-993"></a>                                                  <span class="n">cn</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">cn</span><span class="p">[</span><span class="s2">"TE"</span><span class="p">],</span> <span class="n">cn</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">],</span> <span class="n">cn</span><span class="p">[</span><span class="s2">"BB"</span><span class="p">])</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-994" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-994"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-995" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-995"></a>    <span class="c1">#Quadratic estimate</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-996" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-996"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">==</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-997" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-997"></a>        <span class="n">qe</span> <span class="o">=</span> <span class="n">scalar_quadratic_estimate</span><span class="p">(</span><span class="n">cn</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span> <span class="n">cfl</span><span class="p">[</span><span class="s2">"TT"</span><span class="p">],</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-998" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-998"></a>                                       <span class="n">mask</span><span class="p">,</span> <span class="n">beam</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">)</span> <span class="o">/</span> <span class="n">nphi_fac</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-999" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-999"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1000" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1000"></a>        <span class="n">qe</span> <span class="o">=</span> <span class="n">polar_quadratic_estimate</span><span class="p">(</span><span class="n">cf</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">],</span> <span class="n">cf</span><span class="p">[</span><span class="s2">"BB"</span><span class="p">],</span> <span class="n">cfl</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">],</span> <span class="n">cfl</span><span class="p">[</span><span class="s2">"BB"</span><span class="p">],</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1001" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1001"></a>                                      <span class="n">cn</span><span class="p">[</span><span class="s2">"EE"</span><span class="p">],</span> <span class="n">cn</span><span class="p">[</span><span class="s2">"BB"</span><span class="p">],</span> <span class="n">mask</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1002" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1002"></a>                                      <span class="n">beam</span><span class="p">,</span> <span class="n">beam</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">)</span> <span class="o">/</span> <span class="n">nphi_fac</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1003" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1003"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1004" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1004"></a>    <span class="c1">#The G mixing matrix    </span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1005" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1005"></a>    <span class="n">g</span> <span class="o">=</span> <span class="n">get_g_matrix</span><span class="p">(</span><span class="n">cphi</span><span class="p">,</span> <span class="n">qe</span><span class="p">,</span> <span class="n">a_phi</span><span class="p">,</span> <span class="n">a_phi</span> <span class="o">=</span> <span class="n">a_phi</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1006" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1006"></a>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1007" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1007"></a>    <span class="c1">#convert phi back to fourier space</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1008" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1008"></a>    <span class="n">phi</span> <span class="o">=</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">phi</span><span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1009" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1009"></a>    <span class="c1">#Build dataset for the requested polarization</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1010" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1010"></a>    <span class="k">if</span> <span class="n">pol</span> <span class="o">==</span> <span class="s2">"I"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1011" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1011"></a>        <span class="k">return</span> <span class="n">_build_dataset_t</span><span class="p">(</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1012" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1012"></a>            <span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">cphi</span><span class="p">,</span> <span class="n">unscaled_cphi</span><span class="p">,</span> <span class="n">qe</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1013" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1013"></a>            <span class="n">cf</span><span class="p">,</span> <span class="n">cf_scalar</span><span class="p">,</span> <span class="n">cf_tensor</span><span class="p">,</span> <span class="n">cfl</span><span class="p">,</span> <span class="n">cn</span><span class="p">,</span> <span class="n">d_tt</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">beam</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1014" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1014"></a>            <span class="n">field_t</span><span class="p">,</span> <span class="n">lensed_t</span><span class="p">,</span> <span class="n">data_t</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">a_phi</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1015" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1015"></a>        <span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1016" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1016"></a>    <span class="k">elif</span> <span class="n">pol</span> <span class="o">==</span> <span class="s2">"P"</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1017" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1017"></a>        <span class="k">return</span> <span class="n">_build_dataset_eb</span><span class="p">(</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1018" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1018"></a>            <span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">cphi</span><span class="p">,</span> <span class="n">unscaled_cphi</span><span class="p">,</span> <span class="n">qe</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1019" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1019"></a>            <span class="n">cf</span><span class="p">,</span> <span class="n">cf_scalar</span><span class="p">,</span> <span class="n">cf_tensor</span><span class="p">,</span> <span class="n">cfl</span><span class="p">,</span> <span class="n">cn</span><span class="p">,</span> <span class="n">d_ee</span><span class="p">,</span> <span class="n">d_bb</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">beam</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1020" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1020"></a>            <span class="n">field_e</span><span class="p">,</span> <span class="n">field_b</span><span class="p">,</span> <span class="n">lensed_e</span><span class="p">,</span> <span class="n">lensed_b</span><span class="p">,</span> <span class="n">data_e</span><span class="p">,</span> <span class="n">data_b</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">a_phi</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1021" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1021"></a>        <span class="p">)</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1022" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1022"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1023" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1023"></a>        <span class="k">return</span> <span class="n">_build_dataset_teb</span><span class="p">(</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1024" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1024"></a>            <span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">pix_width</span><span class="p">,</span> <span class="n">cphi</span><span class="p">,</span> <span class="n">unscaled_cphi</span><span class="p">,</span> <span class="n">qe</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1025" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1025"></a>            <span class="n">cf</span><span class="p">,</span> <span class="n">cf_scalar</span><span class="p">,</span> <span class="n">cf_tensor</span><span class="p">,</span> <span class="n">cfl</span><span class="p">,</span> <span class="n">cn</span><span class="p">,</span> <span class="n">d_tt</span><span class="p">,</span> <span class="n">d_te</span><span class="p">,</span> <span class="n">d_ee</span><span class="p">,</span> <span class="n">d_bb</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">beam</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1026" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1026"></a>            <span class="n">field_t</span><span class="p">,</span> <span class="n">field_e</span><span class="p">,</span> <span class="n">field_b</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1027" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1027"></a>            <span class="n">lensed_t</span><span class="p">,</span> <span class="n">lensed_e</span><span class="p">,</span> <span class="n">lensed_b</span><span class="p">,</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1028" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1028"></a>            <span class="n">data_t</span><span class="p">,</span> <span class="n">data_e</span><span class="p">,</span> <span class="n">data_b</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">a_phi</span>
+<a id="cmb_lensing.simulate.load_sim--source--__codelineno-0-1029" name="cmb_lensing.simulate.load_sim--source--__codelineno-0-1029"></a>        <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../" class="md-footer__link md-footer__link--prev" aria-label="Previous: API Reference">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                API Reference
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../map-joint/" class="md-footer__link md-footer__link--next" aria-label="Next: MAP Estimation">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                MAP Estimation
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "content.code.copy", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  <script data-mkdocs-jupyter-mathjax="{&quot;url&quot;: &quot;https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-mml-chtml.js&quot;, &quot;version&quot;: 4}">
+/* Shared by full pages and Material's instant navigation. */
+(() => {
+  const config = JSON.parse(document.currentScript.dataset.mkdocsJupyterMathjax);
+  if (window.mkdocsJupyterMathJax) return;
+
+  let loading;
+  let queue = Promise.resolve();
+  let previous = [];
+
+  const ready = async () => {
+    if (!loading) {
+      loading = (async () => {
+        let math = window.MathJax;
+        if (!math?.typesetPromise) {
+          const url = new URL(config.url, document.baseURI).href;
+          const existing = Array.from(document.scripts).find(script =>
+            script.src && (script.src === url || script.id === 'MathJax-script' ||
+              (/mathjax/i.test(script.src) &&
+               /\/(?:MathJax|latest|(?:tex|mml)(?:-mml)?-(?:chtml|svg))\.js(?:[?#]|$)/i.test(script.src))));
+          if (existing) {
+            if (!math?.startup?.promise) {
+              await new Promise((resolve, reject) => {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', reject, { once: true });
+              });
+            }
+          } else {
+            // Keep site macros, delimiters and startup hooks when supplied.
+            const options = math || {};
+            window.MathJax = {
+              ...options,
+              loader: {
+                ...options.loader,
+                load: Array.from(new Set(['ui/safe', ...(options.loader?.load || [])]))
+              },
+              startup: { typeset: false, ...options.startup },
+              tex: {
+                tags: 'ams',
+                useLabelIds: true,
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                ...options.tex
+              }
+            };
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = config.url;
+              script.id = 'MathJax-script';
+              script.async = true;
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+          }
+        }
+        math = window.MathJax;
+        await math.startup.promise;
+        return math;
+      })();
+    }
+    const math = await loading;
+    // A site owner can extend the v3 queue again on each navigation.
+    await math.startup.promise;
+    return math;
+  };
+
+  const unrendered = node => {
+    if (node.matches('mjx-container')) return [];
+    if (!node.querySelector('mjx-container')) return [node];
+    // In v3, scanning generated assistive MathML again produces nested output.
+    return Array.from(node.children).flatMap(unrendered);
+  };
+
+  const refresh = () => {
+    // A separate chain also serializes v3, without changing v4's startup promise.
+    queue = queue.then(async () => {
+      const notebooks = Array.from(document.querySelectorAll('.jupyter-wrapper'));
+      if (!notebooks.length && !previous.length) return;
+      if (notebooks.length === previous.length &&
+          notebooks.every((node, index) => node === previous[index])) return;
+      const math = await ready();
+      if (previous.length) {
+        math.typesetClear(previous);
+        math.texReset();
+      }
+      previous = notebooks.filter(node => node.isConnected);
+      const pending = previous.flatMap(unrendered);
+      if (pending.length) await math.typesetPromise(pending);
+    }).catch(error => console.error('mkdocs-jupyter: MathJax rendering failed', error));
+    return queue;
+  };
+
+  window.mkdocsJupyterMathJax = { refresh };
+  const start = () => {
+    if (typeof document$ !== 'undefined') document$.subscribe(refresh);
+    else refresh();
+  };
+  // Theme bundles and user-provided MathJax scripts can follow notebook content.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else start();
+})();
+
+</script>
+</body>
+</html>
