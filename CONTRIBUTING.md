@@ -65,7 +65,7 @@ setx CMBLENSING_JL_PATH "C:\path\to\CMBLensing.jl"
 
 `setx` only affects terminals opened afterwards, so close and reopen your terminal before running `pytest --generate`.
 
-See the [testing page](https://zaneblooddev.com/CMBLensing.py/testing/) of the documentation for details. The LCDM sampler, the Fisher forecast and the measurement modules are not yet covered by tests, and contributions there are especially welcome.
+See the [testing page](https://zaneblooddev.com/CMBLensing.py/testing/) of the documentation for details. The LCDM sampler, the Fisher forecast and the measurement modules are not yet covered by tests, and contributions there are especially welcome. The Fisher forecasting code also only supports forecasts for temperature data. Extending this to include polarization data as well would also be a good future project. 
 
 ## Submitting a pull request
 
@@ -80,9 +80,9 @@ See the [testing page](https://zaneblooddev.com/CMBLensing.py/testing/) of the d
 
 There is no automatic formatter, so please follow these conventions:
 
-- Put spaces around `=` and after commas, including keyword arguments: `a = f(b, c, key = 1)`, not `a=f(b,c,key=1)`.
-- Comments start without a space after the `#`: `#like this`, not `# like this`.
-- Prefer plain, readable code: simple loops, one step per line, and variable names that follow the physics (`cphi`, `nphi`, `cl_tt`, ...).
+- We prefer plain, readable code, and variable names that follow the physics (`cphi`, `nphi`, `cl_tt`, ...). Try to strike a balance between readability and efficiency. Avoid the use of obscure APIs or algorithms which might obfuscate the logic to a novice.
+- Do not try to reinvent the wheel. If a standard Pythonic library has the functionality, use it in your code rather than defining all methods from scratch
+- Absolutely no magic numbers. All constants that are widely used should go in the cmb_lensing.constants file
 - Keep it lean: avoid adding defensive input checks or extra machinery that the computation does not need.
 
 ## Documentation
