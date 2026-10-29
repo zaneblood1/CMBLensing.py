@@ -29,17 +29,15 @@ If you wish to run the unit tests or actively contribute to the development of t
 
 ## Downloading the 5D CAMB grid
 
-`sample_joint` evaluates its theory spectra by default through a 5D CAMB spline, `camb_splines/camb_grid_spline.npz` (~7.9 GB). This file is too large to store on GitHub, so either rebuild it on your own cluster ([Building the CAMB Grid](../pipelines/camb-grid.md)) or download the prebuilt copy:
+`sample_joint` evaluates its theory spectra by default through a 5D CAMB spline, `camb_splines/camb_grid_spline.npz` (~7.9 GB). This file and the five small 1D caches (`camb_splines/camb_<param>_grid.npz`) are too large to store on GitHub. They are hosted on the Hugging Face dataset [zaneblood1/5D_LCDM_CAMB_Grid_Spline](https://huggingface.co/datasets/zaneblood1/5D_LCDM_CAMB_Grid_Spline) and are **downloaded automatically into `camb_splines/` the first time the code needs them** (`cmb_lensing/camb_splines.py`). No manual step is needed.
+
+To fetch all six files ahead of time, run
 
 ```bash
-pip install gdown
-gdown 1HhVjNPMi4OR3vn7j7DkdK0pDnF_iNVBr -O camb_splines/camb_grid_spline.npz
+cmb-lensing-download-splines
 ```
 
-The sampler looks for it at exactly `camb_splines/camb_grid_spline.npz` (`cmb_lensing.constants.CAMB_GRID_PATH`). The five small 1D caches (`camb_splines/camb_<param>_grid.npz`) are in the repository and need no download. See [The CAMB Grid](camb-grid.md) for more information on how the two splines are used.
-
-!!! note
-    Free Drive accounts sometimes hit a daily download quota on large files. If `gdown` reports "too many users have viewed or downloaded this file", retry the next day or download it by hand from the link.
+On a cluster, run this once on a login node: compute nodes often have no internet access. You can also rebuild the grid yourself ([Building the CAMB Grid](../pipelines/camb-grid.md)) and place it at `camb_splines/camb_grid_spline.npz`. See [The CAMB Grid](camb-grid.md) for more information on how the two splines are used.
 
 ## HPC setup (`hpc_local.sh`)
 

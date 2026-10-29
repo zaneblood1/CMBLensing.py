@@ -16,8 +16,12 @@ dependencies = [
     "flax>=0.8.0",
     "camb>=1.5.0",
     "scipy>=1.10.0",
-    "matplotlib>=3.7.0"
+    "matplotlib>=3.7.0",
+    "huggingface_hub>=0.23"
 ]
+
+[project.scripts]
+cmb-lensing-download-splines = "cmb_lensing.camb_splines:main"
 
 [project.optional-dependencies]
 dev = [

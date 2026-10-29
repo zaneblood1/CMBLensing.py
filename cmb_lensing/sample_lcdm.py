@@ -12,6 +12,7 @@ from cmb_lensing.constants import (PARAM_ORDER, PARAM_INDEX, GROUND_TRUTH, PARAM
                                    DEFAULT_HMC_STEP_SIZE)
 from cmb_lensing.camb_grid_interp import (load_camb_grid_predictors,
                                           load_camb_grid, GridPredictors)
+from cmb_lensing.camb_splines import camb_spline_file
 import importlib.util
 import os
 
@@ -56,14 +57,14 @@ def get_camb_grid_predictors():
     #force a retrace on every Gibbs sweep)
     global _camb_grid_predictors
     if _camb_grid_predictors is None:
-        _camb_grid_predictors = load_camb_grid_predictors(CAMB_GRID_PATH)
+        _camb_grid_predictors = load_camb_grid_predictors(camb_spline_file("camb_grid_spline.npz"))
     return _camb_grid_predictors
 
 def camb_grid_bb_is_zero():
     #whether the merged grid's unlensed BB is the identically-zero r = 0 spectrum. Static
     #per grid file, so the covariance builders can route BB around the log-interpolating
     #path (which would turn exact zeros into NaN) at trace time
-    return load_camb_grid(CAMB_GRID_PATH).bb_is_zero
+    return load_camb_grid(camb_spline_file("camb_grid_spline.npz")).bb_is_zero
 
 def wrap_temp_predictors(predict_tt, predict_pp):
     """Lift a TT/PP-only predictor pair into the

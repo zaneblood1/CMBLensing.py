@@ -5,7 +5,9 @@ Usage (from the repository root):
     python camb_grid_generation/precompute_camb_1d.py ns --test  #3-point smoke test
     python camb_grid_generation/precompute_camb_1d.py all        #sweep all five parameters
 
-The caches are written to camb_splines/ at the repository root. In the sampler
+The caches are written to camb_splines/ at the repository root (the shipped ones are
+downloaded there on first use from the Hugging Face dataset, see cmb_lensing/camb_splines.py;
+regenerate and re-upload them if CAMB is upgraded). In the sampler
 (USE_CAMB_SPLINE = True in sample_lcdm.py), which imports this file by path since it is not
 part of the package, these replace the 5D grid predictors for a single sampled parameter:
     predict_tt, predict_pp = sample_lcdm.get_camb_spline_predictors("ns")
@@ -33,6 +35,7 @@ from cmb_lensing.simulate import _camb_via_callback, _extract_all_cls
 from cmb_lensing.constants import (DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT, DEFAULT_MNU,
                                    DEFAULT_TAUREIO, PARAM_ORDER, PARAM_INDEX, GROUND_TRUTH,
                                    PARAM_BOUNDS, CAMB_LMAX, CAMB_SPLINES_DIR)
+from cmb_lensing.camb_splines import camb_spline_file
 
 #nodes per 1D sweep, evenly spaced over PARAM_BOUNDS
 GRID_SIZE = 50
@@ -132,11 +135,8 @@ def load_camb_spline_predictors(param_name, path = None):
     if param_name not in PARAM_INDEX:
         raise ValueError(f"unknown parameter {param_name!r}; expected one of {PARAM_ORDER}")
     if path is None:
-        path = default_cache_path(param_name)
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"no cached CAMB grid for {param_name} at {path} - "
-                                f"generate it with: python "
-                                f"camb_grid_generation/precompute_camb_1d.py {param_name}")
+        #downloaded from the Hugging Face dataset on first use
+        path = camb_spline_file(f"camb_{param_name}_grid.npz")
     data = np.load(path)
     grid = data[f"{param_name}_grid"]
     n_ell = data["cl_tt"].shape[1]

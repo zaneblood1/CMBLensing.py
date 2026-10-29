@@ -76,10 +76,14 @@ PARAM_SIGMA = {
 CAMB_LMAX = DEFAULT_MAX_ELL
 
 #where the CAMB spline caches live: camb_splines/ at the repository root (the five 1D
-#camb_<param>_grid.npz of camb_grid_generation/precompute_camb_1d.py and the gitignored
-#~8 GB 5D camb_grid_spline.npz the sampler reads by default)
+#camb_<param>_grid.npz of camb_grid_generation/precompute_camb_1d.py and the ~8 GB 5D
+#camb_grid_spline.npz the sampler reads by default). The folder is gitignored; its files are
+#downloaded from the Hugging Face dataset CAMB_SPLINES_REPO on first use (camb_splines.py)
 CAMB_SPLINES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "camb_splines")
 CAMB_GRID_PATH = os.path.join(CAMB_SPLINES_DIR, "camb_grid_spline.npz")
+CAMB_SPLINES_REPO = "zaneblood1/5D_LCDM_CAMB_Grid_Spline"
+CAMB_SPLINE_FILES = ["camb_theta_MC_100_grid.npz", "camb_logA_grid.npz", "camb_ns_grid.npz",
+                     "camb_ombh2_grid.npz", "camb_omch2_grid.npz", "camb_grid_spline.npz"]
 
 #The default field and operator constants are defined for a square 256 x 256 map
 #with 2 arcminute resolution...

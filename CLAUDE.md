@@ -82,7 +82,7 @@ No linter or formatter is configured. The only CI is `.github/workflows/docs.yml
 cmb_lensing/                  the Python package (constants.py holds PARAM_ORDER / GROUND_TRUTH / PARAM_BOUNDS / PARAM_SIGMA / CAMB_LMAX / CAMB_SPLINES_DIR / CAMB_GRID_PATH)
   fisher_output/              fisher_forecast.py's figures and npz
   sample_lcdm_output/         sample_lcdm's progress plots (must exist before plotting)
-camb_splines/                 five ~3 MB camb_<param>_grid.npz (1D caches) + the gitignored ~8 GB camb_grid_spline.npz (5D grid)
+camb_splines/                 five ~3 MB camb_<param>_grid.npz (1D caches) + the ~8 GB camb_grid_spline.npz (5D grid); the whole folder is gitignored (since 2026-10-28)
 camb_grid_generation/         precompute_camb_1d.py (the 1D caches) + slurm / merge / validate scripts for the 5D grid
 docs/                         map_joint_tutorial.ipynb, sample_joint_tutorial.ipynb
 experimental_results/         hand-maintained results (README + experimental_details.md per run)
@@ -122,7 +122,7 @@ hpc_local.example.sh          template for the gitignored hpc_local.sh every HPC
 - `empirical_map_joint_noise/` — W from the `lower_qe_bound` files' `phi_noise_fid` (map_joint's N_eff); merged files only, with `copied_phi_moments.npz`.
 - `empirical_sampler_noise/` — W from `sampler_effective_noise.npz`'s `nphi`; the per-seed job files are present.
 
-`camb_splines/camb_grid_spline.npz` (~8 GB) is gitignored — it was once committed by accident and pushed a pack past GitHub's 2 GiB limit; never force-add it.
+**`camb_splines/` is not in git (2026-10-28).** All six files live on the Hugging Face dataset `zaneblood1/5D_LCDM_CAMB_Grid_Spline` (`constants.CAMB_SPLINES_REPO` / `CAMB_SPLINE_FILES`, files at the dataset root). `cmb_lensing/camb_splines.camb_spline_file(filename)` returns `camb_splines/<filename>`, first downloading it with `hf_hub_download(..., local_dir = CAMB_SPLINES_DIR)` if it is missing (no revision pin, by user decision: the dataset is treated as fixed). It is called by `sample_lcdm.get_camb_grid_predictors` / `camb_grid_bb_is_zero` and by `precompute_camb_1d.load_camb_spline_predictors` when no `path` is given. A file already present is never re-downloaded, so a locally rebuilt grid at that path wins. `cmb-lensing-download-splines` (`[project.scripts]`) pre-fetches all six, e.g. on a cluster login node. `tests/test_camb_grid.py` keeps its skip-if-missing and never downloads. Never force-add the grid: it was once committed by accident and pushed a pack past GitHub's 2 GiB limit.
 
 ## Architecture
 

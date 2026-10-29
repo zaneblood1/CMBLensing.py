@@ -4,10 +4,10 @@
 
 | Switch | Source | Size | Use |
 |---|---|---|---|
-| `USE_CAMB_GRID = True` (default) | 5D tensor-product cubic spline over `(H0, logA, ns, ombh2, omch2)`, `camb_splines/camb_grid_spline.npz` | ~7.9 GB, **not in git** | all five parameters; required for `pol = "IP"` / `"P"` |
-| `USE_CAMB_SPLINE = True` | five 1D spline caches `camb_splines/camb_<param>_grid.npz` | ~3 MB each, tracked | one sampled parameter; temperature only |
+| `USE_CAMB_GRID = True` (default) | 5D tensor-product cubic spline over `(H0, logA, ns, ombh2, omch2)`, `camb_splines/camb_grid_spline.npz` | ~7.9 GB, downloaded on first use | all five parameters; required for `pol = "IP"` / `"P"` |
+| `USE_CAMB_SPLINE = True` | five 1D spline caches `camb_splines/camb_<param>_grid.npz` | ~3 MB each, downloaded on first use | one sampled parameter; temperature only |
 
-To obtain a copy of the CAMB grid either rebuild it on the cluster using the slurm scripts in ``/camb_grid_generation`` and SCP it back to your local machine or use the gdown link quoted on the installation page.
+Both are fetched automatically from the [Hugging Face dataset](https://huggingface.co/datasets/zaneblood1/5D_LCDM_CAMB_Grid_Spline) the first time they are needed (or all at once with `cmb-lensing-download-splines`, see [Installation](installation.md#downloading-the-5d-camb-grid)). To use your own grid instead, rebuild it on the cluster using the slurm scripts in ``/camb_grid_generation``, SCP it back to your local machine and place it at `camb_splines/camb_grid_spline.npz`.
 
 ## Memory
 

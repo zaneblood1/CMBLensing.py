@@ -4,7 +4,8 @@ __pycache__/
 dist/
 build/
 .claude
-camb_splines/camb_grid_spline.npz
+#CAMB spline caches, downloaded from Hugging Face on first use (cmb_lensing/camb_splines.py)
+camb_splines/
 .vscode
 #machine-specific HPC setup (conda, mail address, paths); see hpc_local.example.sh
 hpc_local.sh
