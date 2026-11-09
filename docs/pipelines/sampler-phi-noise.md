@@ -7,9 +7,9 @@ The merge burns each chain in, averages it into the posterior mean \(\bar\phi\),
 ## Running it
 
 ```bash
-bash get_sampler_phi_noise/get_sampler_phi_noise.sh    #one chain per seed
-cd get_sampler_phi_noise
-sbatch merge_sampler_phi_noise.sh                      #set burn_in in it first
+bash measure_phi_noise/get_sampler_phi_noise/get_sampler_phi_noise.sh    #one chain per seed
+cd measure_phi_noise/get_sampler_phi_noise
+sbatch merge_sampler_phi_noise.sh                                        #set burn_in in it first
 ```
 
 The merge works on **running** jobs: each chain flushes its samples every 10 sweeps to a memory-mapped `sampler_phi_NNNN_samples.npy`, and the merge reads only the sweeps its sidecar `sampler_phi_NNNN.npz` reports as done. A chain not yet past the burn-in is left out. Use `rsync --sparse` to copy a partial run.
@@ -22,4 +22,12 @@ python -m cmb_lensing.sampler_phi_noise --nside 64 --theta_pix 5 --n_maps 4 --n_
 
 ## Output: `sampler_phi_noise.npz`
 
-`nphi` (NaN where unmeasured, 0 at the origin), `nphi_error`, `cphi`, the mean moments, `burn_in`, `n_used`, the seeds and the box / cosmology keys. Can be used for forecasting via `fisher_forecast --nphi_source sample_joint --phi_noise sampler_phi_noise.npz` or as the `phi_noise` key in [the delensed covariance](delensed-covariance.md) slurm script.
+`nphi` (NaN where unmeasured, 0 at the origin), `nphi_error`, the N leave-one-out `nphi_leave_one_out`, `cphi`, the mean moments, `burn_in`, `n_used`, the seeds and the box / cosmology keys. Can be used for forecasting via `fisher_forecast --nphi_source sample_joint --phi_noise sampler_phi_noise.npz` or as the `phi_noise` key in [the delensed covariance](delensed-covariance.md) slurm script.
+
+## Plotting the phi noise spectra
+
+```bash
+python measure_phi_noise/phi_noise_analysis.py
+```
+
+draws the merged `map_joint_phi_noise.npz` and `sampler_phi_noise.npz` (paths and box set in its `__main__`) against CAMB's \(C_L^{\phi\phi}\) and the box QE noise, into `measure_phi_noise/phi_noise_plots/noise_level_<noise>uk/`: `phi_noise_spectra_<noise>uk.png` (band medians) and `phi_noise_spectra_over_qe_<noise>uk.png` (band median of the ratio to the lensed-filter QE, with a jackknife band).

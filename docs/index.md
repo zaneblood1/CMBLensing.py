@@ -28,8 +28,9 @@ cmb_lensing/                    the Python package
 camb_splines/                   1D CAMB spline caches + the 5D grid (gitignored, downloaded on first use)
 camb_grid_generation/           scripts that build the 1D caches and the 5D grid
 get_lcdm_samples/               LCDM chains on the HPC + chain_analysis.py
-get_map_joint_phi_noise/        map_joint's per-mode N_phi
-get_sampler_phi_noise/          the sampler's per-mode N_phi
+measure_phi_noise/              phi_noise_analysis.py (the N_phi spectra plots) +
+  get_map_joint_phi_noise/        map_joint's per-mode N_phi
+  get_sampler_phi_noise/          the sampler's per-mode N_phi
 get_delensed_field_covariance/  the empirical delensed T covariance stencil
 runtime_comparison/             map_joint timing, Python vs Julia
 tests/                          A/B tests against CMBLensing.jl + the CAMB grid test

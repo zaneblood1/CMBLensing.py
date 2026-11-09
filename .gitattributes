@@ -1,0 +1,2 @@
+#shell scripts must keep LF endings so bash (WSL, the cluster) can run a Windows checkout
+*.sh text eol=lf

@@ -38,6 +38,6 @@ python -m cmb_lensing.fisher_forecast --noise 5 --nphi_source qe_unlensed --dele
 
 Other flags: `--nside`, `--theta_pix`, `--l_knee`, `--beam_fwhm`, `--params` (default `logA omch2 theta_MC_100`), `--camb_lmax`, `--stability` (also computes at step 2h).
 
-By default the T block is CAMB's partially delensed spectrum at the frozen \(A_L\). `--delensed_covariance` swaps in the [empirical delensed covariance](pipelines/delensed-covariance.md).
+`--t_block` picks the T block: CAMB's `unlensed` or `lensed` C_TT, `delensed` (CAMB's partially delensed spectrum at the frozen \(A_L\), the default) or `measured`, the [empirical delensed covariance](pipelines/delensed-covariance.md) of `--delensed_covariance` (implied when that file is given without `--t_block`).
 
-Outputs go to `cmb_lensing/fisher_output/fisher*_from_blocks_<nphi>_<camb|empirical>_<noise>_uk.*`, with parameters in the order `omch2, ombh2, ns, theta_MC_100, logA`.
+Outputs go to `cmb_lensing/fisher_output/fisher*_from_blocks_<nphi>_<t_block>_<noise>_uk.*`, with parameters in the order `omch2, ombh2, ns, theta_MC_100, logA`.

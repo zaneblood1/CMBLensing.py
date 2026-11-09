@@ -7,34 +7,30 @@ from matplotlib.patches import Ellipse, Patch
 from matplotlib.colors import to_rgba
 from matplotlib.lines import Line2D
 from scipy.stats import gaussian_kde
-import jax.numpy as jnp
-from cmb_lensing.util import gen_ell_grid
-from cmb_lensing.simulate import covar_matrix_from_cls
-from cmb_lensing.constants import GROUND_TRUTH, DEFAULT_ELL_CUTOFF
+from cmb_lensing.constants import GROUND_TRUTH
 from cmb_lensing.fisher_forecast import (annotated_heatmap, plot_annotated_matrix,
                                          correlation_from_covariance, covariance_from_fisher,
-                                         forecast, FILE_NPHI_SOURCES, fourier_weights,
-                                         camb_cls_at_params, iterative_delensing,
-                                         qe_noise_matrix, prior_covariances)
-from cmb_lensing.delensed_covariance import DEFAULT_DELTA_ELL, band_edges, band_average
+                                         forecast)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_DIR = os.path.dirname(HERE)
 CHAIN_DATA_DIR = os.path.join(HERE, "lcdm_sampler_data")
-CHAIN_PLOT_ROOT = os.path.join(HERE, "lcdm_chain_plots")
+#every plot: one subfolder per sampled parameter and JOINT_DIR_NAME for the joint plots
+OUTPUT_DIR = os.path.join(HERE, "chain_analysis_output")
+JOINT_DIR_NAME = "joint_information"
 
-#the Fisher forecasts drawn against the chains, by fisher_forecast nphi_source: the two
-#bounds and the two measured N_phi (drawn only when main's forecast_phi_noise has a file for
-#them). Each is forecast with CAMB's delensed T block ("camb_delensed") and, when main's
-#forecast_delensed_covariance has a file for it, with the empirical one ("empirically_delensed")
-FORECAST_NPHI_SOURCES = ("qe_unlensed", "qe_delensed", "map_joint", "sample_joint")
-
-#the QE response spectrum per qe_ source ("unlensed" when absent)
-FORECAST_QE_RESPONSE = {"qe_delensed": "gradient"}
-
-#the two temperature blocks every forecast is built with: folder name -> description
-T_BLOCKS = {"camb_delensed": "CAMB delensed T",
-            "empirically_delensed": "empirically delensed T"}
+#the forecast's temperature block (fisher_forecast.T_BLOCKS): CAMB's "unlensed" or "lensed"
+#C_TT, CAMB's analytic "delensed" one, or "measured" (a merged delensed_covariance.npz)
+DEFAULT_T_BLOCK = "unlensed"
+#the forecast's phi noise: "qe" (the box QE N0) or "measured" (a merged phi noise npz)
+DEFAULT_PHI_NOISE_SOURCE = "qe"
+#the QE N0's filter (fisher_forecast's "qe_<filter>" nphi_source: "unlensed" or "delensed")
+#and response spectrum ("unlensed" or "gradient")
+DEFAULT_QE_FILTER = "unlensed"
+DEFAULT_QE_RESPONSE = "unlensed"
+#the nphi_source a measured phi noise file is forecast under; fisher_forecast reads the
+#`nphi` key of a map_joint and a sampler file alike
+FILE_NPHI_SOURCE = "map_joint"
 
 #how far CAMB is run for the forecasts (None: the rfft grid's corner mode)
 FORECAST_CAMB_LMAX = 4000
@@ -42,31 +38,18 @@ BUFFER = 1e-4
 GRID_SIZE = 1000
 #the multiplicative-mean plot's x range ends where the pdf drops below this fraction of its peak
 PDF_XLIM_THRESHOLD = 1e-3
+#bootstrap replicates (and their seed) of the product distribution's Monte Carlo errors
+N_BOOTSTRAP = 200
+BOOTSTRAP_SEED = 0
 
 #thin each chain by its integrated autocorrelation time before the per-parameter plots
 SHOULD_THIN = True
 #a map is discarded when any parameter's Gelman-Rubin R-hat across its sub-chains exceeds this
 R_THRESHOLD = 1_000_000
 
-#the label of the measured (chain) posterior in file names
+#the labels of the measured (chain) posterior and of the forecast in file names
 EMPIRICAL_LABEL = "empirical"
-
-def plot_dirs(noise):
-    """(chain plot dir, spectra plot dir, fisher plot dir) of one noise level, all ending in
-    os.sep: lcdm_chain_plots/noise_level_<noise>uk/ (the per-parameter folders) and its
-    spectra_plots/ and fisher/ subfolders. fisher/ holds the chains' covariance and
-    correlation matrices and one <nphi_source>/<t_block>/ folder per forecast
-    (forecast_plot_dir)."""
-    chain_dir = os.path.join(CHAIN_PLOT_ROOT, f"noise_level_{noise}uk")
-    return (chain_dir + os.sep, os.path.join(chain_dir, "spectra_plots") + os.sep,
-            os.path.join(chain_dir, "fisher") + os.sep)
-
-def forecast_plot_dir(fisher_dir, nphi_source, t_block):
-    """fisher/<nphi_source>/<t_block>/ (created): one forecast's triangle plot, covariance,
-    correlation and covariance-ratio plots."""
-    path = os.path.join(fisher_dir, nphi_source, t_block) + os.sep
-    os.makedirs(path, exist_ok = True)
-    return path
+FISHER_LABEL = "fisher"
 
 def gelman_rubin(chains):
     """Gelman-Rubin R-hat convergence diagnostic across multiple chains."""
@@ -150,7 +133,48 @@ def significant_digits(value):
     digits = digits.lstrip("0").rstrip("0")
     return max(1, len(digits))
 
-def plot_multiplicative_mean(chains, avg_sigma_single, output_path, ground_truth, param_name):
+def product_pdf(densities, dx):
+    """The product of the per-map densities on one grid, renormalized (trapezoid rule) after
+    every factor so it never underflows."""
+    pdf = densities[0].copy()
+    norm = np.sum(((pdf[:-1] + pdf[1:]) * dx) / 2)
+    pdf /= norm
+    for idx in range(1, len(densities)):
+        pdf *= densities[idx]
+        norm = np.sum(((pdf[:-1] + pdf[1:]) * dx) / 2)
+        pdf /= norm
+    return pdf
+
+def product_moments(pdf, grid, dx):
+    """Mean and standard deviation of a normalized pdf on a uniform grid."""
+    mean = np.dot(pdf, grid * dx[0])
+    std = np.sqrt(np.sum(dx[0] * pdf * (grid - mean)**2))
+    return mean, std
+
+def bootstrap_product_errors(chains, grid, dx, ground_truth):
+    """Monte Carlo errors on the product mean, std and z-score (truth - mean) / std from the
+    finite chains. Every replicate resamples EVERY map's thinned chain with replacement at its
+    own length (the maps themselves are never resampled: that would be the scatter between
+    maps, not chain noise), rebuilds each map's KDE and the product. The z-score is formed per
+    replicate, so its error carries the mean-std correlation. Valid because the chains are
+    thinned by their IAT, so their points are close to independent."""
+    rng = np.random.default_rng(BOOTSTRAP_SEED)
+    boot_means = np.zeros(N_BOOTSTRAP)
+    boot_stds = np.zeros(N_BOOTSTRAP)
+    for b in range(N_BOOTSTRAP):
+        densities = []
+        for chain in chains:
+            resampled = rng.choice(chain, size = len(chain), replace = True)
+            densities.append(gaussian_kde(resampled)(grid))
+        pdf = product_pdf(np.array(densities), dx)
+        boot_means[b], boot_stds[b] = product_moments(pdf, grid, dx)
+    boot_z_scores = (ground_truth - boot_means) / boot_stds
+    return (np.std(boot_means, ddof = 1), np.std(boot_stds, ddof = 1),
+            np.std(boot_z_scores, ddof = 1))
+
+def plot_multiplicative_mean(chains, output_path, ground_truth, param_name):
+    """The product distribution's plot. Returns its mean, std and z-score with their bootstrap
+    Monte Carlo errors."""
 
     #the normalized product of the per-map densities (a gaussian_kde for each chain)
     all_chains = np.concatenate([chain for chain in chains])
@@ -159,38 +183,31 @@ def plot_multiplicative_mean(chains, avg_sigma_single, output_path, ground_truth
     dx = np.diff(grid)
 
     #--------------------------- multiplicative pdf ---------------------------
-    multiplicative_pdf = densities[0]
-    norm = np.sum(((multiplicative_pdf[:-1] + multiplicative_pdf[1:]) * dx)/2)
-    multiplicative_pdf /= norm
-    for idx in range(1, len(densities)):
-        multiplicative_pdf *= densities[idx]
-        norm = np.sum(((multiplicative_pdf[:-1] + multiplicative_pdf[1:]) * dx)/2)
-        multiplicative_pdf /= norm
-
+    multiplicative_pdf = product_pdf(densities, dx)
     multiplicative_mode = grid[np.argmax(multiplicative_pdf)]
-    multiplicative_mean = np.dot(multiplicative_pdf, grid * dx[0])
-    multiplicative_std = np.sqrt(np.sum(dx[0] * multiplicative_pdf * (grid - multiplicative_mean)**2))
+    multiplicative_mean, multiplicative_std = product_moments(multiplicative_pdf, grid, dx)
+    product_z_score = (ground_truth - multiplicative_mean) / multiplicative_std
+    mean_error, std_error, z_error = bootstrap_product_errors(chains, grid, dx, ground_truth)
+
+    mean_text = standard_notation(multiplicative_mean, mean_error)
+    std_text = standard_notation(multiplicative_std, std_error)
+    z_text = standard_notation(product_z_score, z_error)
 
     plt.figure(figsize=(13, 5))
     plt.plot(grid, multiplicative_pdf, label="Combined Product Distribution", color = "blue")
     plt.axvline(ground_truth, label = f"Ground Truth = {ground_truth}", color = "green")
 
     #multiplicative estimators
-    #mode and mean printed to the fewer significant digits of themselves and the ground truth
+    #mode printed to the fewer significant digits of itself and the ground truth
     truth_digits = significant_digits(ground_truth)
     mode_digits = min(significant_digits(multiplicative_mode), truth_digits)
-    mean_digits = min(significant_digits(multiplicative_mean), truth_digits)
     plt.axvline(multiplicative_mode, label = f"Mult. Mode = {multiplicative_mode:.{mode_digits}g}", color = "orange")
-    plt.axvline(multiplicative_mean, label = f"Mult. Mean = {multiplicative_mean:.{mean_digits}g}", color = "pink")
+    plt.axvline(multiplicative_mean, label = f"Mult. Mean = {mean_text}", color = "pink")
     plt.axvline(multiplicative_mean + multiplicative_std,
-                label = f"+/- 1 Mult. Std = {multiplicative_std:.2g}", color = "grey")
+                label = f"+/- 1 Mult. Std = {std_text}", color = "grey")
     plt.axvline(multiplicative_mean - multiplicative_std, color = "grey")
 
-    product_z_score = (ground_truth - multiplicative_mean)/multiplicative_std
-    plt.plot([], [], label = f"Product Z-score = {product_z_score:.2f}")
-
-    std_err_z_score = (ground_truth - multiplicative_mean)/avg_sigma_single
-    plt.plot([], [], label = f"Std. Err. Z-score = {std_err_z_score:.2f}")
+    plt.plot([], [], label = f"Product Z-score = {z_text}")
 
     #clip the x range to where the pdf is above a fraction of its peak (ground truth kept in view)
     above = grid[multiplicative_pdf > PDF_XLIM_THRESHOLD * multiplicative_pdf.max()]
@@ -203,7 +220,8 @@ def plot_multiplicative_mean(chains, avg_sigma_single, output_path, ground_truth
     plt.legend(fontsize=7.5); plt.grid(alpha=0.2)
     plt.savefig(output_path + f"{param_name.lower()}_mean_distributions.png", dpi=150, bbox_inches="tight")
     plt.close()
-    return
+    return (multiplicative_mean, multiplicative_std, product_z_score,
+            mean_error, std_error, z_error)
 
 def plot_autocorrelation_chains(chains_per_map, output_path, param_name):
     acfs_per_map = []
@@ -262,7 +280,7 @@ def plot_mean_histogram(chains, output_path, ground_truth, param_name):
     plt.legend(); plt.grid(alpha = 0.2)
     plt.savefig(output_path + f"{param_name.lower()}_mean_histogram.png", dpi = 150, bbox_inches = "tight")
     plt.close()
-    return avg_sigma_single
+    return means_std, avg_sigma_single, std_sigma_single
 
 def prune_chains(raw_chains, iats_per_chain, should_thin = SHOULD_THIN):
     """One array per map: its sub-chains, each thinned by its own integrated autocorrelation
@@ -385,12 +403,68 @@ def per_param_analysis(file_name, num_maps, num_chains, map_pre_factor, ground_t
     plot_marginals(chains, output_path, ground_truth, param_name)
 
     #histogram of per-map marginal means
-    avg_sigma_single = plot_mean_histogram(chains, output_path, ground_truth, param_name)
+    means_std, avg_sigma_single, std_sigma_single = plot_mean_histogram(chains, output_path,
+                                                                        ground_truth, param_name)
 
-    #combined product distribution
-    plot_multiplicative_mean(chains, avg_sigma_single, output_path, ground_truth, param_name)
+    #error on the average single-map width: the scatter of the widths over sqrt(number of maps)
+    avg_sigma_error = std_sigma_single / np.sqrt(len(chains))
 
-    return raw_chains
+    #combined product distribution, with its bootstrap Monte Carlo errors
+    (product_mean, product_std, product_z_score,
+     product_mean_error, product_std_error, product_z_error) = plot_multiplicative_mean(
+        chains, output_path, ground_truth, param_name)
+
+    #the numbers of the z_scores.png table
+    summary = {"product_mean": product_mean, "product_std": product_std,
+               "product_z_score": product_z_score,
+               "product_mean_error": product_mean_error, "product_std_error": product_std_error,
+               "product_z_error": product_z_error,
+               "avg_sigma_single": avg_sigma_single, "avg_sigma_error": avg_sigma_error}
+    return raw_chains, summary
+
+def standard_notation(value, error):
+    """value(e) in the standard concise notation, value +/- e with e in units of the last shown
+    digit: the error rounded to one significant figure, the value rounded at that decimal
+    place, e.g. (0.109238, 0.00031) -> 0.1092(3) = 0.1092 +/- 0.0003."""
+    decimal = error_decimal(error)
+    error_digit = round(float(error) * 10.0**decimal)
+    return f"{rounded_text(value, decimal)}({error_digit})"
+
+def plot_z_score_table(summaries, ground_truth_values, plot_dir):
+    """z_scores.png in plot_dir: one row per sampled parameter, the ground truth next to its
+    symbol, and the columns, a(b) = a +/- b in units of a's last digit (standard_notation)
+
+    product mean        a(b), b its bootstrap Monte Carlo error (bootstrap_product_errors)
+    product std         a(b), b its bootstrap Monte Carlo error
+    avg single-map std  a(b), b = std of the per-map stds / sqrt(number of maps)
+    product z-score     (truth - product mean) / product std, a(b) with b the std of the
+                        z-score formed in every bootstrap replicate
+    """
+    column_labels = ["Product Mean", "Product Std", "Avg. Single-Map Std", "Product Z-score"]
+    row_labels = []
+    cells = []
+    for name, summary in summaries.items():
+        ground_truth = ground_truth_values[name]
+        mean_text = standard_notation(summary["product_mean"], summary["product_mean_error"])
+        std_text = standard_notation(summary["product_std"], summary["product_std_error"])
+        avg_sigma_text = standard_notation(summary["avg_sigma_single"], summary["avg_sigma_error"])
+        z_text = standard_notation(summary["product_z_score"], summary["product_z_error"])
+
+        row_labels.append(f"{param_symbol(name)}  (truth = {ground_truth})")
+        cells.append([mean_text, std_text, avg_sigma_text, z_text])
+
+    figure, axis = plt.subplots(figsize = (11, 0.5 * (len(row_labels) + 1)))
+    axis.axis("off")
+    table = axis.table(cellText = cells, rowLabels = row_labels, colLabels = column_labels,
+                       cellLoc = "center", loc = "center")
+    table.auto_set_font_size(False)
+    table.set_fontsize(11)
+    table.scale(1.0, 2.0)
+    table.auto_set_column_width(list(range(-1, len(column_labels))))
+    path = plot_dir + "z_scores.png"
+    figure.savefig(path, dpi = 150, bbox_inches = "tight")
+    plt.close(figure)
+    return
 
 def plot_annotated_heat_map(matrix, names, title, file_name, path):
     figure, axis = plt.subplots(figsize = (7.5, 6.5))
@@ -427,10 +501,10 @@ def plot_covariance_and_correlation(cov_mat, param_names, label, plot_dir, title
     in its box) for one posterior: the chains' (EMPIRICAL_LABEL) or a forecast's. `title`
     names the posterior in the plot titles (`label` when None)."""
     title = label if title is None else title
-    plot_annotated_heat_map(cov_mat, param_names, f"{title} covariance matrix",
+    plot_annotated_heat_map(cov_mat, param_names, f"{title}\ncovariance matrix",
                             f"covariance_matrix_{label}.png", plot_dir)
     plot_annotated_matrix(correlation_from_covariance(cov_mat), param_names,
-                          f"{title} correlation matrix",
+                          f"{title}\ncorrelation matrix",
                           plot_dir + f"correlation_matrix_{label}.png",
                           norm = matplotlib.colors.Normalize(vmin = -1, vmax = 1))
 
@@ -466,14 +540,6 @@ def get_avg_covariance_matrix(raw_chains):
     per_map_cov_mats = np.array(per_map_cov_mats)
     avg_cov_mat = np.mean(per_map_cov_mats, axis = 0)
     cov_err, sigma_err = measured_errors(per_map_cov_mats)
-    print(f"Averaged {num_maps} covariance matrices, one per map")
-    print(f"Jackknife error (over maps) of the averaged covariance elements, "
-          f"err_covar / |covar|:")
-    print(cov_err / np.abs(avg_cov_mat))
-    print(f"Measured widths (order {param_names}): {np.sqrt(np.diag(avg_cov_mat))} "
-          f"+/- {sigma_err} (jackknife)")
-    print("Average Correlation matrix (rows / columns ordered as", param_names, ")")
-    print(correlation_from_covariance(avg_cov_mat))
     return avg_cov_mat, param_names, cov_err, sigma_err
 
 #Contour styling for the triangle plots, one per forecast: the chains always blue, the
@@ -497,28 +563,18 @@ PARAM_SYMBOLS = {"theta_MC_100": "100*\\theta_{\\rm MC}",
                  "ns": "n_s",
                  "ombh2": "\\Omega_b h^2",
                  "omch2": "\\Omega_c h^2"}
-#per forecast (fisher_forecast's nphi_source): the short symbol in the annotations and the
-#legend / title description
-FORECAST_LABELS = {
-    #the two reported bounds: N_phi from the box QE with the unlensed C_TT in its filter
-    #(upper bound on the information) and with the iterated partially delensed C_TT (lower)
-    "qe_unlensed": ("QE unlensed", "upper bound (QE, unlensed filter)"),
-    "qe_delensed": ("QE delelensed", "lower bound (QE, delensed filter)"),
-    "map_joint": ("map_joint", "map_joint N_phi"),
-    "sample_joint": ("true_sampler", "sampler N_phi"),
-}
 
-def forecast_labels(nphi_source):
-    """(short symbol, description) of a forecast's N_phi source."""
-    return FORECAST_LABELS.get(nphi_source, ("fisher", nphi_source))
-
-def forecast_file_label(nphi_source, t_block):
-    """One forecast's file-name label: <nphi_source>_<t_block>."""
-    return f"{nphi_source}_{t_block}"
-
-def forecast_title(nphi_source, t_block):
-    """One forecast's name in plot titles: its N_phi source and its T block."""
-    return f"N_phi: {nphi_source}, T block: {T_BLOCKS[t_block]}"
+def forecast_title(t_block, phi_noise_source, phi_noise, qe_filter, qe_response):
+    """The forecast's name in plot titles: where its N_phi and its T block come from."""
+    if phi_noise_source == "qe":
+        nphi_text = f"QE ({qe_filter} filter, {qe_response} response)"
+    else:
+        nphi_text = f"measured ({os.path.basename(phi_noise)})"
+    if t_block == "measured":
+        t_text = "measured delensed"
+    else:
+        t_text = f"CAMB {t_block}"
+    return f"N_phi: {nphi_text}\nT block: {t_text}"
 
 
 #the data each pol setting of the sampler sees, for the triangle plots' subtitle
@@ -532,14 +588,35 @@ def param_symbol(name):
         return f"${PARAM_SYMBOLS[name]}$"
     return name
 
-def format_scaled(value, exponent, error = None):
-    """value (+/- error) as one mathtext mantissa times 10^exponent, e.g.
-    (3.268 +/- 0.043) x 10^-3, so a measured and a forecast number written at the same
-    exponent can be read against each other digit by digit."""
+def error_decimal(error):
+    """The decimal place of the first significant digit of error once it is rounded to one
+    significant figure, e.g. 0.0008465 -> 4, 0.00096 (-> 0.001) -> 3, 23 -> -1."""
+    decimal = -decimal_exponent(error)
+    rounded = round(float(error), decimal)
+    return -decimal_exponent(rounded)
+
+def rounded_text(value, decimal):
+    """value rounded at the given decimal place (negative: to tens, hundreds, ...)."""
+    return f"{round(float(value), decimal):.{max(decimal, 0)}f}"
+
+def format_scaled(value, exponent, decimal, error = None):
+    """value (+/- error) as one mathtext mantissa times 10^exponent, rounded at the raw
+    decimal place `decimal` (error_decimal of the jackknife error), e.g. 0.003268 +/- 0.0008465
+    at exponent -3 -> (3.3 +/- 0.8) x 10^-3, so a measured and a forecast number written at
+    the same exponent can be read against each other digit by digit."""
     scale = 10.0**exponent
+    mantissa_decimal = decimal + exponent
     if error is None:
-        return f"${value / scale:.3f}\\times 10^{{{exponent}}}$"
-    return f"$({value / scale:.3f} \\pm {error / scale:.3f})\\times 10^{{{exponent}}}$"
+        return f"${rounded_text(value / scale, mantissa_decimal)}\\times 10^{{{exponent}}}$"
+    return (f"$({rounded_text(value / scale, mantissa_decimal)} \\pm "
+            f"{rounded_text(error / scale, mantissa_decimal)})\\times 10^{{{exponent}}}$")
+
+def ratio_text(ratio, error):
+    """ratio +/- error, the error (jackknife error / fisher value) to its first significant
+    figure and the ratio rounded at the same decimal place, e.g. 1.017 +/- 0.0081 ->
+    1.017 +/- 0.008, 0.72 +/- 0.071 -> 0.72 +/- 0.07."""
+    decimal = error_decimal(error)
+    return f"{rounded_text(ratio, decimal)} $\\pm$ {rounded_text(error, decimal)}"
 
 def decimal_exponent(value):
     return int(np.floor(np.log10(abs(value))))
@@ -554,12 +631,11 @@ def stacked_text(ax, lines, x, y_top, line_step, ha = "left"):
     return
 
 
-def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, param_names, means,
+def triangle_plot(measured_cov_mat, forecast_cov_mat, param_names, means,
                   measured_cov_sigma, measured_sigma_err, plot_dir,
                   sigmas = (1,), nside = None, theta_pix = None, noise = None, pol = None):
-    """Triangle plot of the sampled posterior (blue) against ONE Fisher forecast (red), the
-    one with N_phi from `nphi_source` and the `t_block` temperature block (a T_BLOCKS key):
-    triangle_plot_<nphi_source>_<t_block>.png in plot_dir.
+    """Triangle plot of the sampled posterior (blue) against the Fisher forecast (red):
+    triangle_plot.png in plot_dir.
 
     Both are filled at FILL_ALPHA under an opaque outline, fills drawn beneath all outlines so
     the overlap stays legible. The diagonal carries each parameter's marginal Gaussian, the
@@ -591,7 +667,6 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
     measured_cov_sigma = np.asarray(measured_cov_sigma)
     means = np.asarray(means)
     n = len(param_names)
-    forecast_label = forecast_file_label(nphi_source, t_block)
 
     #(covariance, colour, filled, linestyle) - the central contours filled, the measured
     #+/- error limits as dashed outlines only
@@ -616,8 +691,6 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
     text_fraction = 0.04 + 3 * line_step
     diag_ylim = 1.05 / (1 - text_fraction)
 
-    print(f"Off-diagonal covariances vs {forecast_label} (measured +/- delete-one-map "
-          f"jackknife):")
     fig, axes = plt.subplots(n, n, figsize = (PANEL_WIDTH * n, PANEL_HEIGHT * n),
                              squeeze = False, layout = "constrained")
     for i in range(n):
@@ -632,16 +705,12 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
                 ratio = cov_measured / cov_fisher
                 ratio_error = cov_error / abs(cov_fisher)
                 exponent = decimal_exponent(cov_measured)
-                lines = [(f"Cov({param_symbol(param_names[i])}, "
-                          f"{param_symbol(param_names[j])})", "black"),
-                         (f"$C_{{\\rm measured}}$ = {format_scaled(cov_measured, exponent, cov_error)}",
-                          MEASURED_COLOUR),
-                         (f"$C_{{\\rm fisher}}$ = {format_scaled(cov_fisher, exponent)}", FORECAST_COLOUR),
-                         (f"$C_{{\\rm measured}}/C_{{\\rm fisher}}$ = {ratio:.3f} $\\pm$ "
-                          f"{ratio_error:.3f}", "black")]
-                print(f"    {param_names[i]}, {param_names[j]}: measured {cov_measured:+.4e} "
-                      f"+/- {cov_error:.2e}  {forecast_label} {cov_fisher:+.4e}  "
-                      f"measured / {forecast_label} = {ratio:.3f} +/- {ratio_error:.3f}")
+                #both covariances rounded at the first significant digit of the jackknife error
+                decimal = error_decimal(cov_error)
+                lines = [(f"Cov({param_symbol(param_names[i])}, {param_symbol(param_names[j])})", "black"),
+                         (f"$C_{{\\rm measured}}$ = {format_scaled(cov_measured, exponent, decimal, cov_error)}", MEASURED_COLOUR),
+                         (f"$C_{{\\rm fisher}}$ = {format_scaled(cov_fisher, exponent, decimal)}", FORECAST_COLOUR),
+                         (f"$C_{{\\rm measured}}/C_{{\\rm fisher}}$ = {ratio_text(ratio, ratio_error)}", "black")]
                 y_top = 0.5 + 0.5 * len(lines) * line_step
                 stacked_text(ax, lines, 0.5, y_top, line_step, ha = "center")
                 continue
@@ -682,13 +751,12 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
                 error_measured = measured_sigma_err[i]
                 sigma_fisher = np.sqrt(forecast[i, i])
                 exponent = decimal_exponent(sigma_measured)
+                #both widths rounded at the first significant digit of the jackknife error
+                decimal = error_decimal(error_measured)
                 #the colour says which is measured (blue) and which forecast (red)
-                lines = [(f"$\\sigma_{{\\rm measured}}$ = {format_scaled(sigma_measured, exponent, error_measured)}",
-                          MEASURED_COLOUR),
-                         (f"$\\sigma_{{\\rm fisher}}$ = {format_scaled(sigma_fisher, exponent)}", FORECAST_COLOUR),
-                         (f"$\\sigma_{{\\rm measured}}/\\sigma_{{\\rm fisher}}$ = "
-                          f"{sigma_measured / sigma_fisher:.3f} $\\pm$ "
-                          f"{error_measured / sigma_fisher:.3f}", "black")]
+                lines = [(f"$\\sigma_{{\\rm measured}}$ = {format_scaled(sigma_measured, exponent, decimal, error_measured)}", MEASURED_COLOUR),
+                         (f"$\\sigma_{{\\rm fisher}}$ = {format_scaled(sigma_fisher, exponent, decimal)}", FORECAST_COLOUR),
+                         (f"$\\sigma_{{\\rm measured}}/\\sigma_{{\\rm fisher}}$ = {ratio_text(sigma_measured / sigma_fisher, error_measured / sigma_fisher)}", "black")]
                 stacked_text(ax, lines, 0.03, 0.97, line_step)
                 ax.set_ylim(0, diag_ylim)
                 ax.set_yticks([])
@@ -724,8 +792,7 @@ def triangle_plot(measured_cov_mat, nphi_source, t_block, forecast_cov_mat, para
         title += (f"\n{POL_DESCRIPTIONS[pol]}, {noise:g}$\\mu$K-arcmin, {theta_pix:g}' pixels, "
                   f"{nside}$^2$ pixels")
     fig.suptitle(title, fontsize = LABEL_FONTSIZE)
-    plt.savefig(plot_dir + f"triangle_plot_{forecast_label}.png", dpi = 150,
-                bbox_inches = "tight")
+    plt.savefig(plot_dir + "triangle_plot.png", dpi = 150, bbox_inches = "tight")
     plt.close(fig)
     return
 
@@ -735,333 +802,88 @@ def get_means_per_param(all_chains, param_names):
             for name in param_names]
 
 def get_forecasted_covariance(nside, theta_pix, noise, is_sampled, param_names,
-                              nphi_source = "qe_delensed", phi_noise = None,
-                              delensed_covariance = None):
+                              t_block = DEFAULT_T_BLOCK, delensed_covariance = None,
+                              phi_noise_source = DEFAULT_PHI_NOISE_SOURCE, phi_noise = None,
+                              qe_filter = DEFAULT_QE_FILTER, qe_response = DEFAULT_QE_RESPONSE):
     """Fisher-forecast covariance for the sampled parameters, reordered to match param_names.
+    The arguments are main's.
 
-    `nphi_source` selects the forecast's N_phi (fisher_forecast.NPHI_SOURCES): "qe_unlensed"
-    (the upper bound on the information) or "qe_delensed" (the lower bound), or "map_joint" /
-    "sample_joint" with their `phi_noise` file. The response spectrum comes from
-    FORECAST_QE_RESPONSE. The T block is CAMB's delensed spectrum, or the empirical one of
-    the `delensed_covariance` npz when given. CAMB results are memoized in
-    fisher_forecast._CAMB_CACHE and the stencil POINTS are shared, so later calls re-run no
-    CAMB, only the reconstruction and the block builds.
-
-    forecast() returns its parameters in fisher_forecast's OUTPUT_PARAM_ORDER (omch2, ombh2,
-    ns, theta_MC_100, logA), while param_names follows the chains' (GROUND_TRUTH's) order,
-    so the forecast covariance is permuted into param_names order here.
+    forecast() returns its parameters in fisher_forecast's OUTPUT_PARAM_ORDER, while
+    param_names follows the chains' (GROUND_TRUTH's) order, so the covariance is permuted here.
     """
+    if phi_noise_source == "qe":
+        nphi_source = f"qe_{qe_filter}"
+    else:
+        nphi_source = FILE_NPHI_SOURCE
     fisher, names = forecast(nside, theta_pix, noise, is_sampled, GROUND_TRUTH,
-                             nphi_source = nphi_source,
-                             qe_response = FORECAST_QE_RESPONSE.get(nphi_source, "unlensed"),
-                             phi_noise = phi_noise,
+                             nphi_source = nphi_source, qe_response = qe_response,
+                             phi_noise = phi_noise, t_block = t_block,
                              delensed_covariance = delensed_covariance,
                              camb_lmax = FORECAST_CAMB_LMAX, l_knee = 0, beam_fwhm = 0)
     covariance = covariance_from_fisher(fisher, names)
     order = [names.index(name) for name in param_names]
     return covariance[np.ix_(order, order)]
 
-def joint_param_analysis(all_chains, nside, theta_pix, noise, is_sampled, pol, fisher_dir,
-                         forecast_phi_noise, forecast_delensed_covariance):
-    """The measured posterior against every forecast, into fisher_dir: the chains'
-    covariance_matrix_empirical.png and correlation_matrix_empirical.png at its root, and per
-    forecast a <nphi_source>/<t_block>/ folder (forecast_plot_dir) with its triangle plot,
-    covariance and correlation matrices and the chains-over-forecast covariance ratio.
-
-    Every source in FORECAST_NPHI_SOURCES is forecast with CAMB's delensed T block
-    ("camb_delensed") and, when `forecast_delensed_covariance` has a file for it, with that
-    file's empirical one too ("empirically_delensed"). A measured-N_phi source (map_joint /
-    sample_joint) with no file in `forecast_phi_noise` is skipped altogether."""
+def joint_param_analysis(all_chains, nside, theta_pix, noise, is_sampled, pol, joint_dir,
+                         t_block, delensed_covariance, phi_noise_source, phi_noise,
+                         qe_filter, qe_response):
+    """The measured posterior against the Fisher forecast, into joint_dir: the empirical and
+    fisher covariance / correlation matrices, their fisher-over-empirical ratios and the
+    triangle plot."""
 
     print("\n")
     print(f"Beginning joint parameter analysis")
     (measured_cov_mat, param_names, measured_cov_sigma,
      measured_sigma_err) = get_avg_covariance_matrix(all_chains)
     means = get_means_per_param(all_chains, param_names)
-    plot_covariance_and_correlation(measured_cov_mat, param_names, EMPIRICAL_LABEL, fisher_dir,
+    forecasted_cov_mat = get_forecasted_covariance(nside, theta_pix, noise, is_sampled,
+                                                   param_names, t_block = t_block,
+                                                   delensed_covariance = delensed_covariance,
+                                                   phi_noise_source = phi_noise_source,
+                                                   phi_noise = phi_noise,
+                                                   qe_filter = qe_filter,
+                                                   qe_response = qe_response)
+    title = forecast_title(t_block, phi_noise_source, phi_noise, qe_filter, qe_response)
+
+    plot_covariance_and_correlation(measured_cov_mat, param_names, EMPIRICAL_LABEL, joint_dir,
                                     title = "Chains (empirical)")
-    #both bounds: the measured posterior should sit BETWEEN them, in the widths and in the
-    #off-diagonal covariances alike
-    forecasts = {}
-    for nphi_source in FORECAST_NPHI_SOURCES:
-        if nphi_source in FILE_NPHI_SOURCES and nphi_source not in forecast_phi_noise:
-            print(f"skipping the {nphi_source} forecasts: no N_phi file given")
-            continue
-        phi_noise = forecast_phi_noise.get(nphi_source)
-        t_block_files = {"camb_delensed": None}
-        if nphi_source in forecast_delensed_covariance:
-            t_block_files["empirically_delensed"] = forecast_delensed_covariance[nphi_source]
-        for t_block, path in t_block_files.items():
-            forecasts[(nphi_source, t_block)] = get_forecasted_covariance(
-                nside, theta_pix, noise, is_sampled, param_names, nphi_source = nphi_source,
-                phi_noise = phi_noise, delensed_covariance = path)
-
-    for (nphi_source, t_block), forecasted_cov_mat in forecasts.items():
-        plot_dir = forecast_plot_dir(fisher_dir, nphi_source, t_block)
-        label = forecast_file_label(nphi_source, t_block)
-        title = forecast_title(nphi_source, t_block)
-        triangle_plot(measured_cov_mat, nphi_source, t_block, forecasted_cov_mat, param_names,
-                      means, measured_cov_sigma, measured_sigma_err,
-                      plot_dir, nside = nside, theta_pix = theta_pix, noise = noise, pol = pol)
-        plot_covariance_and_correlation(forecasted_cov_mat, param_names, label, plot_dir,
-                                        title = f"Forecast ({title})")
-        plot_annotated_heat_map(measured_cov_mat / forecasted_cov_mat, param_names,
-                                f"Chains / forecast covariance ({title})",
-                                f"covariance_ratio_{EMPIRICAL_LABEL}_over_{label}.png",
-                                plot_dir)
+    plot_covariance_and_correlation(forecasted_cov_mat, param_names, FISHER_LABEL, joint_dir,
+                                    title = f"Forecast\n{title}")
+    #per-entry ratios, coloured about 1 (agreement)
+    ratio_label = f"{FISHER_LABEL}_over_{EMPIRICAL_LABEL}"
+    plot_annotated_matrix(forecasted_cov_mat / measured_cov_mat, param_names,
+                          f"Forecast / chains covariance\n{title}",
+                          joint_dir + f"covariance_ratio_{ratio_label}.png",
+                          norm = matplotlib.colors.CenteredNorm(vcenter = 1))
+    plot_annotated_matrix(correlation_from_covariance(forecasted_cov_mat) /
+                          correlation_from_covariance(measured_cov_mat), param_names,
+                          f"Forecast / chains correlation\n{title}",
+                          joint_dir + f"correlation_ratio_{ratio_label}.png",
+                          norm = matplotlib.colors.CenteredNorm(vcenter = 1))
+    triangle_plot(measured_cov_mat, forecasted_cov_mat, param_names, means, measured_cov_sigma,
+                  measured_sigma_err, joint_dir, nside = nside, theta_pix = theta_pix,
+                  noise = noise, pol = pol)
     return
-
-# ── Phi-noise and delensed-spectra comparison plots ────────────────────────
-
-#(colour, marker) of each N_phi source's measured series in the spectra plots: its measured
-#N_phi in the phi-noise plot, and the empirical delensed spectrum whose W it built in the
-#delensed-spectra plot
-SOURCE_STYLE = {"qe_unlensed": ("C0", "o"),
-                "qe_delensed": ("C1", "s"),
-                "map_joint": ("C2", "^"),
-                "sample_joint": ("C9", "D")}
-#the largest band centre the delensed-spectra plot draws: past CAMB's own range the model
-#spectra are a log-log extrapolation and the box's lensed power aliases at the grid's corner
-SPECTRA_ELL_MAX = 4000.0
-
-def band_index(ell_grid, edges, use):
-    """The |L| band of every rfft-grid mode, -1 for a mode outside the bands or not in `use`."""
-    ells = np.asarray(ell_grid)
-    index = np.digitize(ells, edges) - 1
-    return np.where(use & (index >= 0) & (index < len(edges) - 1), index, -1)
-
-def band_harmonic(matrix, index, n_band):
-    """The INFORMATION-weighted band value 1 / <1/N> over the band's finite positive modes
-    (the mean that commutes with averaging Fisher information), and the mode count. Each
-    rfft entry is weighted by w_k (2 in the bulk, 1 on the self-conjugate columns), the
-    number of full-plane modes it stands for, as in fisher_forecast.radial_cl_profile.
-
-    The harmonic mean is dominated by the LOWEST noise modes, the arithmetic mean by the
-    LARGEST. E.g. two modes with N = 1 and N = 100 carry information 1/1 + 1/100 = 1.01:
-    the harmonic mean 2 / 1.01 = 1.98 gives back 2 / 1.98 = 1.01, while the arithmetic mean
-    50.5 implies 2 / 50.5 = 0.04, as if the band held almost no information. The QE's
-    diverged modes and an empirical file's poorly measured modes would drag an arithmetic
-    band mean up the same way."""
-    dof = np.asarray(fourier_weights(matrix.shape[0]))
-    inside = (index >= 0) & np.isfinite(matrix) & (matrix > 0)
-    weight = dof[inside]
-    total = np.bincount(index[inside], weights = weight / matrix[inside], minlength = n_band)
-    count = np.bincount(index[inside], weights = weight, minlength = n_band)
-    with np.errstate(divide = "ignore", invalid = "ignore"):
-        return np.where(count > 0, count / total, np.nan), count
-
-def band_median(matrix, index, n_band):
-    """Median over each band's finite modes (NaN for an empty band), each rfft entry counted
-    w_k times (2 in the bulk, 1 on the self-conjugate columns) like band_harmonic, i.e. the
-    median over the full-plane modes."""
-    dof = np.asarray(fourier_weights(matrix.shape[0])).astype(int)
-    values = np.full(n_band, np.nan)
-    for b in range(n_band):
-        inside = (index == b) & np.isfinite(matrix)
-        if inside.any():
-            values[b] = np.median(np.repeat(matrix[inside], dof[inside]))
-    return values
-
-def qe_noise_matrices(params, nside, theta_pix, noise_level, l_knee, beam_fwhm):
-    """(C_phi, [(label, color, linestyle, N_phi^QE matrix)]) on the rfft grid from direct CAMB,
-    all with the unlensed response and undivided by NPHI_FAC: the box QE with the lensed C_TT
-    in its filter (the reference every ratio is taken against, first), the iterated-delensing
-    fixed point (fisher_forecast's qe_delensed filter) and the unlensed C_TT in the filter
-    (qe_unlensed)."""
-    ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    cls = camb_cls_at_params(params)
-    delensed_tt = iterative_delensing(params, cls, nside, pix_width, ell_grid, noise_level,
-                                      l_knee, beam_fwhm, DEFAULT_ELL_CUTOFF, verbose = False,
-                                      qe_response = "unlensed")[2]
-    matrices = []
-    for label, color, linestyle, filter_tt in (
-            ("QE (box matrix: unlensed response, lensed filter, no NPHI_FAC)", "C3", "--",
-             cls["total_TT"]),
-            ("QE, iterative delensing (unlensed response)", "C4", "-.", delensed_tt),
-            ("QE, unlensed $C^{TT}$ in the filter (unlensed response)", "C5", "-.",
-             cls["scalar_TT"])):
-        matrices.append((label, color, linestyle, np.asarray(qe_noise_matrix(
-            cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm, DEFAULT_ELL_CUTOFF,
-            filter_tt = filter_tt, qe_response = "unlensed"))))
-    cphi = np.asarray(prior_covariances(params, nside, pix_width, ell_grid)[1])
-    return cphi, matrices
-
-def plot_phi_noise_vs_qe(nside, theta_pix, noise, forecast_phi_noise, out_dir):
-    """Per-mode phi noise spectra against the box QE matrix at this noise level:
-    phi_noise_vs_qe_per_mode_<noise>uk.png in out_dir.
-
-    Draws the `nphi` (C_phi (1/r^2 - 1), r^2 = <phi_bar phi*>^2 / (<|phi_bar|^2><|phi|^2>))
-    of every merged map_joint_phi_noise.npz / sampler_phi_noise.npz in `forecast_phi_noise`,
-    on the chains' box at GROUND_TRUTH (white noise, no beam). Top panel:
-    information-weighted band means with CAMB's C_L^phiphi and the QE matrices of
-    qe_noise_matrices. Bottom panel: every mode's N_k / N_QE,k as a faint point, with the
-    band median on top.
-    """
-    if not forecast_phi_noise:
-        print(f"no phi noise files given: phi_noise_vs_qe_per_mode_{noise}uk.png skipped")
-        return
-    ell_grid = np.asarray(gen_ell_grid(nside, theta_pix)[0])
-    use = ell_grid > 0
-    edges = band_edges(ell_grid)
-    n_band = len(edges) - 1
-    index = band_index(ell_grid, edges, use)
-    centres = 0.5 * (edges[1:] + edges[:-1])
-    cphi, qe_matrices = qe_noise_matrices(GROUND_TRUTH, nside, theta_pix, noise, 0.0, 0.0)
-    nphi_qe = qe_matrices[0][3]
-    series = []
-    for nphi_source, path in forecast_phi_noise.items():
-        merged = np.load(path)
-        colour, marker = SOURCE_STYLE[nphi_source]
-        name = (f"{nphi_source} $N_{{\\rm eff}}$ = $C_\\phi(1/r^2-1)$ "
-                f"({int(merged['n_realizations'])} realizations)")
-        series.append((name, colour, marker, np.asarray(merged["nphi"])))
-
-    figure, (top, bottom) = plt.subplots(2, 1, figsize = (10, 10), sharex = True,
-                                         gridspec_kw = dict(height_ratios = [3, 2]))
-    order = np.argsort(ell_grid[use])
-    top.loglog(ell_grid[use][order], cphi[use][order], color = "0.35", linewidth = 1.5,
-               label = r"CAMB $C_L^{\phi\phi}$")
-    band_qe = band_harmonic(np.where(use, nphi_qe, np.nan), index, n_band)[0]
-    keep = np.isfinite(band_qe)
-    bottom.axhline(1.0, color = "C3", linestyle = "--", linewidth = 1)
-    for position, (name, color, linestyle, matrix) in enumerate(qe_matrices):
-        band = band_harmonic(np.where(use, matrix, np.nan), index, n_band)[0]
-        good = keep & np.isfinite(band)
-        top.loglog(centres[good], band[good], color = color, linestyle = linestyle,
-                   linewidth = 1.3 if position else 1.5, label = name)
-        if position:
-            bottom.plot(centres[good], band[good] / band_qe[good], color = color,
-                        linestyle = linestyle, linewidth = 1.3,
-                        label = f"{name} / QE (ratio of band means)")
-
-    for name, color, marker, matrix in series:
-        measured = use & np.isfinite(matrix) & (matrix > 0)
-        with np.errstate(divide = "ignore", invalid = "ignore"):
-            ratio = np.where(measured, matrix / nphi_qe, np.nan)
-        band = band_harmonic(np.where(measured, matrix, np.nan), index, n_band)[0]
-        good = np.isfinite(band)
-        top.loglog(centres[good], band[good], color = color, marker = marker, markersize = 3,
-                   linewidth = 1, label = name)
-        bottom.plot(ell_grid[measured], ratio[measured], linestyle = "none", marker = ".",
-                    markersize = 1.5, color = color, alpha = 0.12, rasterized = True)
-        median = band_median(ratio, index, n_band)
-        good = np.isfinite(median)
-        bottom.plot(centres[good], median[good], color = color, marker = marker, markersize = 3,
-                    linewidth = 1.2,
-                    label = f"{name.split(' (')[0].split(' = ')[0]} / QE (band median)")
-        print(f"{noise:g} uK  {name.split(' (')[0][:24]:24s} modes {int(measured.sum()):5d}  "
-              f"median N/N_QE {np.nanmedian(ratio):.3f}")
-
-    top.set_ylabel(r"$N_L$ (covar units; information-weighted band mean of the per-mode matrix)")
-    top.legend(fontsize = 8)
-    bottom.set_xscale("log")
-    bottom.set_ylim(0.0, 2.0)
-    bottom.set_xlabel(r"$L$")
-    bottom.set_ylabel(r"per-mode $N_k / N_k^{\rm QE}$")
-    bottom.legend(fontsize = 7, loc = "upper left", ncol = 2)
-    figure.suptitle(f"phi noise per mode relative to the QE | nside {nside}, "
-                    f"{theta_pix:g}', {noise:g} uK-arcmin", fontsize = 11)
-    figure.tight_layout(rect = (0, 0, 1, 0.96))
-    path = os.path.join(out_dir, f"phi_noise_vs_qe_per_mode_{noise}uk.png")
-    figure.savefig(path, dpi = 150)
-    plt.close(figure)
-    print(f"wrote {path}")
-
-#NOTE this method is not currently called anywhere
-def plot_delensed_spectra_comparison(nside, theta_pix, noise, forecast_delensed_covariance,
-                                     out_dir, delta_ell = DEFAULT_DELTA_ELL):
-    """Unlensed / lensed / delensed temperature spectra, CAMB against the box, at this noise
-    level: delensed_spectra_comparison_<noise>uk.png in out_dir.
-
-    Series, all band-averaged over the same |l| annuli of the rfft grid: CAMB's unlensed,
-    lensed and iteratively delensed TT (get_partially_lensed_cls at the Alens_L
-    fisher_forecast.iterative_delensing converges to, unlensed response), and the empirical
-    delensed spectrum (`delensed_fid`) of every merged delensed_covariance.npz in
-    `forecast_delensed_covariance`, drawn directly (so they carry the realizations' cosmic
-    variance). Everything is on the chains' box at GROUND_TRUTH (white noise, no beam).
-    Top panel: D_l = l (l + 1) C_l / 2 pi. Bottom panel: every series over CAMB unlensed.
-    """
-    if not forecast_delensed_covariance:
-        print(f"no delensed covariance files given: delensed_spectra_comparison_{noise}uk.png "
-              f"skipped")
-        return
-    ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    weights = fourier_weights(nside)
-    edges = band_edges(ell_grid, delta_ell)
-
-    def band(matrix):
-        centres, values, _ = band_average(matrix, ell_grid, weights, edges)
-        return centres, values
-
-    def camb_band(cl):
-        #CAMB's C_l on the grid exactly as the merge puts it there (C_l / pix_width^2)
-        ells = jnp.arange(2, 2 + cl.shape[0]).astype(jnp.float64)
-        return band(np.asarray(covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cl,
-                                                     origin_value = 0)))
-
-    cls = camb_cls_at_params(GROUND_TRUTH)
-    #the converged delensed C_TT of the iteration: box QE matrix (no NPHI_FAC), unlensed
-    #response, beam 0 as the data are simulated
-    delensed_tt = iterative_delensing(GROUND_TRUTH, cls, nside, pix_width, ell_grid, noise,
-                                      0.0, 0.0, 10_000, verbose = False,
-                                      qe_response = "unlensed")[2]
-
-    centres, camb_unlensed = camb_band(cls["scalar_TT"])
-    empirical = []
-    for nphi_source, path in forecast_delensed_covariance.items():
-        merged = np.load(path, allow_pickle = True)
-        colour, marker = SOURCE_STYLE[nphi_source]
-        label = f"empirically delensed, W from N_phi: {forecast_labels(nphi_source)[1]}"
-        empirical.append((label, colour, marker, merged))
-    #grid units C_l / pix_width^2 -> D_l
-    to_dl = centres * (centres + 1) / (2 * np.pi) * float(pix_width)**2
-    series = [("CAMB unlensed", "0.2", "-", None, camb_unlensed),
-              ("CAMB lensed", "C3", "-", None, camb_band(cls["total_TT"])[1]),
-              ("CAMB iteratively delensed", "C4", "--", None, camb_band(delensed_tt)[1])]
-    for name, color, marker, merged in empirical:
-        delensed = band(np.asarray(merged["delensed_fid"]))[1]
-        series.append((name, color, "-", marker, delensed))
-
-    figure, (top, bottom) = plt.subplots(2, 1, figsize = (11, 10), sharex = True,
-                                         gridspec_kw = dict(height_ratios = [3, 2]))
-    shown = centres <= SPECTRA_ELL_MAX
-    centres, camb_unlensed, to_dl = centres[shown], camb_unlensed[shown], to_dl[shown]
-    for name, color, linestyle, marker, values in series:
-        values = values[shown]
-        style = dict(color = color, linestyle = linestyle, marker = marker, markersize = 3,
-                     linewidth = 1.3)
-        top.plot(centres, values * to_dl, label = name, **style)
-        bottom.plot(centres, values / camb_unlensed, label = name, **style)
-
-    top.set_yscale("log")
-    top.set_ylabel(r"$D_\ell^{TT} = \ell(\ell+1)\,C_\ell / 2\pi$  [$\mu$K$^2$]")
-    top.legend(fontsize = 8)
-    bottom.set_xlabel(r"$\ell$")
-    bottom.set_ylabel(r"$C_\ell\ /\ C_\ell^{\rm unlensed,\ CAMB}$")
-    figure.suptitle(f"Temperature spectra | nside {nside}, {theta_pix:g}', "
-                    f"{noise:g} uK-arcmin | bands of {delta_ell:g}", fontsize = 11)
-    figure.tight_layout(rect = (0, 0, 1, 0.96))
-    path = os.path.join(out_dir, f"delensed_spectra_comparison_{noise}uk.png")
-    figure.savefig(path, dpi = 150)
-    plt.close(figure)
-    print(f"wrote {path}")
 
 def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values,
          was_sampled, default_burn_in, nside, theta_pix, noise, pol,
-         forecast_phi_noise, forecast_delensed_covariance):
-    """Every plot of one run goes under its noise level's folder (plot_dirs),
-    lcdm_chain_plots/noise_level_<noise>uk/: one subfolder per sampled parameter, fisher/ (the
-    covariance / correlation / triangle plots, one <nphi_source>/<t_block>/ folder per
-    forecast) and spectra_plots/.
+         t_block = DEFAULT_T_BLOCK, delensed_covariance = None,
+         phi_noise_source = DEFAULT_PHI_NOISE_SOURCE, phi_noise = None,
+         qe_filter = DEFAULT_QE_FILTER, qe_response = DEFAULT_QE_RESPONSE):
+    """Every plot goes under OUTPUT_DIR: one subfolder per sampled parameter and
+    JOINT_DIR_NAME/ (z_scores.png and the chains-vs-forecast plots).
 
-    forecast_phi_noise:           {"map_joint" | "sample_joint": path} of merged
-                                  map_joint_phi_noise.npz / sampler_phi_noise.npz files
-    forecast_delensed_covariance: {nphi_source: path} of merged delensed_covariance.npz
-                                  files whose W was built from that source's N_phi
-    Both measured at this run's box and noise level; either may be empty."""
-    chain_plot_dir, spectra_plot_dir, fisher_plot_dir = plot_dirs(noise)
-    for path in (chain_plot_dir, spectra_plot_dir, fisher_plot_dir):
-        os.makedirs(path, exist_ok = True)
+    The forecast's two blocks:
+    t_block:             "unlensed" / "lensed" (CAMB's C_TT), "delensed" (CAMB's analytic
+                         delensing at the N_phi below) or "measured" (needs
+                         delensed_covariance, a merged delensed_covariance.npz)
+    phi_noise_source:    "qe" (the box QE N0 with qe_filter "unlensed" / "delensed" and
+                         qe_response "unlensed" / "gradient") or "measured" (needs phi_noise,
+                         a merged map_joint_phi_noise.npz / sampler_phi_noise.npz)
+    The files must be measured at this run's box and noise level."""
+    chain_plot_dir = OUTPUT_DIR + os.sep
+    joint_dir = os.path.join(OUTPUT_DIR, JOINT_DIR_NAME) + os.sep
+    os.makedirs(joint_dir, exist_ok = True)
 
     sampled_names = [name for name in ground_truth_values if was_sampled[name]]
     non_converged_maps = prune_maps_by_r_hat(file_name, num_maps, num_chains, map_pre_factor,
@@ -1069,38 +891,44 @@ def main(file_name, num_maps, num_chains, map_pre_factor, ground_truth_values,
                                              list(ground_truth_values))
 
     #single parameter analyses
-    all_chains = {name: per_param_analysis(file_name, num_maps, num_chains, map_pre_factor,
-                                           ground_truth_values[name], default_burn_in, name,
-                                           non_converged_maps, chain_plot_dir)
-                  for name in sampled_names}
+    all_chains = {}
+    summaries = {}
+    for name in sampled_names:
+        all_chains[name], summaries[name] = per_param_analysis(file_name, num_maps, num_chains,
+                                                               map_pre_factor,
+                                                               ground_truth_values[name],
+                                                               default_burn_in, name,
+                                                               non_converged_maps, chain_plot_dir)
 
-    #the posterior against the Fisher forecasts
-    if len(sampled_names) > 1:
-        joint_param_analysis(all_chains, nside, theta_pix, noise, was_sampled, pol,
-                             fisher_plot_dir, forecast_phi_noise,
-                             forecast_delensed_covariance)
+    #the table of product means, widths and z-scores
+    plot_z_score_table(summaries, ground_truth_values, joint_dir)
 
-    #the phi noise and the delensed spectra at the chains' noise level
-    print("\n")
-    print(f"Plotting the phi noise and delensed spectra at {noise:g} uK-arcmin")
-    plot_phi_noise_vs_qe(nside, theta_pix, noise, forecast_phi_noise, spectra_plot_dir)
+    #the posterior against the Fisher forecast
+    # if len(sampled_names) > 1:
+    #     joint_param_analysis(all_chains, nside, theta_pix, noise, was_sampled, pol, joint_dir,
+    #                          t_block, delensed_covariance, phi_noise_source, phi_noise,
+    #                          qe_filter, qe_response)
     return
 
 if __name__ == "__main__":
 
-    #the Fisher forecast the triangle plot compares against, and the phi-noise / delensed-
-    #spectra plots, are only meaningful at the box and noise level the chains ran on - MATCH
-    #sample_lcdm.sh
+    #the Fisher forecast the triangle plot compares against is only meaningful at the box and
+    #noise level the chains ran on - MATCH sample_lcdm.sh
     nside = 128
     theta_pix = 2.5
-    noise = 5
+    noise = 10
     #"I", "P" or "IP", as pol in sample_lcdm.sh; only labels the triangle plots
     pol = "I"
     num_maps = 10
     num_chains = 5
     default_burn_in = 600
     map_pre_factor = 234567
-    file_name = "data_5uk"
+    # file_name = "joint_inference_2026_10_29_2.5uk"
+    # file_name = "joint_inference_2026_10_29_5uk"
+    file_name = "joint_inference_2026_10_29_10uk"
+    # file_name = "omch2_logA_theta_MC_100_joint_inference_09_02_26_low_noise"
+    # file_name = "omch2_logA_theta_MC_100_joint_inference_08_27_26"
+    # file_name = "omch2_logA_theta_MC_100_joint_inference_09_02_26_high_noise"
 
     was_sampled = {}
     was_sampled["omch2"] = True
@@ -1109,35 +937,30 @@ if __name__ == "__main__":
     was_sampled["theta_MC_100"] = True
     was_sampled["logA"] = True
 
-    #the measured inputs to the forecasts and spectra plots, at THIS box and noise level.
-    #Edit to wherever the merged files are; drop an entry to skip it
-
-    #File paths to empirically generated phi noise matrices
-    forecast_phi_noise = {
-        # "map_joint": os.path.join(REPO_DIR, "get_map_joint_phi_noise",
-        #                           "map_joint_phi_noise_output", "map_joint_phi_noise.npz"),
-        # "sample_joint": os.path.join(REPO_DIR, "get_sampler_phi_noise",
-        #                              "sampler_phi_noise_output", "sampler_phi_noise.npz"),
-    }
-
-    #File paths to empirically delensed temperature covariance matrices for a given phi noise matrix
+    #the forecast, at THIS box and noise level. T block: "unlensed", "lensed", "delensed" or
+    #"measured" (with delensed_covariance). Phi noise: "qe" (with qe_filter / qe_response) or
+    #"measured" (with phi_noise). A measured delensed covariance's W should be built from the
+    #same N_phi the forecast uses
+    t_block = "measured"
+    phi_noise_source = "qe"
+    qe_filter = "unlensed"
+    qe_response = "unlensed"
     covariance_data = os.path.join(REPO_DIR, "get_delensed_field_covariance",
                                    "delensed_field_covariance_data")
-    forecast_delensed_covariance = {
-        "qe_unlensed": os.path.join(covariance_data, "lower_qe_bound", 
-                                    f"delensed_covariance_output_{noise}uk_lower_qe_bound",
-                                    "delensed_covariance.npz"),
-        # "qe_delensed": os.path.join(covariance_data, "upper_qe_bound",
-        #                             f"delensed_covariance_output_{noise}uk_upper_qe_bound",
-        #                             "delensed_covariance.npz"),
-        # "map_joint": os.path.join(covariance_data, "empirical_map_joint_noise",
-        #                           f"delensed_covariance_output_{noise}uk_map_joint",
-        #                           "delensed_covariance.npz"),
-        # "sample_joint": os.path.join(covariance_data, "empirical_sample_joint_noise",
-        #                              f"delensed_covariance_output_{noise}uk_sample_joint",
-        #                              "delensed_covariance.npz"),
-    }
+    delensed_covariance = os.path.join(covariance_data,
+                          f"delensed_covariance_output_qe_filter_unlensed_response_unlensed_{noise}uk",
+                          "delensed_covariance.npz")
+    phi_noise = None
+    #e.g. map_joint's N_phi with its matching delensed covariance (phi_noise_source = "measured"):
+    # phi_noise = os.path.join(REPO_DIR, "measure_phi_noise", "get_map_joint_phi_noise",
+    #                          "map_joint_phi_noise", f"map_joint_phi_noise_output_{noise}uk",
+    #                          "map_joint_phi_noise.npz")
+    # delensed_covariance = os.path.join(covariance_data,
+    #                       f"delensed_covariance_output_map_joint_{noise}uk",
+    #                       "delensed_covariance.npz")
 
     main(file_name, num_maps, num_chains, map_pre_factor,
-         GROUND_TRUTH, was_sampled, default_burn_in,
-         nside, theta_pix, noise, pol, forecast_phi_noise, forecast_delensed_covariance)
+         GROUND_TRUTH, was_sampled, default_burn_in, nside, theta_pix, noise, pol,
+         t_block = t_block, delensed_covariance = delensed_covariance,
+         phi_noise_source = phi_noise_source, phi_noise = phi_noise,
+         qe_filter = qe_filter, qe_response = qe_response)

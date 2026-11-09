@@ -1456,7 +1456,7 @@ if __name__ == "__main__":
     if reparameterize_lcdm:
         from cmb_lensing.fisher_forecast import output_dir
         fisher_path = os.path.join(output_dir(),
-                                   f"fisher_from_blocks_qe_delensed_camb_{noise_level}_uk.npz")
+                                   f"fisher_from_blocks_qe_delensed_delensed_{noise_level}_uk.npz")
         if not os.path.exists(fisher_path):
             raise FileNotFoundError(f"reparameterize_lcdm needs {fisher_path}; run "
                                     f"python -m cmb_lensing.fisher_forecast --nside {nside} "

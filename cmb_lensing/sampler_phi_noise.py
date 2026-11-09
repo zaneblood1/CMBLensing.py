@@ -36,7 +36,7 @@ The merge reads only the first `n_done` rows, so it also runs on a directory of 
 It writes sampler_phi_noise.npz, whose `nphi` is read by fisher_forecast (--nphi_source
 sample_joint --phi_noise) and by delensed_covariance (phi_noise).
 
-HPC path: get_sampler_phi_noise/get_sampler_phi_noise.sh -> get_sampler_phi_noise_1_chain.sh
+HPC path: measure_phi_noise/get_sampler_phi_noise/get_sampler_phi_noise.sh -> get_sampler_phi_noise_1_chain.sh
 -> get_sampler_phi_noise_1_chain.py, then merge_sampler_phi_noise.sh -> merge_sampler_phi_noise.py.
 """
 import argparse
@@ -165,8 +165,9 @@ def merge_phi_noise(directory, burn_in):
     A chain is used up to the `n_done` sweeps its sidecar reports (so running jobs merge as
     shorter chains); one with no sweep past `burn_in` yet is left out. Returns the dict written
     to sampler_phi_noise.npz: `nphi` (rfft grid, covar_matrix_from_cls units, NaN where
-    unmeasured, 0 at the origin), its jackknife error `nphi_error`, `cphi`, the mean moments
-    and the box / cosmology metadata.
+    unmeasured, 0 at the origin), its jackknife error `nphi_error`, the N leave-one-out N_phi
+    `nphi_leave_one_out` that error comes from, `cphi`, the mean moments and the box / cosmology
+    metadata.
     """
     paths = sorted(glob.glob(os.path.join(directory, f"{JOB_PREFIX}_[0-9]*.npz")))
 
@@ -202,10 +203,11 @@ def merge_phi_noise(directory, burn_in):
           f"{min(n_used)}-{max(n_used)} sweeps used per chain")
 
     cphi = np.asarray(first["cphi"])
-    nphi, nphi_error, mean_auto, mean_cross, mean_true_auto = noise_with_jackknife(
+    nphi, nphi_error, nphi_leave_one_out, mean_auto, mean_cross, mean_true_auto = noise_with_jackknife(
         np.array(autos), np.array(crosses), np.array(true_autos), cphi)
 
-    return dict(nphi = nphi, nphi_error = nphi_error, cphi = cphi,
+    return dict(nphi = nphi, nphi_error = nphi_error, nphi_leave_one_out = nphi_leave_one_out,
+                cphi = cphi,
                 mean_auto = mean_auto, mean_cross = mean_cross,
                 mean_true_auto = mean_true_auto,
                 burn_in = burn_in, n_used = np.array(n_used),

@@ -12,3 +12,10 @@ hpc_local.sh
 #mkdocs build output
 site/
 .cache/
+delensed_field_covariance_data/
+map_joint_phi_noise/
+sampler_phi_noise_data/
+phi_noise_plots/
+lcdm_sampler_data/
+chain_analysis_output/
+lcdm_chain_plots/

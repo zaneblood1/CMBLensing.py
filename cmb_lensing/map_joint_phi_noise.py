@@ -26,7 +26,8 @@ load_stored_nphi gives them W = 0). The origin is 0.
 N_phi describes map_joint AT the number of steps it was run for, on THIS box, at the
 fiducial cosmology; it is held fixed across the forecast's finite-difference stencil.
 
-Fanned out one slurm job per realization by get_map_joint_phi_noise/get_map_joint_phi_noise.sh
+Fanned out one slurm job per realization by
+measure_phi_noise/get_map_joint_phi_noise/get_map_joint_phi_noise.sh
 -> get_map_joint_phi_noise_1_realization.sh/.py, merged by merge_map_joint_phi_noise.py into
 map_joint_phi_noise.npz, whose `nphi` is read by fisher_forecast (--nphi_source map_joint
 --phi_noise) and by delensed_covariance (phi_noise).
@@ -117,12 +118,13 @@ def noise_from_moments(auto, cross, true_auto, cphi):
 
 
 def noise_with_jackknife(autos, crosses, true_autos, cphi):
-    """(nphi, nphi_error, mean_auto, mean_cross, mean_true_auto) from the stacked
-    (n_realizations, nside, nside // 2 + 1) per-realization moments.
+    """(nphi, nphi_error, nphi_leave_one_out, mean_auto, mean_cross, mean_true_auto) from the
+    stacked (n_realizations, nside, nside // 2 + 1) per-realization moments.
 
     The moments are averaged over realizations before noise_from_moments takes the ratio;
-    `nphi_error` is a delete-one-realization jackknife through the same ratio (NaN with
-    fewer than 3 realizations). Shared with sampler_phi_noise.
+    `nphi_error` is a delete-one-realization jackknife through the same ratio and
+    `nphi_leave_one_out` the (n_realizations, nside, nside // 2 + 1) N_phi it is built from
+    (both NaN with fewer than 3 realizations). Shared with sampler_phi_noise.
     """
     n_realization = len(autos)
     mean_auto = np.mean(autos, axis = 0)
@@ -132,6 +134,7 @@ def noise_with_jackknife(autos, crosses, true_autos, cphi):
 
     #delete-one jackknife
     nphi_error = np.full(cphi.shape, np.nan)
+    nphi_leave_one_out = np.full((n_realization,) + cphi.shape, np.nan)
     if n_realization > 2:
         leave_one_out = []
         for index in range(n_realization):
@@ -140,18 +143,19 @@ def noise_with_jackknife(autos, crosses, true_autos, cphi):
                                                     np.mean(crosses[kept], axis = 0),
                                                     np.mean(true_autos[kept], axis = 0),
                                                     cphi))
-        leave_one_out = np.array(leave_one_out)
-        spread = leave_one_out - np.mean(leave_one_out, axis = 0)
+        nphi_leave_one_out = np.array(leave_one_out)
+        spread = nphi_leave_one_out - np.mean(nphi_leave_one_out, axis = 0)
         nphi_error = np.sqrt((n_realization - 1) / n_realization *
                              np.sum(spread**2, axis = 0))
-    return nphi, nphi_error, mean_auto, mean_cross, mean_true_auto
+    return nphi, nphi_error, nphi_leave_one_out, mean_auto, mean_cross, mean_true_auto
 
 
 def merge_phi_noise(directory):
     """Average the per-realization moments and form the per-mode N_phi, with a jackknife error.
 
     The error `nphi_error` is a delete-one-realization jackknife, recomputed through the
-    same ratio as the answer. Returns the dict written to map_joint_phi_noise.npz.
+    same ratio as the answer, and `nphi_leave_one_out` holds the N leave-one-out N_phi it comes
+    from. Returns the dict written to map_joint_phi_noise.npz.
     """
     paths = sorted(glob.glob(os.path.join(directory, REALIZATION_GLOB)))
     n_realization = len(paths)
@@ -173,10 +177,11 @@ def merge_phi_noise(directory):
     first = np.load(paths[0])
     cphi = np.asarray(first["cphi"])
 
-    nphi, nphi_error, mean_auto, mean_cross, mean_true_auto = noise_with_jackknife(
+    nphi, nphi_error, nphi_leave_one_out, mean_auto, mean_cross, mean_true_auto = noise_with_jackknife(
         autos, crosses, true_autos, cphi)
 
-    return dict(nphi = nphi, nphi_error = nphi_error, cphi = cphi,
+    return dict(nphi = nphi, nphi_error = nphi_error, nphi_leave_one_out = nphi_leave_one_out,
+                cphi = cphi,
                 mean_auto = mean_auto, mean_cross = mean_cross,
                 mean_true_auto = mean_true_auto,
                 n_realizations = n_realization, seeds = np.array(seeds),

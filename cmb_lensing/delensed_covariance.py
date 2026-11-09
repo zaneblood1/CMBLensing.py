@@ -32,7 +32,7 @@ weights enter the Fisher contraction.
 The NOISELESS lensed field is inverse-lensed, and the forecast adds the isotropic C_n back
 on - covariance_blocks's "C_TT^delensed + C_n" convention.
 
-The reconstruction noise of map_joint is NOT measured here; that is get_map_joint_phi_noise/.
+The reconstruction noise of map_joint is NOT measured here; that is measure_phi_noise/get_map_joint_phi_noise/.
 
 The measurement is fanned out one slurm job per seed by
 get_delensed_field_covariance/get_delensed_covariance.sh -> run_single_delensed_covariance.sh ->

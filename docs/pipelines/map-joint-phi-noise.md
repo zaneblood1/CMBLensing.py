@@ -17,9 +17,9 @@ with a delete-one-realization jackknife error.
 ## Running it
 
 ```bash
-bash get_map_joint_phi_noise/get_map_joint_phi_noise.sh          #one job per seed
+bash measure_phi_noise/get_map_joint_phi_noise/get_map_joint_phi_noise.sh          #one job per seed
 #copy map_joint_phi_noise_output/ to your machine, then
-python get_map_joint_phi_noise/merge_map_joint_phi_noise.py --noise_dir <map_joint_phi_noise_output>
+python measure_phi_noise/get_map_joint_phi_noise/merge_map_joint_phi_noise.py --noise_dir <map_joint_phi_noise_output>
 ```
 
 Settings at the top of the driver: `nside`, `theta_pix`, `noise_level`, `l_knee`, `map_joint_steps`, `num_realizations`, `seed_prefix`.
@@ -30,6 +30,7 @@ Settings at the top of the driver: `nside`, `theta_pix`, `noise_level`, `l_knee`
 |---|---|
 | `nphi` | per-mode phi noise on the rfft2 grid; NaN where the mean cross is <= 0, 0 at the origin |
 | `nphi_error` | jackknife error |
+| `nphi_leave_one_out` | the N leave-one-out `nphi` the jackknife comes from, shape `(n_realizations, nside, nside // 2 + 1)` |
 | box / cosmology keys | `nside`, `theta_pix`, `noise_level`, `l_knee`, `param_names`, `params` |
 
-Can be used in forecasting via `fisher_forecast --nphi_source map_joint --phi_noise map_joint_phi_noise.npz` or as the noise source for [the delensed covariance](delensed-covariance.md).
+Can be used in forecasting via `fisher_forecast --nphi_source map_joint --phi_noise map_joint_phi_noise.npz` or as the noise source for [the delensed covariance](delensed-covariance.md). Its spectra are plotted by `measure_phi_noise/phi_noise_analysis.py` (see [Sampler Phi Noise](sampler-phi-noise.md#plotting-the-phi-noise-spectra)).
