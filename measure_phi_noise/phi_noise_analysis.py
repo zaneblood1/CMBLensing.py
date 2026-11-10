@@ -187,15 +187,15 @@ if __name__ == "__main__":
     #the box and noise level the merged phi noise files were measured at
     nside = 128
     theta_pix = 2.5
-    noise = 10
+    noise_levels = [2.5, 5, 10]
 
     #merged map_joint_phi_noise.npz / sampler_phi_noise.npz files at THIS box and noise level.
     #Edit to wherever the merged files are; drop an entry to skip it
-    phi_noise_files = {
-        "map_joint": os.path.join(HERE, "get_map_joint_phi_noise", "map_joint_phi_noise",
-                                  f"map_joint_phi_noise_output_{noise}uk", "map_joint_phi_noise.npz"),
-        "sample_joint": os.path.join(HERE, "get_sampler_phi_noise", "sampler_phi_noise_data",
-                                     f"sampler_phi_noise_output_{noise}uk", "sampler_phi_noise.npz"),
-    }
-
-    plot_phi_noise_vs_qe(nside, theta_pix, noise, phi_noise_files, plot_dir(noise))
+    for noise in noise_levels:
+        phi_noise_files = {
+            "map_joint": os.path.join(HERE, "get_map_joint_phi_noise", "map_joint_phi_noise_new",
+                                      f"map_joint_phi_noise_output_{noise}uk", "map_joint_phi_noise.npz"),
+            "sample_joint": os.path.join(HERE, "get_sampler_phi_noise", "sampler_phi_noise_data_old",
+                                         f"sampler_phi_noise_output_{noise}uk", "sampler_phi_noise.npz"),
+        }
+        plot_phi_noise_vs_qe(nside, theta_pix, noise, phi_noise_files, plot_dir(noise))

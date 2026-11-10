@@ -15,9 +15,6 @@ from juliacall import Main as jl
 import time
 import argparse
 
-#results go next to this script
-RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "performance_results")
-
 #Parse the arguments of the slurm job
 parser = argparse.ArgumentParser()
 parser.add_argument("--map_size", type = int)
@@ -25,7 +22,11 @@ parser.add_argument("--seed", type = int)
 parser.add_argument("--trial", type = int)
 parser.add_argument("--pol", type = str)
 parser.add_argument("--theta_pix", type = float)
+parser.add_argument("--noise_level", type = float)
+#the results folder (run_performance_test.sh's out_dir)
+parser.add_argument("--out_dir", type = str)
 args = parser.parse_args()
+RESULTS_DIR = args.out_dir
 
 #call julia load_sim via julia call to get the julia generated simulation data
 #in order to better compare apples to apples
@@ -34,6 +35,7 @@ using CMBLensing
 data_set = load_sim(
     seed = {args.seed},
     θpix = {args.theta_pix},
+    μKarcminT = {args.noise_level},
     T = Float64,
     Nside = {args.map_size},
     pol = :{args.pol}

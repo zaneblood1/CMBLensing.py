@@ -14,5 +14,10 @@ conda activate myenv
 #it is in your login shell too: put this line in ~/.bashrc as well, or source this file first
 export SBATCH_MAIL_USER=you@example.edu
 
+#optional: the submission throttle of hpc_submit.sh (defaults 85 jobs, 60 s). Set
+#MAX_QUEUED_JOBS a few jobs below the cluster's cap on queued + running jobs
+export MAX_QUEUED_JOBS=89
+export SUBMIT_POLL_SECONDS=600
+
 #the CMBLensing.jl checkout, used only by runtime_comparison/
 export CMBLENSING_JL_PATH=/path/to/CMBLensing.jl

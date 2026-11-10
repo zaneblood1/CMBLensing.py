@@ -1,12 +1,13 @@
-"""One chain of the sampler effective noise: sample (f, phi) | d with theta at ground truth.
+"""One chain of the sampler phi noise: sample (f, phi) | d with theta at ground truth.
 
-Spawned once per seed by get_sampler_phi_noise.sh. The job builds load_sim's (f, phi, d)
-realization at its seed (at GROUND_TRUTH), then runs sample_lcdm.sample_joint's Gibbs sweep
-without its theta step - f from its exact conditional, one HMC step on phi - starting from
-phi = 0, and writes EVERY phi sample to a preallocated .npy as the chain produces it:
+Spawned once per (map seed, chain index) by get_sampler_phi_noise.sh. The job builds
+load_sim's (f, phi, d) realization at its seed (at GROUND_TRUTH), then runs
+sample_lcdm.sample_joint's Gibbs sweep without its theta step - f from its exact conditional,
+one HMC step on phi - starting from phi = 0 (chain 0) or a draw from the C_phi prior (every
+other chain), and writes EVERY phi sample to a preallocated .npy as the chain produces it:
 
-    sampler_phi_NNNN_samples.npy   (num_sweeps, nside, nside // 2 + 1) complex64
-    sampler_phi_NNNN.npz           n_done, phi_true, C_phi, HMC acceptances, configuration
+    sampler_phi_NNNN_cK_samples.npy   (num_sweeps, nside, nside // 2 + 1) complex64
+    sampler_phi_NNNN_cK.npz           n_done, phi_true, C_phi, HMC acceptances, configuration
 
 The samples are flushed and the npz rewritten (atomically) every few sweeps, so
 merge_sampler_phi_noise.py can analyse the chain while it is still running and a job
@@ -30,6 +31,10 @@ parser.add_argument("--flush_every", type = int, default = DEFAULT_FLUSH_EVERY)
 parser.add_argument("--out_dir", type = str, required = True)
 parser.add_argument("--hmc_step_size", type = float, required = True)
 parser.add_argument("--hmc_num_steps", type = int, required = True)
+parser.add_argument("--chain_index", type = int, default = 0)
+#seed of the chain's random numbers; empty or absent: drawn at random (stored in the sidecar)
+parser.add_argument("--chain_seed", type = lambda value: int(value) if value else None,
+                    default = None)
 args = parser.parse_args()
 
 #the index is in the filename and the seed is in the payload; the analysis rejects duplicate
@@ -37,4 +42,5 @@ args = parser.parse_args()
 run_job(args.out_dir, args.realization_index, args.map_seed, args.nside, args.theta_pix,
         args.noise_level, n_sweeps = args.num_sweeps, l_knee = args.l_knee,
         hmc_step_size = args.hmc_step_size, hmc_num_steps = args.hmc_num_steps, 
-        flush_every = args.flush_every)
+        flush_every = args.flush_every, chain_index = args.chain_index,
+        chain_seed = args.chain_seed)

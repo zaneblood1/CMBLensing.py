@@ -11,7 +11,7 @@
 #submits from it
 source "$SLURM_SUBMIT_DIR/../../hpc_local.sh" || exit 1
 
-#call the python script for a single chain (one data map)
+#call the python script for a single chain (one data map, one chain index)
 python3 "$SLURM_SUBMIT_DIR/get_sampler_phi_noise_1_chain.py" \
     --realization_index "$1" \
     --map_seed "$2" \
@@ -22,4 +22,6 @@ python3 "$SLURM_SUBMIT_DIR/get_sampler_phi_noise_1_chain.py" \
     --num_sweeps "$7" \
     --out_dir "$8" \
     --hmc_step_size "$9" \
-    --hmc_num_steps "${10}"
+    --hmc_num_steps "${10}" \
+    --chain_index "${11}" \
+    --chain_seed "${12}"

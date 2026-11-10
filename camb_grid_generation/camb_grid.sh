@@ -2,26 +2,33 @@
 
 #Run with "bash camb_grid.sh" (not sbatch): it only submits the jobs. It moves into its own
 #folder and sources the untracked repo-root hpc_local.sh (conda, SBATCH_MAIL_USER; copy
-#hpc_local.example.sh to create it), which the jobs inherit
+#hpc_local.example.sh to create it), which the jobs inherit. Submission is throttled
+#(../hpc_submit.sh), so the driver runs until the last job is submitted: start it with
+#"nohup bash camb_grid.sh > submit.log 2>&1 &" or inside tmux
+#
+#Every setting below is a default; override any of them as --<name>=<value>, e.g.
+#    bash camb_grid.sh --lmax=5000 --h0_nodes=101 --out_dir_name=grid_lmax_5000
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$here" || exit 1
-source ../hpc_local.sh || exit 1
+
+#every --name=value argument becomes the variable name=value
+for arg in "$@"; do declare "${arg#--}"; done
 
 #shared CAMB settings for every grid point
-lmax=4000 #must equal constants.DEFAULT_MAX_ELL so the grid shares load_sim's ell support
-tau=0.05 #pinned by prior, not gridded
-mnu=0.06 #pinned by prior, not gridded
-k_pivot=0.05
-alens=1
+lmax=${lmax:-4000} #must equal constants.DEFAULT_MAX_ELL so the grid shares load_sim's ell support
+tau=${tau:-0.05} #pinned by prior, not gridded
+mnu=${mnu:-0.06} #pinned by prior, not gridded
+k_pivot=${k_pivot:-0.05}
+alens=${alens:-1}
 
 #CAMB accuracy. Defaults (all boosts = 1) match the existing 1D caches and load_sim's
 #default behavior
-accuracy_boost=1
-l_sample_boost=1
-l_accuracy_boost=1
+accuracy_boost=${accuracy_boost:-1}
+l_sample_boost=${l_sample_boost:-1}
+l_accuracy_boost=${l_accuracy_boost:-1}
 
-#output folder shared by every job
-out_dir="$here/multi_param_CAMB_grid"
+#name of the output folder shared by every job, created inside this folder
+out_dir_name=${out_dir_name:-multi_param_CAMB_grid}
 
 #Grid ranges. logA / ns / ombh2 / omch2 use the same -5 sigma to +5 sigma endpoints as
 #sample_lcdm.sh so the existing 1D caches stay a valid check along each axis. H0 replaces
@@ -29,16 +36,16 @@ out_dir="$here/multi_param_CAMB_grid"
 #omch2 together, so a rectangular theta box has corners CAMB cannot solve (the 1D cache
 #already loses 8 of its 50 nodes to exactly that). H0 in [25, 130] covers
 #theta_MC_100 in [0.8804, 1.1899] at the fiducial ombh2 / omch2
-h0_min=25
-h0_max=130
-log_a_min=2.661635
-log_a_max=3.782861
-ns_min=0.867143
-ns_max=1.042186
-ombh2_min=0.020413
-ombh2_max=0.024389
-omch2_min=0.079704
-omch2_max=0.155541
+h0_min=${h0_min:-25}
+h0_max=${h0_max:-130}
+log_a_min=${log_a_min:-2.661635}
+log_a_max=${log_a_max:-3.782861}
+ns_min=${ns_min:-0.867143}
+ns_max=${ns_max:-1.042186}
+ombh2_min=${ombh2_min:-0.020413}
+ombh2_max=${ombh2_max:-0.024389}
+omch2_min=${omch2_min:-0.079704}
+omch2_max=${omch2_max:-0.155541}
 
 #Nodes per axis, set by measuring the cubic-spline error on the existing 1D caches with
 #CAMB's own numerical noise projected out. lnCl^TT is very nearly analytic in logA and ns
@@ -46,11 +53,16 @@ omch2_max=0.155541
 #because moving it shifts the acoustic peaks in ell: 81 linearly spaced nodes hold the
 #theta spacing at 0.0053 across the whole box, which the 1D theta cache says is what
 #~1e-3 lnCl costs. Total = 81 x 5 x 5 x 5 x 7 = 70875 CAMB calls in 875 jobs
-h0_nodes=81
-log_a_nodes=5
-ns_nodes=5
-ombh2_nodes=5
-omch2_nodes=7
+h0_nodes=${h0_nodes:-81}
+log_a_nodes=${log_a_nodes:-5}
+ns_nodes=${ns_nodes:-5}
+ombh2_nodes=${ombh2_nodes:-5}
+omch2_nodes=${omch2_nodes:-7}
+
+source ../hpc_local.sh || exit 1
+source ../hpc_submit.sh || exit 1
+
+out_dir="$here/$out_dir_name"
 
 #store all these common parameters in an
 #array to pass to our slurm jobs
@@ -70,6 +82,36 @@ args=(
 )
 
 mkdir -p "$out_dir"
+
+#audit trail: the submission date and every setting, rewritten on every run
+cat > "$out_dir/submission_settings.txt" <<EOF
+submitted $(date "+%Y-%m-%d %H:%M:%S %Z") by $USER on $(hostname)
+lmax=$lmax
+tau=$tau
+mnu=$mnu
+k_pivot=$k_pivot
+alens=$alens
+accuracy_boost=$accuracy_boost
+l_sample_boost=$l_sample_boost
+l_accuracy_boost=$l_accuracy_boost
+out_dir_name=$out_dir_name
+h0_min=$h0_min
+h0_max=$h0_max
+log_a_min=$log_a_min
+log_a_max=$log_a_max
+ns_min=$ns_min
+ns_max=$ns_max
+ombh2_min=$ombh2_min
+ombh2_max=$ombh2_max
+omch2_min=$omch2_min
+omch2_max=$omch2_max
+h0_nodes=$h0_nodes
+log_a_nodes=$log_a_nodes
+ns_nodes=$ns_nodes
+ombh2_nodes=$ombh2_nodes
+omch2_nodes=$omch2_nodes
+
+EOF
 
 #value of node i on a linearly spaced axis of n nodes running from min to max
 node_value() {
@@ -93,7 +135,7 @@ for ((a=0; a<log_a_nodes; a++)); do
             ombh2=$(node_value "$ombh2_min" "$ombh2_max" "$ombh2_nodes" "$c")
             for ((d=0; d<omch2_nodes; d++)); do
                 omch2=$(node_value "$omch2_min" "$omch2_max" "$omch2_nodes" "$d")
-                sbatch run_single_camb_grid.sh "$a" "$log_a" "$b" "$ns" "$c" "$ombh2" "$d" "$omch2" "${args[@]}"
+                submit_throttled run_single_camb_grid.sh "$a" "$log_a" "$b" "$ns" "$c" "$ombh2" "$d" "$omch2" "${args[@]}"
             done
         done
     done

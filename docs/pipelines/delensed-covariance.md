@@ -27,7 +27,16 @@ bash get_delensed_field_covariance/get_delensed_field_covariance.sh
 python get_delensed_field_covariance/merge_delensed_field_covariance.py --covariance_dir <delensed_covariance_output>
 ```
 
-Other settings in the driver: `derivative_params` (the forecast's `--params` must be drawn from this list), `step_sigma` (0.05, in units of `PARAM_SIGMA`), `num_realizations`, `seed_prefix`. A 3-point job at nside 128 takes ~20 s.
+Other settings in the driver: `derivative_params` (the forecast's `--params` must be drawn from this list), `step_sigma` (0.05, in units of `PARAM_SIGMA`), `num_realizations`, `seed_prefix`, `out_dir_name` (the output folder's name inside `get_delensed_field_covariance/`). A 3-point job at nside 128 takes ~20 s.
+
+Every setting has a default in the driver and can be overridden on the command line as `--<name>=<value>`, e.g.
+
+```bash
+bash get_delensed_field_covariance/get_delensed_field_covariance.sh --noise_level=10 --qe_filter=delensed \
+    --derivative_params="omch2 logA" --out_dir_name=delensed_covariance_output_10uk
+```
+
+A misspelled name is ignored and the default used. Each run writes the submission date and every setting to `submission_settings.txt` in the output folder (replacing any earlier copy); use a new `out_dir_name` when you change settings.
 
 ## Output: `delensed_covariance.npz`
 

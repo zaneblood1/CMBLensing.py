@@ -24,11 +24,16 @@ from cmb_lensing.constants import DEFAULT_HMC_NUM_STEPS, DEFAULT_HMC_STEP_SIZE
 #fold_in(PRNGKey(map_seed), CHAIN_STREAM) with CHAIN_STREAM not 0 or 1 it never can
 CHAIN_STREAM = 2_026_092_301
 
-def chain_key(map_seed):
-    """The MCMC root key of one chain on the realization load_sim draws at `map_seed`:
-    distinct per `chain_index` and disjoint from every key load_sim uses."""
+def chain_key(map_seed, chain_seed):
+    """The MCMC root key of one chain on the realization load_sim draws at `map_seed`.
+
+    Every chain is its own branch fold_in(stream, chain_seed) of a stream disjoint from every
+    key load_sim uses, and nothing draws from the stream itself, so chains with different
+    `chain_seed` never share a key with each other or with the data (split(k)[i] ==
+    fold_in(k, i), so a chain rooted AT the stream would reach into its siblings' branches).
+    """
     stream = jax.random.fold_in(jax.random.PRNGKey(map_seed), CHAIN_STREAM)
-    return stream
+    return jax.random.fold_in(stream, chain_seed)
 
 def mixed_theta_matrices(params, data_set, nside, pix_width, ell_grid, qe_frozen):
     """(C_f, C_phi, D, G) operators at one cosmology, built the way sample_lcdm builds them.
@@ -48,15 +53,16 @@ def mixed_theta_matrices(params, data_set, nside, pix_width, ell_grid, qe_frozen
     return cf_op, cphi_op, d_op, g_op
 
 def posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_draws, rng_key,
-                          on_draw = None, verbose = True, hmc_step_size = DEFAULT_HMC_STEP_SIZE, 
-                          hmc_num_steps = DEFAULT_HMC_NUM_STEPS):
+                          on_draw = None, verbose = True, hmc_step_size = DEFAULT_HMC_STEP_SIZE,
+                          hmc_num_steps = DEFAULT_HMC_NUM_STEPS, phi_start = None):
     """Draws of the mixed pair (f°, phi°) from p(f°, phi° | d, theta), theta held fixed.
 
     The same Gibbs sweep sample_lcdm.sample_joint runs, minus its theta step: f from its
     exact conditional (gibbs_sample_f), a mix, one HMC step on phi° (gibbs_sample_phi), and
     an unmix to hand the next f step the new phi. D and G never change, so the (f°, phi°)
     pair at the end of each sweep IS a posterior draw in fixed mixed coordinates. The chain
-    starts at phi = 0 and hands EVERY sweep to the caller, the first one included: there is
+    starts at `phi_start` (a field of data_set.phi's type; phi = 0 when None) and hands EVERY
+    sweep to the caller, the first one included: there is
     deliberately no burn-in and no thinning here, since both are properties of the
     realization and are chosen in post-processing. `rng_key` is the chain's own key
     (chain_key).
@@ -81,7 +87,7 @@ def posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_draws, rng_k
                 mixing_d = d_fid, mixing_g = g_fid,
                 quadratic_estimate = data_set.quadratic_estimate)
 
-    phi = 0 * data_set.phi
+    phi = 0 * data_set.phi if phi_start is None else phi_start
     field_zeroes = 0 * data_set.unlensed_field
     key = rng_key
     draws, accepts = [], []

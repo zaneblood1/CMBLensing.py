@@ -2,7 +2,6 @@ from cmb_lensing.sample_lcdm import *
 from cmb_lensing.simulate import *
 import argparse
 import os
-from datetime import date
 
 #Parse the arguments of the slurm job
 parser = argparse.ArgumentParser()
@@ -37,6 +36,15 @@ parser.add_argument("--omch2_ground", type = float)
 parser.add_argument("--theta_MC_100_ground", type = float)
 parser.add_argument("--log_a_ground", type = float)
 parser.add_argument("--ns_ground", type = float)
+parser.add_argument("--ombh2_proposal_sigma", type = float)
+parser.add_argument("--omch2_proposal_sigma", type = float)
+parser.add_argument("--theta_MC_100_proposal_sigma", type = float)
+parser.add_argument("--log_a_proposal_sigma", type = float)
+parser.add_argument("--ns_proposal_sigma", type = float)
+parser.add_argument("--out_dir", type = str)
+#"true" / "false" from sample_lcdm.sh
+for name in ("ombh2", "omch2", "theta_MC_100", "log_a", "ns"):
+    parser.add_argument(f"--sample_{name}", type = lambda value: value.lower() == "true")
 args = parser.parse_args()
 
 #Generate a single realization of the ground truth data set using the chain index as the seed
@@ -67,22 +75,22 @@ param_ranges["theta_MC_100"] = (args.theta_MC_100_min, args.theta_MC_100_max)
 param_ranges["logA"] = (args.log_a_min, args.log_a_max)
 param_ranges["ns"] = (args.ns_min, args.ns_max)
 
-#NOTE flip these depending on which parameter is being sampled
-#Whether or not to sample each parameter
+#Whether or not to sample each parameter, set in sample_lcdm.sh
 should_sample = {}
-should_sample["ombh2"] = False
-should_sample["omch2"] = True
-should_sample["theta_MC_100"] = True
-should_sample["logA"] = True
-should_sample["ns"] = False
+should_sample["ombh2"] = args.sample_ombh2
+should_sample["omch2"] = args.sample_omch2
+should_sample["theta_MC_100"] = args.sample_theta_MC_100
+should_sample["logA"] = args.sample_log_a
+should_sample["ns"] = args.sample_ns
 
-#Tune these with a single pilot chain to achieve around 44% acceptance per parameter
+#Metropolis proposal widths, set in sample_lcdm.sh (tune toward ~44% acceptance per parameter).
+#sample_joint visits the parameters in this dict's order
 proposal_sigmas = {}
-proposal_sigmas["ombh2"] = 1e-4
-proposal_sigmas["omch2"] = 1e-3
-proposal_sigmas["theta_MC_100"] = 1e-3
-proposal_sigmas["logA"] = 1e-2
-proposal_sigmas["ns"] = 1e-2
+proposal_sigmas["ombh2"] = args.ombh2_proposal_sigma
+proposal_sigmas["omch2"] = args.omch2_proposal_sigma
+proposal_sigmas["theta_MC_100"] = args.theta_MC_100_proposal_sigma
+proposal_sigmas["logA"] = args.log_a_proposal_sigma
+proposal_sigmas["ns"] = args.ns_proposal_sigma
 
 #Do not turn on any logging
 advanced_logging = {}
@@ -92,18 +100,17 @@ advanced_logging["plot_log_pdf"] = False
 advanced_logging["plot_lcdm_sigmas"] = False
 
 #Plug the ground truth into sample_joint() to try and learn the LCDM distributions. The chains
-#go to lcdm_sampler_data/<experiment>/ next to this script, where chain_analysis.py reads them;
-#sample_joint appends to files there but does not create the directory
-hpc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
-           "lcdm_sampler_data",
-           f"joint_inference_{date.today().isoformat().replace("-", "_")}") + os.sep
+#go to the run's folder (sample_lcdm.sh's out_dir, lcdm_sampler_data/<experiment>/), where
+#chain_analysis.py reads them; sample_joint appends to files there but does not create it
+hpc_path = args.out_dir + os.sep
 os.makedirs(hpc_path, exist_ok = True)
 params, phi, sub_key = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, args.noise_level, 
                                     advanced_logging, phi_init = "ZEROES", fixed_fields = False,
                                     hmc_step_size = args.hmc_step_size, hmc_num_steps = args.hmc_num_steps,
                                     iters_per_chain = args.iters_per_chain, num_burn_in_fix_theta = args.num_burn_in_fix_theta,
                                     map_idx = args.map_seed, sub_chain_idx = args.chain, seed = None,
-                                    num_burn_in_always_accept = 0, hpc_path = hpc_path)
+                                    num_burn_in_always_accept = args.num_burn_in_always_accept,
+                                    hpc_path = hpc_path)
 #the chain's final state, next to its histories: pass np.load(<this file>) to sample_joint's
 #resume_chain_dict to continue the chain (the data set is rebuilt from map_seed)
 data_dict = {}

@@ -19,4 +19,6 @@ python3 "$SLURM_SUBMIT_DIR/python_performance_test.py" \
     --seed $2 \
     --trial $3 \
     --pol $4 \
-    --theta_pix $5
+    --theta_pix $5 \
+    --noise_level $6 \
+    --out_dir "$7"

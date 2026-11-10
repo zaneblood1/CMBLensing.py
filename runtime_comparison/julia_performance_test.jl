@@ -6,9 +6,6 @@ using CMBLensing
 using ArgParse
 using NPZ
 
-#results go next to this script
-RESULTS_DIR = joinpath(@__DIR__, "performance_results")
-
 #load in the task id and the f, phi combo id
 function parse_commandline()
     settings = ArgParseSettings()
@@ -23,6 +20,11 @@ function parse_commandline()
             arg_type = String
         "--theta_pix"
             arg_type = Float64
+        "--noise_level"
+            arg_type = Float64
+        #the results folder (run_performance_test.sh's out_dir)
+        "--out_dir"
+            arg_type = String
     end
     return parse_args(settings)
 end
@@ -32,6 +34,8 @@ trial = args["trial"]
 map_size = args["map_size"]
 seed = args["seed"]
 theta_pix = args["theta_pix"]
+noise_level = args["noise_level"]
+RESULTS_DIR = args["out_dir"]
 
 polarity = args["pol"]
 if polarity == "I"
@@ -48,6 +52,7 @@ end
 (;f, f̃, ϕ, ds) = load_sim(
     seed = seed,
     θpix = theta_pix,
+    μKarcminT = noise_level,
     T = Float64,
     Nside = map_size,
     pol = pol

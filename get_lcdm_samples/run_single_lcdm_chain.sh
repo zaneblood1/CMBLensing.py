@@ -43,4 +43,15 @@ python3 "$SLURM_SUBMIT_DIR/run_single_lcdm_chain.py" \
     --iters_per_chain "${28}" \
     --num_burn_in_always_accept "${29}" \
     --hmc_num_steps "${30}" \
-    --hmc_step_size "${31}"
+    --hmc_step_size "${31}" \
+    --ombh2_proposal_sigma "${32}" \
+    --omch2_proposal_sigma "${33}" \
+    --theta_MC_100_proposal_sigma "${34}" \
+    --log_a_proposal_sigma "${35}" \
+    --ns_proposal_sigma "${36}" \
+    --out_dir "${37}" \
+    --sample_ombh2 "${38}" \
+    --sample_omch2 "${39}" \
+    --sample_theta_MC_100 "${40}" \
+    --sample_log_a "${41}" \
+    --sample_ns "${42}"

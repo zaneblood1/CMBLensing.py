@@ -19,3 +19,9 @@ phi_noise_plots/
 lcdm_sampler_data/
 chain_analysis_output/
 lcdm_chain_plots/
+debug/
+map_joint_phi_noise_*/
+sampler_phi_noise_data_*/
+convert_old_sampler_phi_noise.py
+phi_noise_plots*/
+debug_phi_noise*

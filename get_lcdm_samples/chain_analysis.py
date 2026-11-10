@@ -8,6 +8,7 @@ from matplotlib.colors import to_rgba
 from matplotlib.lines import Line2D
 from scipy.stats import gaussian_kde
 from cmb_lensing.constants import GROUND_TRUTH
+from cmb_lensing.mcmc_diagnostics import gelman_rubin, autocorrelation, integrated_autocorrelation_time
 from cmb_lensing.fisher_forecast import (annotated_heatmap, plot_annotated_matrix,
                                          correlation_from_covariance, covariance_from_fisher,
                                          forecast)
@@ -50,44 +51,6 @@ R_THRESHOLD = 1_000_000
 #the labels of the measured (chain) posterior and of the forecast in file names
 EMPIRICAL_LABEL = "empirical"
 FISHER_LABEL = "fisher"
-
-def gelman_rubin(chains):
-    """Gelman-Rubin R-hat convergence diagnostic across multiple chains."""
-    m = len(chains)
-    n = min(len(c) for c in chains)
-    #trim all chains to same length
-    chains = [c[:n] for c in chains]
-
-    chain_means = np.array([np.mean(c) for c in chains])
-    chain_vars = np.array([np.var(c, ddof = 1) for c in chains])
-
-    overall_mean = np.mean(chain_means)
-    B = n / (m - 1) * np.sum((chain_means - overall_mean) ** 2)
-    W = np.mean(chain_vars)
-
-    var_hat = (n - 1) / n * W + (1 / n) * B
-    R_hat = np.sqrt(var_hat / W)
-    return R_hat
-
-def integrated_autocorrelation_time(acf, c = 5.0):
-    """Sokal's automatic windowing — truncate at lag M where M < c * tau(M)."""
-    tau = 1.0
-    for m in range(1, len(acf)):
-        tau += 2.0 * acf[m]
-        if m >= c * tau:
-            return tau
-    return tau
-
-def autocorrelation(chain, max_lag = None):
-    """Normalized autocorrelation of a 1D chain of samples."""
-    n = len(chain)
-    if max_lag is None:
-        max_lag = n // 2
-    x = chain - np.mean(chain)
-    variance = np.var(chain)
-    acf = np.correlate(x, x, mode = "full")[n - 1:]  #positive lags only
-    acf = acf[:max_lag] / (variance * n)
-    return acf
 
 def all_chain_trace(chains, output_path, param_name):
     plt.figure(figsize = (16, 5))

@@ -7,9 +7,11 @@ jobs may still be running: only the sweeps each one reports as complete are read
     python merge_sampler_phi_noise.py --chain_dir ABSOLUTE_PATH_TO/sampler_phi_noise_output --burn_in 200
 
 Writes sampler_phi_noise.npz into that directory: `nphi` (the per-mode rfft2 matrix in
-covar_matrix_from_cls units, NaN on unmeasured modes, 0 at the origin), its jackknife error
-`nphi_error`, the N leave-one-out N_phi `nphi_leave_one_out`, `cphi`, the mean moments and the
-box / cosmology metadata.
+covar_matrix_from_cls units from the posterior mean's response to the truth, NaN on unmeasured
+modes, 0 at the origin), its jackknife error `nphi_error`, the N leave-one-out N_phi
+`nphi_leave_one_out`, the per-mode R-hat across each
+realization's chains (`rhat_real`, `rhat_imaginary`), `cphi`, the mean moments and the box /
+cosmology metadata. Check the burn-in with plot_sampler_convergence.py on that file.
 """
 
 import argparse

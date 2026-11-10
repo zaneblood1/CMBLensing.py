@@ -104,33 +104,66 @@ def measure_phi_noise(nside, theta_pix, noise_level, map_seed, l_knee = 0.0,
 
 # ── Merging the realizations ──────────────────────────────────────────────
 
-def noise_from_moments(auto, cross, true_auto, cphi):
-    """N_phi = C_phi (1 / r^2 - 1) per mode, r^2 = cross^2 / (auto true_auto).
-
-    NaN where the mean cross power is not positive (no correlation with the truth measured);
-    0 at the origin.
-    """
+def _noise_from_r_squared(r_squared, mean_cross_with_truth, cphi):
+    """N_phi = C_phi (1 / r^2 - 1); NaN where the mean cross power with the truth is not
+    positive (no correlation measured), 0 at the origin."""
     with np.errstate(divide = "ignore", invalid = "ignore"):
-        r_squared = cross**2 / (auto * true_auto)
-        nphi = np.where(cross > 0, cphi * (1.0 / r_squared - 1.0), np.nan)
+        nphi = np.where(mean_cross_with_truth > 0, cphi * (1.0 / r_squared - 1.0), np.nan)
     nphi[0, 0] = 0.0
     return nphi
 
 
-def noise_with_jackknife(autos, crosses, true_autos, cphi):
-    """(nphi, nphi_error, nphi_leave_one_out, mean_auto, mean_cross, mean_true_auto) from the
-    stacked (n_realizations, nside, nside // 2 + 1) per-realization moments.
+def noise_from_correlation(mean_estimate_power, mean_cross_with_truth, mean_true_power, cphi):
+    """Per-mode N_phi from the squared correlation of the estimate with the truth,
 
-    The moments are averaged over realizations before noise_from_moments takes the ratio;
-    `nphi_error` is a delete-one-realization jackknife through the same ratio and
-    `nphi_leave_one_out` the (n_realizations, nside, nside // 2 + 1) N_phi it is built from
-    (both NaN with fewer than 3 realizations). Shared with sampler_phi_noise.
+        r^2 = <Re(phi_estimate phi_true*)>^2 / (<|phi_estimate|^2> <|phi_true|^2>).
+
+    Valid for any estimate (unchanged if the estimate is rescaled), but every source of
+    scatter in the estimate counts as noise, including a sampler's Monte Carlo error in a
+    finite chain average.
+    """
+    with np.errstate(divide = "ignore", invalid = "ignore"):
+        r_squared = mean_cross_with_truth**2 / (mean_estimate_power * mean_true_power)
+    return _noise_from_r_squared(r_squared, mean_cross_with_truth, cphi)
+
+
+def noise_from_response(mean_cross_with_truth, mean_true_power, cphi):
+    """Per-mode N_phi from the estimate's response to the truth,
+
+        r^2 = <Re(phi_estimate phi_true*)> / <|phi_true|^2>.
+
+    Valid only when the estimate is the exact posterior mean E[phi | d], for which
+    <Re(phi_estimate phi_true*)> = <|phi_estimate|^2>, so this equals noise_from_correlation.
+    It never uses <|phi_estimate|^2>, so a chain average's Monte Carlo error (independent of
+    the truth) drops out; a shrunk estimate (e.g. a chain not yet burnt in) reads as noise.
+    Not valid for a MAP estimate.
+    """
+    with np.errstate(divide = "ignore", invalid = "ignore"):
+        r_squared = mean_cross_with_truth / mean_true_power
+    return _noise_from_r_squared(r_squared, mean_cross_with_truth, cphi)
+
+def _noise_from_means(estimator, mean_estimate_power, mean_cross_with_truth, mean_true_power, cphi):
+    if estimator == "response":
+        return noise_from_response(mean_cross_with_truth, mean_true_power, cphi)
+    return noise_from_correlation(mean_estimate_power, mean_cross_with_truth, mean_true_power, cphi)
+
+
+def noise_with_jackknife(autos, crosses, true_autos, cphi, estimator = "correlation"):
+    """(nphi, nphi_error, nphi_leave_one_out, mean_auto, mean_cross, mean_true_auto) from the
+    stacked (n_realizations, nside, nside // 2 + 1) per-realization moments: `autos`
+    |phi_estimate|^2, `crosses` Re(phi_estimate phi_true*), `true_autos` |phi_true|^2.
+
+    The moments are averaged over realizations before the `estimator` ("correlation":
+    noise_from_correlation, "response": noise_from_response) takes the ratio; `nphi_error` is a
+    delete-one-realization jackknife through the same ratio and `nphi_leave_one_out` the
+    (n_realizations, nside, nside // 2 + 1) N_phi it is built from (both NaN with fewer than
+    3 realizations). Shared with sampler_phi_noise.
     """
     n_realization = len(autos)
     mean_auto = np.mean(autos, axis = 0)
     mean_cross = np.mean(crosses, axis = 0)
     mean_true_auto = np.mean(true_autos, axis = 0)
-    nphi = noise_from_moments(mean_auto, mean_cross, mean_true_auto, cphi)
+    nphi = _noise_from_means(estimator, mean_auto, mean_cross, mean_true_auto, cphi)
 
     #delete-one jackknife
     nphi_error = np.full(cphi.shape, np.nan)
@@ -139,10 +172,11 @@ def noise_with_jackknife(autos, crosses, true_autos, cphi):
         leave_one_out = []
         for index in range(n_realization):
             kept = np.arange(n_realization) != index
-            leave_one_out.append(noise_from_moments(np.mean(autos[kept], axis = 0),
-                                                    np.mean(crosses[kept], axis = 0),
-                                                    np.mean(true_autos[kept], axis = 0),
-                                                    cphi))
+            leave_one_out.append(_noise_from_means(estimator,
+                                                   np.mean(autos[kept], axis = 0),
+                                                   np.mean(crosses[kept], axis = 0),
+                                                   np.mean(true_autos[kept], axis = 0),
+                                                   cphi))
         nphi_leave_one_out = np.array(leave_one_out)
         spread = nphi_leave_one_out - np.mean(nphi_leave_one_out, axis = 0)
         nphi_error = np.sqrt((n_realization - 1) / n_realization *
