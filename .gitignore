@@ -27,3 +27,4 @@ phi_noise_plots*/
 debug_phi_noise*
 debug_fisher_covar_vs_cls.py
 fisher_output
+CODE_REVIEW_FINDINGS.md
