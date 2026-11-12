@@ -75,7 +75,7 @@ hmc_num_steps=${hmc_num_steps:-10}
 hmc_step_size=${hmc_step_size:-0.05}
 
 #name of the folder every chain of this run writes to, inside lcdm_sampler_data/ (default: the
-#submission date), where chain_analysis.py reads it
+#submission date), the chain_dir of python -m cmb_lensing.chain_analysis
 out_dir_name=${out_dir_name:-joint_inference_$(date +%Y_%m_%d)}
 out_dir="$here/lcdm_sampler_data/$out_dir_name"
 mkdir -p "$out_dir"

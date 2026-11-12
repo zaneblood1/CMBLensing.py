@@ -16,7 +16,7 @@ jackknife). r_k^2 here is the posterior mean's RESPONSE to the truth
 
 THE CHAIN is fixed_theta_chain.posterior_mixed_draws: sample_lcdm.sample_joint's
 own Gibbs sweep (gibbs_sample_f, mix, one phi HMC step, unmix) minus its theta step, with C_f /
-C_phi / D / G built at the ground truth the way the sampler builds them (f needs no start: it
+C_phi / D the ground-truth data set's own and G built the way the sampler builds it (f needs no start: it
 is redrawn from its exact conditional every sweep). Chain 0 of a realization starts at phi = 0,
 chain k > 0 at its own draw from the C_phi prior. A chain's random numbers come from
 fixed_theta_chain.chain_key(map_seed, chain_seed): `chain_seed` is given by the caller or, by
@@ -41,8 +41,11 @@ FILES. A job (realization NNNN, chain K) writes two files, both valid while it i
                                    phi_true, C_phi, the HMC acceptances and the configuration,
                                    rewritten atomically after every flush
 The merge reads only the first `n_done` rows, so it also runs on a directory of running jobs.
-It writes sampler_phi_noise.npz, whose `nphi` is read by fisher_forecast (--nphi_source
-sample_joint --phi_noise) and by delensed_covariance (phi_noise).
+It writes sampler_phi_noise.npz, whose `nphi` is read by fisher_forecast (--phi_noise) and by
+delensed_covariance (phi_noise).
+
+The data can be temperature ("I"), polarization ("P") or both ("IP") (`pol`); phi, and so
+everything stored and merged here, is a scalar field for all three.
 
 HPC path: measure_phi_noise/get_sampler_phi_noise/get_sampler_phi_noise.sh -> get_sampler_phi_noise_1_chain.sh
 -> get_sampler_phi_noise_1_chain.py, then merge_sampler_phi_noise.sh -> merge_sampler_phi_noise.py.
@@ -56,12 +59,11 @@ import jax
 import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 from cmb_lensing.matrix_operators import pinv
-from cmb_lensing.util import gen_ell_grid
 from cmb_lensing.constants import Basis, GROUND_TRUTH, PARAM_ORDER, DEFAULT_HMC_STEP_SIZE, DEFAULT_HMC_NUM_STEPS
 from cmb_lensing.fields import fourier
 from cmb_lensing.simulate import load_sim, field_from_covar_single_key
-from cmb_lensing.fisher_forecast import camb_cls_at_params, load_sim_cosmology
-from cmb_lensing.map_joint_phi_noise import cross_power_grid, noise_with_jackknife
+from cmb_lensing.camb_spectra import camb_cls_at_params, load_sim_cosmology, POLS, DEFAULT_POL
+from cmb_lensing.map_joint_phi_noise import cross_power_grid, noise_with_jackknife, stored_pol
 from cmb_lensing.mcmc_diagnostics import gelman_rubin_from_moments
 
 DEFAULT_N_SWEEPS = 6000
@@ -90,8 +92,8 @@ def save_atomic(path, **arrays):
     np.savez(temporary, **arrays)
     os.replace(temporary, path)
 
-def simulate_base(nside, theta_pix, noise_level, seed, params, l_knee = 0.0):
-    return load_sim(nside, theta_pix, "I", seed, **load_sim_cosmology(params),
+def simulate_base(nside, theta_pix, noise_level, seed, params, l_knee = 0.0, pol = DEFAULT_POL):
+    return load_sim(nside, theta_pix, pol, seed, **load_sim_cosmology(params),
                     uk_arcmin_t = noise_level, r = 0, nt = 0, l_knee = l_knee,
                     precomputed_cls = camb_cls_at_params(params))
 
@@ -108,8 +110,9 @@ def run_job(out_dir, realization_index, map_seed, nside, theta_pix, noise_level,
             n_sweeps = DEFAULT_N_SWEEPS, l_knee = 0.0, param_ground = None,
             hmc_step_size = DEFAULT_HMC_STEP_SIZE, hmc_num_steps = DEFAULT_HMC_NUM_STEPS,
             flush_every = DEFAULT_FLUSH_EVERY, chain_index = 0, chain_seed = None,
-            verbose = True):
+            verbose = True, pol = DEFAULT_POL):
     """One chain of (f, phi) | d at the ground-truth theta, every phi sample written to disk.
+    `pol` ("I", "P" or "IP") is the polarization of the simulated data.
 
     Chain 0 of a realization starts at phi = 0, every other chain at its own draw from the
     C_phi prior, so the chains of one realization start far apart and their agreement after
@@ -126,13 +129,9 @@ def run_job(out_dir, realization_index, map_seed, nside, theta_pix, noise_level,
     sidecar_path = os.path.join(out_dir, sidecar_name(realization_index, chain_index))
     samples_path = os.path.join(out_dir, samples_name(realization_index, chain_index))
 
-    data_set = simulate_base(nside, theta_pix, noise_level, map_seed, param_ground, l_knee)
-    ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    #C_f / C_phi / D / G at the ground truth, built by the same constructors the sampler's
-    #_recompute_cosmo_matrices uses, with load_sim's own QE norm
-    cf_op, cphi_op, d_fid, g_fid = mixed_theta_matrices(
-                                   param_ground, data_set, nside, pix_width, ell_grid,
-                                   data_set.quadratic_estimate.scalar_matrix)
+    data_set = simulate_base(nside, theta_pix, noise_level, map_seed, param_ground, l_knee, pol)
+    #C_f / C_phi / D of the ground-truth data set and the sampler's G from load_sim's QE norm
+    cf_op, cphi_op, d_fid, g_fid = mixed_theta_matrices(data_set)
     g_inverse = pinv(g_fid)
 
     if chain_seed is None:
@@ -153,7 +152,7 @@ def run_job(out_dir, realization_index, map_seed, nside, theta_pix, noise_level,
     metadata = dict(realization_index = realization_index, map_seed = map_seed,
                     chain_index = chain_index, chain_seed = chain_seed,
                     nside = nside, theta_pix = theta_pix, noise_level = noise_level,
-                    l_knee = l_knee, beam_fwhm = 0.0, n_sweeps = n_sweeps,
+                    l_knee = l_knee, beam_fwhm = 0.0, pol = pol, n_sweeps = n_sweeps,
                     phi_true = np.asarray(_to_fourier(data_set.phi).scalar_matrix),
                     cphi = np.asarray(cphi_op.scalar_matrix),
                     params = np.array([param_ground[name] for name in PARAM_ORDER]),
@@ -297,7 +296,7 @@ def merge_phi_noise(directory, burn_in):
                 burn_in = burn_in, n_chains = np.array(n_chains), n_used = np.array(n_used),
                 n_realizations = len(n_chains), seeds = np.array(list(jobs_by_seed)),
                 params = np.asarray(first["params"]), param_names = np.array(PARAM_ORDER),
-                **{key: first[key] for key in CONFIG_KEYS})
+                pol = stored_pol(first), **{key: first[key] for key in CONFIG_KEYS})
 
 
 # ── Local runner ───────────────────────────────────────────────────────────
@@ -309,6 +308,7 @@ def main():
     parser.add_argument("--theta_pix", type = float, default = 5.0)
     parser.add_argument("--noise_level", type = float, default = 5.0)
     parser.add_argument("--l_knee", type = float, default = 0.0)
+    parser.add_argument("--pol", choices = POLS, default = DEFAULT_POL)
     parser.add_argument("--n_maps", type = int, default = 4)
     parser.add_argument("--n_sweeps", type = int, default = 400)
     parser.add_argument("--burn_in", type = int, default = DEFAULT_BURN_IN)
@@ -328,7 +328,7 @@ def main():
             run_job(args.out_dir, m, args.seed_prefix + m, args.nside, args.theta_pix,
                     args.noise_level, n_sweeps = args.n_sweeps, l_knee = args.l_knee,
                     hmc_step_size = args.hmc_step_size, hmc_num_steps = args.hmc_num_steps,
-                    chain_index = chain_index, chain_seed = chain_seed)
+                    chain_index = chain_index, chain_seed = chain_seed, pol = args.pol)
     out_path = os.path.join(args.out_dir, MERGED_NAME)
     np.savez(out_path, **merge_phi_noise(args.out_dir, args.burn_in))
 

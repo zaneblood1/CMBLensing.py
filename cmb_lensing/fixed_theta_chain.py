@@ -2,19 +2,21 @@
 
 sample_lcdm.sample_joint's Gibbs sweep minus its theta step: f from its exact conditional
 (gibbs_sample_f), a mix, one HMC step on phi° (gibbs_sample_phi) and an unmix, with C_f /
-C_phi / D / G built once at a fixed cosmology by the same constructors the sampler uses
-(mixed_theta_matrices). sampler_phi_noise.py runs one such chain per realization at the
-ground truth and cross correlates the posterior-mean phi with the true phi to measure the
-sampler's effective reconstruction noise.
+C_phi / D / G held at the cosmology the data set was simulated at (mixed_theta_matrices).
+sampler_phi_noise.py runs such chains on every realization at the ground truth and cross
+correlates the posterior-mean phi with the true phi to measure the sampler's effective
+reconstruction noise. Works for temperature, polarization and joint data sets.
 """
 
 import numpy as np
 import jax
 jax.config.update("jax_enable_x64", True)
-from cmb_lensing.simulate import get_d_tt_matrix, get_g_matrix_lcdm
+from cmb_lensing.simulate import get_g_matrix_lcdm
 from cmb_lensing.mixing import mix, unmix
-from cmb_lensing.fisher_forecast import prior_covariances
 from cmb_lensing.constants import DEFAULT_HMC_NUM_STEPS, DEFAULT_HMC_STEP_SIZE
+
+#print the running phi acceptance every this many sweeps
+PROGRESS_EVERY = 50
 
 #fold_in data separating a chain's MCMC randomness from its data realization's. load_sim
 #starts from PRNGKey(map_seed) and splits off one subkey per draw (rng_key, subkey =
@@ -35,22 +37,19 @@ def chain_key(map_seed, chain_seed):
     stream = jax.random.fold_in(jax.random.PRNGKey(map_seed), CHAIN_STREAM)
     return jax.random.fold_in(stream, chain_seed)
 
-def mixed_theta_matrices(params, data_set, nside, pix_width, ell_grid, qe_frozen):
-    """(C_f, C_phi, D, G) operators at one cosmology, built the way sample_lcdm builds them.
+def mixed_theta_matrices(data_set):
+    """(C_f, C_phi, D, G) operators at the cosmology `data_set` was simulated at.
 
-    D = get_d_tt_matrix(C_f, C_n) and G = get_g_matrix_lcdm(C_phi, N_phi) - the same two
-    constructors _recompute_cosmo_matrices uses - so the mixing here matches the sampler's.
-    `qe_frozen` is the quadratic-estimate norm matrix G is built from (load_sim's own
-    `quadratic_estimate.scalar_matrix`, for sampler_phi_noise), as the sampler holds its
-    QE norm fixed for a whole chain.
-    T-only.
+    C_f, C_phi and D are load_sim's own (for every polarization, built from the same spectra
+    and by the same constructors as the sampler's _recompute_cosmo_matrices). load_sim's G is
+    the identity, so G is rebuilt as the sampler does, get_g_matrix_lcdm(C_phi, N_phi), from
+    the data set's quadratic-estimate norm, which the sampler holds fixed for a whole chain.
     """
-    cf, cphi = prior_covariances(params, nside, pix_width, ell_grid)
-    cf_op = data_set.field_covariance.replace(scalar_matrix = cf)
-    cphi_op = data_set.phi_covariance.replace(scalar_matrix = cphi)
-    d_op = data_set.mixing_d.replace(scalar_matrix = get_d_tt_matrix(cf, data_set.noise_covariance.scalar_matrix))
-    g_op = data_set.mixing_g.replace(scalar_matrix = get_g_matrix_lcdm(cphi, qe_frozen))
-    return cf_op, cphi_op, d_op, g_op
+    cphi_op = data_set.phi_covariance
+    g_matrix = get_g_matrix_lcdm(cphi_op.scalar_matrix,
+                                 data_set.quadratic_estimate.scalar_matrix)
+    g_op = data_set.mixing_g.replace(scalar_matrix = g_matrix)
+    return data_set.field_covariance, cphi_op, data_set.mixing_d, g_op
 
 def posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_draws, rng_key,
                           on_draw = None, verbose = True, hmc_step_size = DEFAULT_HMC_STEP_SIZE,
@@ -107,7 +106,7 @@ def posterior_mixed_draws(data_set, cf_op, cphi_op, d_fid, g_fid, n_draws, rng_k
         else:
             #consumed here and dropped: only the callback's summary survives the sweep
             on_draw(sweep, mixed_field, mixed_phi, accepts[-1])
-        if verbose and sweep % 50 == 0:
+        if verbose and sweep % PROGRESS_EVERY == 0:
             print(f"    sweep {sweep}/{n_draws}: phi acceptance {np.mean(accepts):.3f}")
 
     diagnostics = dict(phi_accepts = np.array(accepts),

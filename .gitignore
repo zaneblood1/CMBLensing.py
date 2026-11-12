@@ -25,3 +25,5 @@ sampler_phi_noise_data_*/
 convert_old_sampler_phi_noise.py
 phi_noise_plots*/
 debug_phi_noise*
+debug_fisher_covar_vs_cls.py
+fisher_output

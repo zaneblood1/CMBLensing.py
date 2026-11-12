@@ -23,14 +23,15 @@ ratios of single realizations cannot be averaged into the answer. Modes whose me
 and are stored as NaN (the forecast gives them no phi information, delensed_covariance's
 load_stored_nphi gives them W = 0). The origin is 0.
 
-N_phi describes map_joint AT the number of steps it was run for, on THIS box, at the
-fiducial cosmology; it is held fixed across the forecast's finite-difference stencil.
+N_phi describes map_joint AT the number of steps it was run for, on THIS box and data
+polarization (`pol`: "I", "P" or "IP"; phi is a scalar field for all three), at the fiducial
+cosmology; it is held fixed across the forecast's finite-difference stencil.
 
 Fanned out one slurm job per realization by
 measure_phi_noise/get_map_joint_phi_noise/get_map_joint_phi_noise.sh
 -> get_map_joint_phi_noise_1_realization.sh/.py, merged by merge_map_joint_phi_noise.py into
-map_joint_phi_noise.npz, whose `nphi` is read by fisher_forecast (--nphi_source map_joint
---phi_noise) and by delensed_covariance (phi_noise).
+map_joint_phi_noise.npz, whose `nphi` is read by fisher_forecast (--phi_noise) and by
+delensed_covariance (phi_noise).
 """
 
 import glob
@@ -40,9 +41,10 @@ import jax.numpy as jnp
 from cmb_lensing.util import gen_ell_grid
 from cmb_lensing.fields import Basis, fourier
 from cmb_lensing.map_joint import map_joint
-from cmb_lensing.simulate import load_sim, covar_matrix_from_cls
+from cmb_lensing.simulate import load_sim
 from cmb_lensing.constants import PARAM_ORDER, GROUND_TRUTH
-from cmb_lensing.fisher_forecast import camb_cls_at_params, load_sim_cosmology
+from cmb_lensing.camb_spectra import (camb_cls_at_params, load_sim_cosmology, covar_from_cl,
+                                      DEFAULT_POL)
 
 #the filename every per-realization job writes, and the merged product
 REALIZATION_GLOB = "map_joint_phi_noise_*.npz"
@@ -50,6 +52,14 @@ MERGED_NAME = "map_joint_phi_noise.npz"
 
 #metadata copied from the job files into the merged file
 _CONFIG_KEYS = ("nside", "theta_pix", "noise_level", "l_knee", "map_joint_steps")
+#map_joint iterations of the phi reconstruction (map_joint's own default)
+DEFAULT_MAP_JOINT_STEPS = 30
+
+
+def stored_pol(job):
+    """The data polarization a job file was run at; files written before 2026-11-11 have no
+    `pol` and are temperature-only."""
+    return str(job["pol"]) if "pol" in job.files else DEFAULT_POL
 
 
 def cross_power_grid(first_fourier, second_fourier, nside):
@@ -73,20 +83,18 @@ def _scalar_matrix(field):
 # ── One realization ───────────────────────────────────────────────────────
 
 def measure_phi_noise(nside, theta_pix, noise_level, map_seed, l_knee = 0.0,
-                      map_joint_steps = 30, verbose = True):
-    """One realization at GROUND_TRUTH: simulate, reconstruct with map_joint, store the moments.
+                      map_joint_steps = DEFAULT_MAP_JOINT_STEPS, pol = DEFAULT_POL):
+    """One realization at GROUND_TRUTH: simulate data of polarization `pol` ("I", "P" or
+    "IP"), reconstruct with map_joint, store the moments.
 
     Returns per-mode rfft-grid matrices `auto`, `cross`, `true_auto` and `cphi`, all in
     covar_matrix_from_cls units. map_joint's phi_hat is used as it comes (no rescaling).
     """
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
     cls = camb_cls_at_params(GROUND_TRUTH)
+    cphi = np.asarray(covar_from_cl(nside, pix_width, ell_grid, cls["phi"]))
 
-    phi_ells = jnp.arange(2, 2 + cls["phi"].shape[0]).astype(jnp.float64)
-    cphi = np.asarray(covar_matrix_from_cls(nside, pix_width, ell_grid, phi_ells, cls["phi"],
-                                            origin_value = 0))
-
-    data_set = load_sim(nside, theta_pix, "I", map_seed,
+    data_set = load_sim(nside, theta_pix, pol, map_seed,
                         **load_sim_cosmology(GROUND_TRUTH),
                         uk_arcmin_t = noise_level, r = 0, nt = 0, l_knee = l_knee,
                         precomputed_cls = cls)
@@ -220,5 +228,5 @@ def merge_phi_noise(directory):
                 mean_true_auto = mean_true_auto,
                 n_realizations = n_realization, seeds = np.array(seeds),
                 params = np.array([GROUND_TRUTH[name] for name in PARAM_ORDER]),
-                param_names = np.array(PARAM_ORDER),
+                param_names = np.array(PARAM_ORDER), pol = stored_pol(first),
                 **{key: first[key] for key in _CONFIG_KEYS})

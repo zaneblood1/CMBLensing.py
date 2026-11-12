@@ -20,7 +20,7 @@ python3 "$SLURM_SUBMIT_DIR/run_single_delensed_field_covariance.py" \
     --l_knee "$6" \
     --step_sigma "$7" \
     --qe_filter "$8" \
-    --qe_response "$9" \
+    --pol "$9" \
     --phi_noise "${10}" \
     --out_dir "${11}" \
     --params "${@:12}"

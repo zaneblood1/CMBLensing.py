@@ -34,5 +34,5 @@ See the [sample_joint tutorial](../sample_joint_tutorial.ipynb) for a worked exa
 
 ## Outputs
 
-`sample_joint` returns `(param_vals, phi, sub_key)`: a dict of per-parameter lists, the final phi and the final random key. With `hpc_path` set, every iteration appends the latest value of each sampled parameter to `{hpc_path}{theta}_map_{map_idx}_chain_{sub_chain_idx}_history.txt`, which `chain_analysis.py` reads and analyzes to form distributions out of the sampled data.
+`sample_joint` returns `(param_vals, phi, sub_key)`: a dict of per-parameter lists, the final phi and the final random key. With `hpc_path` set, every iteration appends the latest value of each sampled parameter to `{hpc_path}{theta}_map_{map_idx}_chain_{sub_chain_idx}_history.txt`, which `cmb_lensing/chain_analysis.py` (see [Chain Analysis](../pipelines/chain-analysis.md)) reads and analyzes to form distributions out of the sampled data.
 

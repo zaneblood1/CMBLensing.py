@@ -44,6 +44,8 @@ nside=${nside:-128}
 theta_pix=${theta_pix:-2.5}
 noise_level=${noise_level:-5}
 l_knee=${l_knee:-0}
+#the data's polarization: I (temperature), P (polarization) or IP (both)
+pol=${pol:-I}
 hmc_step_size=${hmc_step_size:-0.05}
 hmc_num_steps=${hmc_num_steps:-10}
 
@@ -78,6 +80,7 @@ nside=$nside
 theta_pix=$theta_pix
 noise_level=$noise_level
 l_knee=$l_knee
+pol=$pol
 hmc_step_size=$hmc_step_size
 hmc_num_steps=$hmc_num_steps
 num_sweeps=$num_sweeps
@@ -100,6 +103,6 @@ for ((m=0; m<num_maps; m++)); do
         submit_throttled --time="$chain_time" --mem-per-cpu="$chain_mem" \
             get_sampler_phi_noise_1_chain.sh "$m" "$map_seed" "$nside" "$theta_pix" \
             "$noise_level" "$l_knee" "$num_sweeps" "$out_dir" "$hmc_step_size" \
-            "$hmc_num_steps" "$chain" "${seeds[chain]}"
+            "$hmc_num_steps" "$chain" "$pol" "${seeds[chain]}"
     done
 done

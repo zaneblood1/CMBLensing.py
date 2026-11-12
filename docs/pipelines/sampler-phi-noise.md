@@ -22,7 +22,7 @@ python plot_sampler_convergence.py --merged sampler_phi_noise_output/sampler_phi
 
 The driver submits through the [submission throttle](../getting-started/hpc-setup.md#submission-throttle), so it keeps running until every job is submitted.
 
-Its settings (`nside`, `theta_pix`, `noise_level`, `l_knee`, `hmc_step_size`, `hmc_num_steps`, `num_sweeps`, `num_maps`, `seed_prefix`, `num_chains`, `chain_time`, `chain_mem`, and `out_dir_name`, the output folder's name inside `get_sampler_phi_noise/`, default `sampler_phi_noise_output`) are defaults that can be overridden on the command line as `--<name>=<value>`, e.g.
+Its settings (`nside`, `theta_pix`, `noise_level`, `l_knee`, `pol` (`I`, `P` or `IP`: the data the chains sample from; default `I`), `hmc_step_size`, `hmc_num_steps`, `num_sweeps`, `num_maps`, `seed_prefix`, `num_chains`, `chain_time`, `chain_mem`, and `out_dir_name`, the output folder's name inside `get_sampler_phi_noise/`, default `sampler_phi_noise_output`) are defaults that can be overridden on the command line as `--<name>=<value>`, e.g.
 
 ```bash
 bash measure_phi_noise/get_sampler_phi_noise/get_sampler_phi_noise.sh --noise_level=10 --num_chains=4 --out_dir_name=sampler_phi_noise_output_10uk
@@ -54,7 +54,7 @@ python -m cmb_lensing.sampler_phi_noise --nside 64 --theta_pix 5 --n_maps 4 --n_
 
 ## Output: `sampler_phi_noise.npz`
 
-`nphi` (NaN where unmeasured, 0 at the origin), `nphi_error`, the N leave-one-out `nphi_leave_one_out`, `rhat_real` / `rhat_imaginary` (per map and mode), `cphi`, the mean moments, `burn_in`, `n_chains`, `n_used`, the seeds and the box / cosmology keys. Can be used for forecasting via `fisher_forecast --nphi_source sample_joint --phi_noise sampler_phi_noise.npz` or as the `phi_noise` key in [the delensed covariance](delensed-covariance.md) slurm script.
+`nphi` (NaN where unmeasured, 0 at the origin), `nphi_error`, the N leave-one-out `nphi_leave_one_out`, `rhat_real` / `rhat_imaginary` (per map and mode), `cphi`, the mean moments, `burn_in`, `n_chains`, `n_used`, the seeds and the box / cosmology keys (including `pol`). Can be used for forecasting via `fisher_forecast --delensed_covariance <npz> --phi_noise sampler_phi_noise.npz` (with the matching `--pol`) or as the `phi_noise` key in [the delensed covariance](delensed-covariance.md) slurm script.
 
 ## Plotting the phi noise spectra
 

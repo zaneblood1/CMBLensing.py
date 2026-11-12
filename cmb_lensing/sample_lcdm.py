@@ -8,72 +8,30 @@ from cmb_lensing.map_joint import *
 from cmb_lensing.mixing import *
 from cmb_lensing.constants import *
 from cmb_lensing.constants import (PARAM_ORDER, PARAM_INDEX, GROUND_TRUTH, PARAM_BOUNDS,
-                                   PARAM_SIGMA, CAMB_GRID_PATH, DEFAULT_HMC_NUM_STEPS, 
-                                   DEFAULT_HMC_STEP_SIZE)
-from cmb_lensing.camb_grid_interp import (load_camb_grid_predictors,
-                                          load_camb_grid, GridPredictors)
+                                   PARAM_SIGMA, CAMB_GRID_PATH, CAMB_GRID_FILE,
+                                   DEFAULT_HMC_NUM_STEPS, DEFAULT_HMC_STEP_SIZE)
+from cmb_lensing.camb_grid_interp import load_camb_grid_predictors, load_camb_grid
 from cmb_lensing.camb_splines import camb_spline_file
-import importlib.util
 import os
 
-USE_CAMB_SPLINE = False
-_camb_spline_predictors = {}
-#the 1D spline loader lives with the cache generator outside the package
-PRECOMPUTE_CAMB_1D_PATH = os.path.join(os.path.dirname(CAMB_SPLINES_DIR),
-                          "camb_grid_generation", "precompute_camb_1d.py")
-
-def _load_precompute_camb_1d():
-    """camb_grid_generation/precompute_camb_1d.py, imported from its file. It is not part of
-    the package, and only the USE_CAMB_SPLINE path ever needs it."""
-    if not os.path.exists(PRECOMPUTE_CAMB_1D_PATH):
-        raise FileNotFoundError(f"USE_CAMB_SPLINE needs {PRECOMPUTE_CAMB_1D_PATH}")
-    spec = importlib.util.spec_from_file_location("precompute_camb_1d",
-                                                  PRECOMPUTE_CAMB_1D_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-def get_camb_spline_predictors(param_name):
-    #lazy per-parameter singletons so the same function objects are reused every call -
-    #they are passed as static jit args to _recompute_cosmo_matrices, so fresh objects
-    #would retrace
-    if param_name not in _camb_spline_predictors:
-        _camb_spline_predictors[param_name] = (
-            _load_precompute_camb_1d().load_camb_spline_predictors(param_name))
-    return _camb_spline_predictors[param_name]
-
-USE_CAMB_GRID = True
+#the theory spectra at every proposed theta come from the 5D CAMB grid spline
 _camb_grid_predictors = None
 
-if USE_CAMB_GRID and USE_CAMB_SPLINE:
-    raise ValueError("USE_CAMB_GRID and USE_CAMB_SPLINE are mutually exclusive Cl sources "
-                     "- the 1D caches pin four parameters at ground truth, the 5D grid "
-                     "does not")
-
 def get_camb_grid_predictors():
-    #lazy singleton for the whole process: the ~2.3 GB of spline coefficients is
-    #read once, and the same two function objects are reused on every call because they
+    #lazy singleton for the whole process: the spline coefficients (~2.1 GB per spectrum)
+    #are read once, and the same function objects are reused on every call because they
     #are passed as static jit args to _recompute_cosmo_matrices (fresh closures would
     #force a retrace on every Gibbs sweep)
     global _camb_grid_predictors
     if _camb_grid_predictors is None:
-        _camb_grid_predictors = load_camb_grid_predictors(camb_spline_file("camb_grid_spline.npz"))
+        _camb_grid_predictors = load_camb_grid_predictors(camb_spline_file(CAMB_GRID_FILE))
     return _camb_grid_predictors
 
 def camb_grid_bb_is_zero():
     #whether the merged grid's unlensed BB is the identically-zero r = 0 spectrum. Static
     #per grid file, so the covariance builders can route BB around the log-interpolating
     #path (which would turn exact zeros into NaN) at trace time
-    return load_camb_grid(camb_spline_file("camb_grid_spline.npz")).bb_is_zero
-
-def wrap_temp_predictors(predict_tt, predict_pp):
-    """Lift a TT/PP-only predictor pair into the
-    GridPredictors namedtuple shape the rest of the sampler passes around. The missing
-    spectra are None, which is only valid for pol = 'I' - the 5D
-    grid is the only Cl source that serves polarization and lensed spectra."""
-    return GridPredictors(tt = predict_tt, ee = None, bb = None, pp = predict_pp,
-                          tt_lensed = None, ee_lensed = None, bb_lensed = None,
-                          te_rho = None)
+    return load_camb_grid(camb_spline_file(CAMB_GRID_FILE)).bb_is_zero
 
 #The jitted theta kernels and eval_logpdf_batch take raw arrays, not field/operator
 #structs. For pol = 'I' those are the (nside, nside//2 + 1) matrices as always; for
@@ -321,166 +279,6 @@ def metropolis_sample_theta(eval_logpdf_grid, theta_name, theta_old, lo, hi,
 
     return np.asarray(theta_current, dtype = np.float64)
 
-#validate the user supplied rotation matrix / rotated proposal widths against the set of sampled
-#parameters and return them alongside the pseudo-inverse that maps a rotated proposal back
-def prepare_rotation(rotation_matrix, rotated_proposal_sigmas, sampled_names):
-    if rotation_matrix is None:
-        raise ValueError("reparameterize_lcdm = True requires a rotation_matrix")
-    if rotated_proposal_sigmas is None or len(rotated_proposal_sigmas) == 0:
-        raise ValueError("reparameterize_lcdm = True requires a non-empty rotated_proposal_sigmas")
-    if len(sampled_names) == 0:
-        raise ValueError("reparameterize_lcdm = True requires at least one parameter with "
-                         "should_sample = True")
-
-    #the rotation acts on the SAMPLED subspace only: N = the number of parameters with
-    #should_sample = True, taken in PARAM_ORDER, so a rotation is (N, N) and not (5, 5)
-    num_sampled = len(sampled_names)
-    rotation = np.asarray(rotation_matrix, dtype = np.float64)
-    if rotation.shape != (num_sampled, num_sampled):
-        raise ValueError(f"rotation_matrix must be square with one row/column per sampled "
-                         f"parameter - {num_sampled} parameters are sampled ({sampled_names}, "
-                         f"ordered as in PARAM_ORDER), so the expected shape is "
-                         f"({num_sampled}, {num_sampled}), got {rotation.shape}")
-
-    rotated_names = list(rotated_proposal_sigmas.keys())
-    if len(rotated_names) != num_sampled:
-        raise ValueError(f"rotated_proposal_sigmas has {len(rotated_names)} entries but "
-                         f"{num_sampled} parameters are sampled - the dict order fixes which "
-                         f"row of rotation_matrix each rotated parameter refers to")
-    for name in rotated_names:
-        if rotated_proposal_sigmas[name] is None:
-            raise ValueError(f"rotated_proposal_sigmas['{name}'] is None - every rotated "
-                             "parameter needs a proposal width")
-
-    rotation_pinv = np.linalg.pinv(rotation)
-    return rotation, rotation_pinv, rotated_names
-
-#build a rotation_matrix / rotated_proposal_sigmas pair that decorrelates the theta step, from
-#an estimate of the posterior covariance - either the empirical covariance of a pilot chain or
-#a Fisher forecast's covariance (fisher<suffix>.npz stores "covariance" and "names", the latter
-#in OUTPUT_PARAM_ORDER, which this reorders for you)
-def rotation_from_covariance(covariance, names, sampled_names = None,
-                             sigma_scale = 2.4, verbose = True):
-
-    covariance = np.asarray(covariance, dtype = np.float64)
-    names = list(names)
-    if covariance.ndim != 2 or covariance.shape[0] != covariance.shape[1]:
-        raise ValueError(f"covariance must be square, got {covariance.shape}")
-    if len(names) != covariance.shape[0]:
-        raise ValueError(f"names has {len(names)} entries but covariance is {covariance.shape}")
-    unknown = [name for name in names if name not in PARAM_INDEX]
-    if unknown:
-        raise ValueError(f"names contains entries that are not LCDM parameters: {unknown} "
-                         f"(expected a subset of {PARAM_ORDER})")
-
-    if sampled_names is None:
-        sampled_names = names
-    missing = [name for name in sampled_names if name not in names]
-    if missing:
-        raise ValueError(f"sampled_names {missing} have no entry in the supplied covariance")
-
-    #the rotation's columns must be ordered the way prepare_rotation reads them
-    ordered = [name for name in PARAM_ORDER if name in sampled_names]
-    order = [names.index(name) for name in ordered]
-
-    if len(ordered) == len(names):
-        block = covariance[np.ix_(order, order)]
-    else:
-        #the unsampled parameters are FROZEN by the chain, not marginalized over, so the target
-        #is the CONDITIONAL covariance inv(precision[sub, sub]) - taking the sub-block of the
-        #covariance instead would be the marginal, which is wider and differently oriented
-        precision = np.linalg.inv(covariance)
-        block = np.linalg.inv(precision[np.ix_(order, order)])
-
-    sigmas = np.sqrt(np.diag(block))
-    if not np.all(sigmas > 0):
-        raise ValueError(f"the covariance has a non-positive variance on its diagonal for "
-                         f"{ordered}, so it cannot be a posterior covariance")
-
-    #eigendecompose the CORRELATION matrix rather than the covariance: the LCDM parameters span
-    #two orders of magnitude in absolute scale (ombh2 ~ 0.022 against logA ~ 3.2), so the leading
-    #eigenvector of the covariance just points at logA instead of at the degeneracy
-    correlation = block / np.outer(sigmas, sigmas)
-    eigenvalues, eigenvectors = np.linalg.eigh(correlation)
-    if not np.all(eigenvalues > 0):
-        raise ValueError(f"the correlation matrix over {ordered} is not positive definite "
-                         f"(eigenvalues {eigenvalues}) - it cannot come from a valid covariance")
-
-    #widest direction first, so rot_0 is the one that most needs the reparametrization
-    descending = np.argsort(eigenvalues)[::-1]
-    eigenvalues = eigenvalues[descending]
-    eigenvectors = eigenvectors[:, descending]
-
-    #theta' = V.T @ diag(1/sigma) @ theta whitens and then decorrelates, so
-    #Cov(theta') = V.T @ correlation @ V = diag(eigenvalues) exactly
-    rotation = eigenvectors.T / sigmas[None, :]
-    rotated_names = [f"rot_{i}" for i in range(len(ordered))]
-    #each rotated move is 1-D along an uncorrelated axis, where the optimal random-walk scale is
-    #~2.4 sigma (the ~44 % acceptance the unrotated sigmas are tuned to)
-    rotated_proposal_sigmas = {name: float(sigma_scale * np.sqrt(eigenvalues[i]))
-                               for i, name in enumerate(rotated_names)}
-
-    if verbose:
-        condition = eigenvalues[0] / eigenvalues[-1]
-        print(f"rotation over {ordered} (condition number {condition:.3g})")
-        for i, name in enumerate(rotated_names):
-            #report each direction in units of the marginal sigmas, which is how it reads
-            #physically - the rotation itself carries the 1/sigma whitening
-            loading = eigenvectors[:, i]
-            terms = "  ".join(f"{loading[j]:+.3f} {ordered[j]}" for j in range(len(ordered)))
-            print(f"  {name}: sigma = {rotated_proposal_sigmas[name]:.4g}   {terms}")
-
-    return rotation, rotated_proposal_sigmas
-
-#symmetric Gaussian random-walk Metropolis-within-Gibbs step along ONE axis of the rotated
-#parametrization theta' = rotation_matrix @ theta, where theta is the vector of SAMPLED
-#parameters in PARAM_ORDER. The proposal is drawn in theta' space and mapped back with
-#pinv(rotation_matrix); the acceptance test is the same as the unrotated one (the proposal is
-#still symmetric, and a linear change of variables applied to every candidate leaves the
-#Metropolis ratio unchanged)
-def metropolis_sample_rotated_theta(eval_logpdf_sampled, rotated_name, rotated_idx,
-                                    theta_vec_old, theta_vec_prime_old,
-                                    rotation, rotation_pinv, param_lo, param_hi,
-                                    lcdm_acceptance, log_acceptance,
-                                    proposal_sigma, rng_key, num_steps = 1):
-    if proposal_sigma is None:
-        raise ValueError("metropolis sampler requires a proposal_sigma for this rotated parameter")
-
-    theta_vec = np.asarray(theta_vec_old, dtype = np.float64)
-    theta_vec_prime = np.asarray(theta_vec_prime_old, dtype = np.float64)
-
-    for _ in range(num_steps):
-        rng_key, k_prop, k_acc = jax.random.split(rng_key, 3)
-
-        theta_vec_prime_prop = theta_vec_prime.copy()
-        theta_vec_prime_prop[rotated_idx] += proposal_sigma * float(jax.random.normal(k_prop))
-        theta_vec_prop = rotation_pinv @ theta_vec_prime_prop
-
-        #reject out-of-bounds proposals BEFORE touching the interpolator - the box is a hard
-        #prior on the ORIGINAL parameters, so it is checked component-wise on the unrotated vector
-        if np.any(theta_vec_prop < param_lo) or np.any(theta_vec_prop > param_hi):
-            continue
-
-        logpdfs = eval_logpdf_sampled(jnp.stack([jnp.asarray(theta_vec, dtype = jnp.float64),
-                                                 jnp.asarray(theta_vec_prop, dtype = jnp.float64)]))
-        delta_h = float(logpdfs[1] - logpdfs[0])
-
-        #accept if log(u) < delta_h (same acceptance test as hmc_step). NaN-safe: a non-finite
-        #logpdf makes delta_h nan and (x < nan) is False, so the step is rejected
-        if float(jnp.log(jax.random.uniform(k_acc))) < delta_h:
-            theta_vec = theta_vec_prop
-            #keep theta' = rotation_matrix @ theta exact rather than carrying the proposed theta'
-            #forward - the two agree to machine precision, this just stops drift accumulating
-            theta_vec_prime = rotation @ theta_vec
-            if log_acceptance:
-                lcdm_acceptance[rotated_name].append(int(True))
-                print(f"{rotated_name} accept rate = {np.sum(np.array(lcdm_acceptance[rotated_name])) / len(lcdm_acceptance[rotated_name])}")
-        elif log_acceptance:
-            lcdm_acceptance[rotated_name].append(int(False))
-            print(f"{rotated_name} accept rate = {np.sum(np.array(lcdm_acceptance[rotated_name])) / len(lcdm_acceptance[rotated_name])}")
-
-    return theta_vec, theta_vec_prime
-
 def make_eval_logpdf_batch(predictors,
                            mixed_temp_matrix, mixed_phi_matrix, data_matrix,
                            qe_scalar, cn_scalar,
@@ -645,12 +443,8 @@ def gibbs_sample_theta(theta_key_idx, theta_range, theta_old, lcdm_acceptance, l
                        fourier_weights, proposal_sigma = None, metropolis_num_steps = 1,
                        pol = "I", bb_is_zero = True):
 
-    #Check whether we are doing 1-D parameter inference or N-D parameter inference
     theta_name = PARAM_ORDER[int(theta_key_idx)]
-    if USE_CAMB_GRID:
-        predictors = get_camb_grid_predictors()
-    else:
-        predictors = wrap_temp_predictors(*get_camb_spline_predictors(theta_name))
+    predictors = get_camb_grid_predictors()
 
     #evaluate the mixed logpdf over an arbitrary (M, 5) batch of parameter vectors
     eval_logpdf_batch = make_eval_logpdf_batch(predictors,
@@ -671,50 +465,6 @@ def gibbs_sample_theta(theta_key_idx, theta_range, theta_old, lcdm_acceptance, l
     lo, hi = float(theta_range[0]), float(theta_range[-1])
     return metropolis_sample_theta(eval_logpdf_grid, theta_name, theta_old, lo, hi, lcdm_acceptance, log_acceptance,
                                    proposal_sigma, rng_key, num_steps = metropolis_num_steps)
-
-#the reparameterized counterpart of gibbs_sample_theta: one 1-D Metropolis move along a single
-#axis of theta' = rotation_matrix @ theta. A rotated move generally displaces EVERY sampled
-#parameter, so the batch is evaluated over the whole sampled subspace at once rather than along
-#a single coordinate axis. sampled_idx holds the PARAM_ORDER positions of the sampled
-#parameters; the remaining entries of current_params are frozen
-def gibbs_sample_rotated_theta(rotated_name, rotated_idx, theta_vec_old, theta_vec_prime_old,
-                               rotation, rotation_pinv, param_lo, param_hi, sampled_idx,
-                               lcdm_acceptance, log_acceptance,
-                               mixed_temp_matrix, mixed_phi_matrix, data_matrix,
-                               current_params, rng_key, nside, pix_width, theta_pix,
-                               ell_grid, qe_scalar, cn_scalar, mask_matrix, beam_matrix,
-                               fourier_weights, proposal_sigma = None, metropolis_num_steps = 1,
-                               pol = "I", bb_is_zero = True):
-
-    #a rotated proposal moves every sampled parameter at once, so only the 5D grid can serve it
-    if not USE_CAMB_GRID:
-        raise ValueError("reparameterize_lcdm = True requires USE_CAMB_GRID - a rotated "
-                         "proposal moves several parameters at once and the 1D caches pin "
-                         "every parameter but one")
-    predictors = get_camb_grid_predictors()
-
-    #evaluate the mixed logpdf over an arbitrary (M, 5) batch of parameter vectors
-    eval_logpdf_batch = make_eval_logpdf_batch(predictors,
-                                               mixed_temp_matrix, mixed_phi_matrix,
-                                               data_matrix,
-                                               qe_scalar, cn_scalar, mask_matrix,
-                                               beam_matrix, fourier_weights,
-                                               nside, pix_width, theta_pix, ell_grid,
-                                               pol = pol, bb_is_zero = bb_is_zero)
-
-    #lift an (M, N) batch over the sampled subspace into the full (M, 5) parameter space
-    def eval_logpdf_sampled(theta_sampled_batch):
-        M = theta_sampled_batch.shape[0]
-        params_batch = jnp.tile(current_params, (M, 1))
-        params_batch = params_batch.at[:, sampled_idx].set(theta_sampled_batch)
-        return eval_logpdf_batch(params_batch)
-
-    return metropolis_sample_rotated_theta(eval_logpdf_sampled, rotated_name, rotated_idx,
-                                           theta_vec_old, theta_vec_prime_old,
-                                           rotation, rotation_pinv, param_lo, param_hi,
-                                           lcdm_acceptance, log_acceptance,
-                                           proposal_sigma, rng_key,
-                                           num_steps = metropolis_num_steps)
 
 #jitted core of the per-iteration covariance/mixing recompute
 @partial(jax.jit, static_argnames = ["predictors", "nside", "pix_width", "refresh_qe"])
@@ -1063,9 +813,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
                  hmc_num_steps = DEFAULT_HMC_NUM_STEPS, hmc_step_size = DEFAULT_HMC_STEP_SIZE,
                  iters_per_chain = 10_000, num_burn_in_fix_theta = 100, num_burn_in_always_accept = 0, 
                  resume_chain_dict = None, seed = None, map_idx = 1, sub_chain_idx = 1,
-                 lmax = DEFAULT_MAX_ELL, metropolis_num_steps = 1, hpc_path = None,
-                 reparameterize_lcdm = False, rotation_matrix = None,
-                 rotated_proposal_sigmas = None):
+                 lmax = DEFAULT_MAX_ELL, metropolis_num_steps = 1, hpc_path = None):
     """Gibbs-sample the joint posterior P(f, phi, theta | d) of the field, the lensing potential
     and the five LCDM parameters.
 
@@ -1073,8 +821,8 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
     random-walk Metropolis move per sampled parameter on the mixed logpdf, and recomputes the
     covariance and mixing matrices at the accepted parameters. The parameters are named as in
     `constants.PARAM_ORDER`: "theta_MC_100", "logA", "ns", "ombh2", "omch2". The spectra come
-    from the 5D CAMB grid (the default) or the 1D CAMB splines, set by the module switches
-    `USE_CAMB_GRID` / `USE_CAMB_SPLINE`.
+    from the 5D CAMB grid spline (`camb_splines/camb_grid_spline.npz`, downloaded on first
+    use).
 
     Args:
         data_set: The data, a `DataSetT`, `DataSetEB` or `DataSetTEB` (e.g. from
@@ -1108,13 +856,6 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
         metropolis_num_steps: Metropolis moves per parameter per iteration.
         hpc_path: If set, every iteration appends each sampled parameter's latest value to
             `{hpc_path}{name}_map_{map_idx}_chain_{sub_chain_idx}_history.txt`.
-        reparameterize_lcdm: Make the Metropolis moves along the axes of
-            theta' = rotation_matrix @ theta instead of along the parameters themselves.
-            Requires the 5D grid.
-        rotation_matrix: (N, N) rotation over the N sampled parameters, taken in
-            `PARAM_ORDER`. Used only with `reparameterize_lcdm`.
-        rotated_proposal_sigmas: {name: width} of the proposal along each rotated axis, in
-            the order of the rotation's rows. Used only with `reparameterize_lcdm`.
 
     Returns:
         (param_vals, phi, sub_key): param_vals is a dict of per-parameter lists of the
@@ -1134,10 +875,7 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
         raise ValueError(f"sample_joint supports DataSetT (pol = 'I'), DataSetEB "
                          f"(pol = 'P') and DataSetTEB (pol = 'IP') datasets, got "
                          f"{type(data_set).__name__}")
-    if pol != "I" and not USE_CAMB_GRID:
-        raise ValueError(f"pol = '{pol}' requires USE_CAMB_GRID - the "
-                         "1D CAMB caches have no EE/BB spectra")
-    bb_is_zero = camb_grid_bb_is_zero() if USE_CAMB_GRID else True
+    bb_is_zero = camb_grid_bb_is_zero()
 
     #if a resume_chain_dict is specified (e.g. np.load of the npz run_single_lcdm_chain.py
     #writes: one entry per parameter name, "phi_map" and "sub_key"), restart from its parameters
@@ -1146,42 +884,18 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
         for name in PARAM_ORDER:
             param_init[name] = float(resume_chain_dict[name])
 
-    #the sampled parameters, in PARAM_ORDER - this is the subspace the rotation acts on, so its
-    #order is what fixes the meaning of each rotation_matrix column
+    #the sampled parameters, in PARAM_ORDER: the ones whose histories are logged
     theta_log_names = [name for name in PARAM_ORDER if should_sample.get(name, False)]
-    sampled_idx = np.array([PARAM_INDEX[name] for name in theta_log_names], dtype = np.int64)
 
-    #optional reparametrization: the theta step becomes a set of 1-D Metropolis moves along the
-    #axes of theta' = rotation_matrix @ theta instead of along the sampled PARAM_ORDER axes
-    if reparameterize_lcdm:
-        rotation, rotation_pinv, rotated_names = prepare_rotation(rotation_matrix,
-                                                                  rotated_proposal_sigmas,
-                                                                  theta_log_names)
-        if not USE_CAMB_GRID:
-            raise ValueError("reparameterize_lcdm = True requires USE_CAMB_GRID - a rotated "
-                             "proposal moves several parameters at once and the 1D caches pin "
-                             "every parameter but one")
-    else:
-        rotation, rotation_pinv, rotated_names = None, None, []
-
-    #Determine whether to use a 1-D interpolator or a 5-D interpolator
-    if USE_CAMB_GRID:
-        predictors = get_camb_grid_predictors()
-        start_tt = predictors.tt(jnp.array([[param_init[k] for k in PARAM_ORDER]]))
-        if not bool(jnp.all(jnp.isfinite(start_tt))):
-            raise ValueError(
-                f"the starting parameters {dict((k, param_init[k]) for k in PARAM_ORDER)} "
-                f"fall outside the 5D CAMB grid, so the initial covariances would be NaN. "
-                f"Check that theta_MC_100 is reachable at this ombh2/omch2 - see "
-                f"theta_grid in {CAMB_GRID_PATH}")
-    elif USE_CAMB_SPLINE:
-        sampled_names = [name for name in PARAM_ORDER if should_sample.get(name, False)]
-        if len(sampled_names) != 1:
-            raise ValueError(f"USE_CAMB_SPLINE requires exactly one sampled parameter "
-                             f"(the caches are 1D), got {sampled_names}")
-        predictors = wrap_temp_predictors(*get_camb_spline_predictors(sampled_names[0]))
-    else:
-        raise ValueError("One of either USE_CAMB_GRID or USE_CAMB_SPLINE must be set to True")
+    #the 5D grid predictors, checked at the starting point before anything heavy runs
+    predictors = get_camb_grid_predictors()
+    start_tt = predictors.tt(jnp.array([[param_init[k] for k in PARAM_ORDER]]))
+    if not bool(jnp.all(jnp.isfinite(start_tt))):
+        raise ValueError(
+            f"the starting parameters {dict((k, param_init[k]) for k in PARAM_ORDER)} "
+            f"fall outside the 5D CAMB grid, so the initial covariances would be NaN. "
+            f"Check that theta_MC_100 is reachable at this ombh2/omch2 - see "
+            f"theta_grid in {CAMB_GRID_PATH}")
 
     #Set the initial parameter values to the user specified starting guesses
     param_vals = {}
@@ -1189,13 +903,6 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
         param_vals[theta] = [theta_val]
     #Also store the current parameter values in a JAX array
     current_params = jnp.array([param_init[k] for k in PARAM_ORDER], dtype = jnp.float64)
-
-    #the rotated step works on plain numpy vectors over the SAMPLED subspace: theta_vec in the
-    #original parameters and its image theta_vec_prime under the rotation, kept in step from here on
-    theta_vec = np.array([param_init[k] for k in theta_log_names], dtype = np.float64)
-    param_lo = np.array([float(param_ranges[k][0]) for k in theta_log_names], dtype = np.float64)
-    param_hi = np.array([float(param_ranges[k][-1]) for k in theta_log_names], dtype = np.float64)
-    theta_vec_prime = rotation @ theta_vec if reparameterize_lcdm else None
 
     #Add data that will be used throughout the sampling algorithm to an args dictionary
     args = {}
@@ -1250,8 +957,6 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
     lcdm_acceptance["omch2"] = []
     lcdm_acceptance["ns"] = []
     lcdm_acceptance["logA"] = []
-    for rotated_name in rotated_names:
-        lcdm_acceptance[rotated_name] = []
 
     for iter in range(1, iters_per_chain + 1):
 
@@ -1281,40 +986,8 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
 
         #4. sample your cosmo parameters
         if iter >= num_burn_in_fix_theta:
-            if reparameterize_lcdm:
-                #a sweep of 1-D Metropolis moves, one per axis of the rotated parametrization
-                for rotated_idx, rotated_name in enumerate(rotated_names):
-                    rng_key, sub_key = jax.random.split(sub_key)
-                    theta_vec, theta_vec_prime = gibbs_sample_rotated_theta(
-                                                   rotated_name, rotated_idx,
-                                                   theta_vec, theta_vec_prime,
-                                                   rotation, rotation_pinv, param_lo, param_hi,
-                                                   sampled_idx,
-                                                   lcdm_acceptance, advanced_logging["lcdm_acceptance"],
-                                                   field_matrix_stack(mixed_temp, pol),
-                                                   mixed_phi.scalar_matrix, data_stack,
-                                                   current_params, rng_key,
-                                                   args["nside"], args["pix_width"], data_field.theta_pix,
-                                                   args["ell_grid"],
-                                                   args["quadratic_estimate"].scalar_matrix,
-                                                   op_matrix_stack(args["noise_covariance"], pol),
-                                                   op_shared_matrix(args["mask"], pol),
-                                                   op_shared_matrix(args["beam"], pol),
-                                                   data_field.fourier_weights,
-                                                   proposal_sigma = rotated_proposal_sigmas[rotated_name],
-                                                   metropolis_num_steps = metropolis_num_steps,
-                                                   pol = pol, bb_is_zero = bb_is_zero)
-
-                    #the next axis of the sweep conditions on the position this one left behind
-                    current_params = current_params.at[jnp.asarray(sampled_idx)].set(
-                                        jnp.asarray(theta_vec, dtype = jnp.float64))
-
-                #a rotated move generally changes every sampled parameter, so all of them are recorded
-                for i, name in enumerate(theta_log_names):
-                    param_vals[name].append(np.asarray(theta_vec[i], dtype = np.float64))
-
             for theta, proposal_sigma in list(proposal_sigmas.items()):
-                if should_sample[theta] and not reparameterize_lcdm:
+                if should_sample[theta]:
                     rng_key, sub_key = jax.random.split(sub_key)
                     theta_key_idx = PARAM_INDEX[theta]
                     theta_val = gibbs_sample_theta(jnp.array(theta_key_idx), param_ranges[theta], 
@@ -1447,31 +1120,10 @@ if __name__ == "__main__":
     advanced_logging["plot_log_pdf"] = True
     advanced_logging["plot_lcdm_sigmas"] = True
 
-    #Whether or not to work in a rotated LCDM sampling space
-    reparameterize_lcdm = False
-
-    #the rotation comes from a Fisher forecast at this box, written by
-    #python -m cmb_lensing.fisher_forecast --nside 128 --theta_pix 2.5 --noise 2.5
-    rotation, rotated_sigmas = None, None
-    if reparameterize_lcdm:
-        from cmb_lensing.fisher_forecast import output_dir
-        fisher_path = os.path.join(output_dir(),
-                                   f"fisher_from_blocks_qe_delensed_delensed_{noise_level}_uk.npz")
-        if not os.path.exists(fisher_path):
-            raise FileNotFoundError(f"reparameterize_lcdm needs {fisher_path}; run "
-                                    f"python -m cmb_lensing.fisher_forecast --nside {nside} "
-                                    f"--theta_pix {theta_pix} --noise {noise_level} first")
-        data = np.load(fisher_path)
-        rotation, rotated_sigmas = rotation_from_covariance(
-            data["covariance"], list(data["names"]),
-            sampled_names = [n for n in PARAM_ORDER if should_sample[n]])
-
     #run the sampling algorithm.
-    param_vals, _, _ = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, 
-                                    should_sample, noise_level, advanced_logging, 
+    param_vals, _, _ = sample_joint(data_set, param_init, proposal_sigmas, param_ranges,
+                                    should_sample, noise_level, advanced_logging,
                                     fixed_fields = False, phi_init = "ZEROES",
-                                    iters_per_chain = 10_000, num_burn_in_fix_theta = 100, 
-                                    seed = 67, reparameterize_lcdm = reparameterize_lcdm,
-                                    rotation_matrix = rotation, 
-                                    rotated_proposal_sigmas = rotated_sigmas)
+                                    iters_per_chain = 10_000, num_burn_in_fix_theta = 100,
+                                    seed = 67)
 

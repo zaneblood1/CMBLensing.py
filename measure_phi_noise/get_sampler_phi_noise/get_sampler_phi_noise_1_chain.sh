@@ -24,4 +24,5 @@ python3 "$SLURM_SUBMIT_DIR/get_sampler_phi_noise_1_chain.py" \
     --hmc_step_size "$9" \
     --hmc_num_steps "${10}" \
     --chain_index "${11}" \
-    --chain_seed "${12}"
+    --pol "${12}" \
+    --chain_seed "${13}"

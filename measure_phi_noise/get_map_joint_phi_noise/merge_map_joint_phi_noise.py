@@ -9,7 +9,7 @@ Writes map_joint_phi_noise.npz into that directory: `nphi` (the per-mode rfft2 m
 covar_matrix_from_cls units, NaN on unmeasured modes), its jackknife error `nphi_error`, the N
 leave-one-out N_phi `nphi_leave_one_out`, `cphi`, the mean moments and the box / cosmology
 metadata. Use it as
-fisher_forecast --nphi_source map_joint --phi_noise <npz>, or as the delensed-covariance jobs'
+fisher_forecast --phi_noise <npz>, or as the delensed-covariance jobs'
 phi_noise. See cmb_lensing/map_joint_phi_noise.py.
 """
 

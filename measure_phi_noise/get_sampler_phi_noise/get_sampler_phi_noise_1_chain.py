@@ -18,6 +18,7 @@ See cmb_lensing/sampler_phi_noise.py for the estimator.
 
 import argparse
 from cmb_lensing.sampler_phi_noise import run_job, DEFAULT_N_SWEEPS, DEFAULT_FLUSH_EVERY
+from cmb_lensing.camb_spectra import POLS, DEFAULT_POL
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--realization_index", type = int, required = True)
@@ -35,6 +36,7 @@ parser.add_argument("--chain_index", type = int, default = 0)
 #seed of the chain's random numbers; empty or absent: drawn at random (stored in the sidecar)
 parser.add_argument("--chain_seed", type = lambda value: int(value) if value else None,
                     default = None)
+parser.add_argument("--pol", choices = POLS, default = DEFAULT_POL)
 args = parser.parse_args()
 
 #the index is in the filename and the seed is in the payload; the analysis rejects duplicate
@@ -43,4 +45,4 @@ run_job(args.out_dir, args.realization_index, args.map_seed, args.nside, args.th
         args.noise_level, n_sweeps = args.num_sweeps, l_knee = args.l_knee,
         hmc_step_size = args.hmc_step_size, hmc_num_steps = args.hmc_num_steps, 
         flush_every = args.flush_every, chain_index = args.chain_index,
-        chain_seed = args.chain_seed)
+        chain_seed = args.chain_seed, pol = args.pol)

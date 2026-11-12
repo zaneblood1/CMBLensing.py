@@ -25,9 +25,9 @@ All array operations run in JAX (float64), so the code runs on CPU and GPU and i
 
 ```
 cmb_lensing/                    the Python package
-camb_splines/                   1D CAMB spline caches + the 5D grid (gitignored, downloaded on first use)
-camb_grid_generation/           scripts that build the 1D caches and the 5D grid
-get_lcdm_samples/               LCDM chains on the HPC + chain_analysis.py
+camb_splines/                   the 5D CAMB grid spline (gitignored, downloaded on first use)
+camb_grid_generation/           scripts that build the 5D grid
+get_lcdm_samples/               LCDM chains on the HPC (analysed by cmb_lensing/chain_analysis.py)
 measure_phi_noise/              phi_noise_analysis.py (the N_phi spectra plots) +
   get_map_joint_phi_noise/        map_joint's per-mode N_phi
   get_sampler_phi_noise/          the sampler's per-mode N_phi

@@ -65,9 +65,9 @@ A larger experiment, averaging over many data map realizations to reduce cosmic 
 | Path | Contents |
 |---|---|
 | `cmb_lensing/` | the Python package |
-| `docs/` | the documentation pages and the `map_joint` / `sample_joint` tutorial notebooks |
+| `docs/` | the documentation pages and the `map_joint` / `sample_joint` / chain analysis tutorial notebooks |
 | `tests/` | comparison tests against CMBLensing.jl and the CAMB grid test |
-| `get_lcdm_samples/` | slurm scripts for LCDM chains and `chain_analysis.py` |
+| `get_lcdm_samples/` | slurm scripts for LCDM chains (analysed by `python -m cmb_lensing.chain_analysis`) |
 | `measure_phi_noise/` | the lensing reconstruction noise of `map_joint` and of the sampler |
 | `get_delensed_field_covariance/` | the empirical delensed covariance used by the forecast |
 | `camb_grid_generation/` | scripts that build the CAMB splines |

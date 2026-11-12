@@ -1,89 +1,59 @@
 """Gaussian Fisher forecast for the LCDM parameters on sample_lcdm.py's flat-sky box.
 
-The forecast is a finite difference of two covariance blocks on the SAME rfft grid the
-sampler runs on (gen_ell_grid at the given nside / theta_pix), contracted with the
-zero-mean Gaussian Fisher formula specialized to a covariance diagonal in Fourier space,
+A central finite difference of per-mode covariance blocks on the SAME rfft grid the sampler
+runs on (gen_ell_grid at the given nside / theta_pix), contracted with the zero-mean Gaussian
+Fisher formula for a covariance that is block diagonal in Fourier space,
 
-    F_ij = 1/2 * sum_blocks sum_k w_k * dln(C_k)/dtheta_i * dln(C_k)/dtheta_j
+    F_ij = 1/2 * sum_blocks sum_k w_k * Tr[ C_k^-1 dC_k/dtheta_i  C_k^-1 dC_k/dtheta_j ]
 
 with w_k = util.get_fourier_weights, the number of independent real degrees of freedom of
-each rfft entry (2 in the bulk, 1 on the self-conjugate columns kx = 0 and kx = Nyquist;
-they sum to nside**2 and are the weights statistics.logpdf is built from). See "Derivation"
-below. The two blocks are
+each rfft entry (2 in the bulk, 1 on the self-conjugate columns; they sum to nside**2 and are
+the weights statistics.logpdf is built from). For a 1 x 1 block the trace is
+dln(C_k)/dtheta_i * dln(C_k)/dtheta_j.
 
-    f block    C_TT^delensed + C_n      the temperature field after delensing, plus the
-                                        instrument noise
-    phi block  C_phi + N_phi            the lensing potential measured to within the
-                                        reconstruction noise N_phi
+THE BLOCKS (per rfft mode k), by the data's polarization `pol`:
 
-THE N_PHI SOURCES. Both blocks are driven by one N_phi: it is the phi block's noise, and it
-sets how well the temperature is delensed - Alens_L = N_L / (C_L + N_L), with N_L the
-azimuthal average of N_phi (radial_cl_profile). Two sources are the box's quadratic-estimator
-noise matrix (qe_noise_matrix = simulate.scalar_quadratic_estimate without NPHI_FAC), and the
-TT spectrum in the estimator's FILTER (`cfl_tt`) brackets the answer:
+    "I"    [TT + N_TT]                                  the delensed field + instrument noise
+    "P"    [EE + N_EE], [BB + N_BB]
+    "IP"   [[TT + N_TT, TE], [TE, EE + N_EE]], [BB + N_BB]
+    all    [C_phi + N_phi]                              the lensing potential measured to
+                                                        within the reconstruction noise
 
-  "qe_unlensed"  UPPER bound on the information. The filter carries the fully UNLENSED
-                 C_TT (cfl_tt -> cf_tt): the estimator sees a map with no lensing variance
-                 left in it, the lowest N_phi any quadratic reconstruction could reach
-  "qe_delensed"  LOWER bound on the information. The filter carries the PARTIALLY delensed
-                 C_TT, iterated from the lensed spectrum to its fixed point
-                 (iterative_delensing): the noise a real iterative QE reconstruction gets
+THE FIELD BLOCKS ARE ALWAYS MEASURED. Their signal, at theta_0 and at theta_0 +/- h_i, is the
+empirical per-mode covariance of the box's own lense_flow delensing, read from a merged
+delensed_covariance.npz (cmb_lensing/delensed_covariance.py); the analytic noise is added
+here. The steps h_i are the file's. There is no CAMB delensing: without the file the forecast
+raises. The delensed BB is pure residual lensing at r = 0, so treating its modes as
+independent Gaussian information is optimistic; `include_bb = False` leaves that block out.
 
-The other two are measured on this box at the fiducial cosmology and read from the `nphi`
-key of the npz passed as --phi_noise (NaN where unmeasured):
+THE PHI BLOCK. C_phi(theta) comes from direct CAMB at the stencil points. N_phi is built
+once at theta_0 and held there (it is a property of the estimator, like the instrument
+noise), from one of
 
-  "map_joint"    map_joint's per-mode reconstruction noise, a merge_map_joint_phi_noise.py npz
-  "sample_joint" the sampler's effective noise, a merge_sampler_phi_noise.py npz
+    the box quadratic-estimate N^(0) (camb_spectra.qe_noise_matrix: load_sim's estimator
+    without NPHI_FAC), with the unlensed spectra in its response and the unlensed (default)
+    or lensed (`qe_filter`) spectra in its filter
+    the `nphi` matrix of a merged map_joint_phi_noise.npz / sampler_phi_noise.npz
+    (`phi_noise`); NaN (unmeasured) modes carry no phi information
 
-THE TEMPERATURE BLOCK (t_block / --t_block): CAMB's "unlensed" or "lensed" C_TT, or the
-delensed one, "delensed" (default) or "measured". By default C_TT^delensed is CAMB's own (get_partially_lensed_cls,
-the non-perturbative correlation-function lensing with C_L^phiphi scaled by Alens_L), re-run
-at every stencil point at the frozen Alens_L. --delensed_covariance replaces it with the
-EMPIRICAL per-mode covariance of the box's own lense_flow delensing
-(cmb_lensing/delensed_covariance.py), value and finite difference alike, and its steps h_i
-replace FD_STEP_FRAC for both blocks. Matching the file's W to the forecast's N_phi is the
-caller's job.
+Build the delensed covariance's Wiener filter from the same N_phi the forecast uses.
 
-THE RECONSTRUCTION IS FROZEN. N_phi and Alens_L are evaluated once at the fiducial cosmology
-and held across the stencil, so only the signal carries theta dependence - N_phi is a
-property of the estimator and the experiment, the same convention that makes C_n
-theta-independent, and the empirical N_phi have no theta dependence to difference anyway.
+The blocks are added as independent, and the field-phi correlations are ignored. The residual
+lensing left in the delensed field tracks C_phi(theta), so the field blocks count some of the
+lensing information the phi block already has. None of this is the marginal Fisher of
+p(d | theta) that sample_joint targets; the chains are the measurement of that.
 
-Derivation (scalar case, in this codebase's normalization). statistics.logpdf is built
-from primal_dot and primal_log_det, i.e. schematically
-
-    log L = -1/2 sum_k w_k [ |x_k|^2 / (nside^2 C_k) + ln C_k ] + const
-
-with E|x_k|^2 = nside^2 C_k (see the field_from_covar_single_key comment). Then
-E[d log L / dtheta_i] = 0, and with Var(|x_k|^2) = (nside^2 C_k)^2 * (2 / w_k) - variance
-v^2 for a free complex mode, 2 v^2 for a real one - the outer product E[d_i log L d_j log L]
-collapses to
-
-    F_ij = 1/4 sum_k w_k^2 (2 / w_k) dln(C_k)/dtheta_i dln(C_k)/dtheta_j
-         = 1/2 sum_k w_k dln(C_k)/dtheta_i dln(C_k)/dtheta_j
-
-The two blocks are added as independent. Because the residual lensing left in the delensed
-map tracks C_phi(theta), the f block picks up some lensing information on omch2 that the
-phi block counts again - scaled down by Alens_L, so it shrinks as the delensing improves.
-
-WHAT THIS IS NOT. None of these is the marginal Fisher of p(d | theta), which is what
-sample_joint actually targets; the chains themselves are the measurement of that.
-
-Finite differences. Central differences with step h_p = FD_STEP_FRAC[p] * PARAM_SIGMA[p]
-from DIRECT CAMB calls (never the 5D grid spline, whose deterministic ~1e-3 lnCl error
-would be differenced over the grid's coarse node spacing); 2 * n_sampled + 1 runs, memoized.
-"--stability" recomputes at 2h and reports the fractional change in the forecast sigmas.
-Parameters with is_sampled[name] = False are held FIXED, not marginalized over.
+Parameters with is_sampled[name] = False are held FIXED, not marginalized over. Every matrix
+is laid out in constants.PARAM_ORDER.
 
 Usage:
-    python -m cmb_lensing.fisher_forecast --nphi_source qe_unlensed --noise 5
-    python -m cmb_lensing.fisher_forecast --nphi_source qe_delensed --qe_response gradient
-    python -m cmb_lensing.fisher_forecast --nphi_source map_joint --phi_noise <map_joint_phi_noise.npz>
-    python -m cmb_lensing.fisher_forecast --nphi_source sample_joint --phi_noise <sampler_phi_noise.npz>
-    python -m cmb_lensing.fisher_forecast --nphi_source qe_unlensed --delensed_covariance <delensed_covariance.npz>
+    python -m cmb_lensing.fisher_forecast --noise 5 --delensed_covariance <delensed_covariance.npz>
+    python -m cmb_lensing.fisher_forecast --noise 5 --delensed_covariance <npz> --qe_filter lensed
+    python -m cmb_lensing.fisher_forecast --noise 5 --delensed_covariance <npz> --phi_noise <map_joint_phi_noise.npz>
+    python -m cmb_lensing.fisher_forecast --noise 5 --pol IP --delensed_covariance <npz> [--no_bb]
 
-Writes into cmb_lensing/fisher_output/, tagged with the N_phi source, the temperature block
-and the noise level (e.g. "_from_blocks_qe_unlensed_delensed_5.0_uk"):
+Writes into cmb_lensing/fisher_output/, tagged with forecast_file_suffix (pol, the N_phi and
+the noise level, e.g. "_I_qe_unlensed_5_uk"):
     fisher_matrix<suffix>.png       F_ij
     covariance_matrix<suffix>.png   F^-1 and the marginalized sigmas
     correlation_matrix<suffix>.png  F^-1 normalized to unit diagonal
@@ -97,669 +67,202 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
-import camb
-import jax
-import jax.numpy as jnp
-jax.config.update("jax_enable_x64", True)
 from cmb_lensing.util import gen_ell_grid, get_fourier_weights
-from cmb_lensing.simulate import (camb_parameters, _extract_all_cls, dl2cl,
-                                  covar_matrix_from_cls, noise_cls, get_beam, get_mask,
-                                  scalar_quadratic_estimate)
-from cmb_lensing.constants import (DEFAULT_MAX_ELL, DEFAULT_A_LENSE, DEFAULT_K_PIVOT,
-                                   DEFAULT_MNU, DEFAULT_TAUREIO, PARAM_ORDER, GROUND_TRUTH,
-                                   PARAM_SIGMA, CAMB_LMAX, DEFAULT_ELL_CUTOFF)
+from cmb_lensing.constants import (PARAM_ORDER, GROUND_TRUTH, PARAM_SIGMA, CAMB_LMAX,
+                                   DEFAULT_ELL_CUTOFF)
+from cmb_lensing.camb_spectra import (camb_cls_at_params, covar_from_cl, instrument_matrices,
+                                      qe_noise_matrix, QE_FILTERS, DEFAULT_QE_FILTER, POLS,
+                                      DEFAULT_POL)
+from cmb_lensing.delensed_covariance import load_merged_covariance
+from cmb_lensing.matrix_plots import annotated_heatmap, plot_annotated_matrix, FIGURE_DPI
 
-
-#finite-difference step for each parameter, as a FRACTION of PARAM_SIGMA. raise them if the
-#forecast is noisy (CAMB's own ~1e-3 lnCl accuracy floor leaking into the difference), lower
-#them if it drifts with step size (genuine curvature of Cl(theta)). verify with --stability
-FD_STEP_FRAC = {
-    "theta_MC_100": 0.05,
-    "logA": 0.05,
-    "ns": 0.05,
-    "ombh2": 0.05,
-    "omch2": 0.05,
-}
-
-#the order every output is laid out in - NOT PARAM_ORDER
-OUTPUT_PARAM_ORDER = ["omch2", "ombh2", "ns", "theta_MC_100", "logA"]
-
-#where N_phi comes from - see the module docstring. The two "qe_" sources are the bounds and
-#are computed here; the other two are read from --phi_noise
-QE_NPHI_SOURCES = ("qe_unlensed", "qe_delensed")
-FILE_NPHI_SOURCES = ("map_joint", "sample_joint")
-NPHI_SOURCES = QE_NPHI_SOURCES + FILE_NPHI_SOURCES
-DEFAULT_NPHI_SOURCE = "qe_unlensed"
-
-#the TT spectrum in the quadratic estimator's inverse-variance FILTER (scalar_quadratic_estimate's
-#`cfl_tt`), qe_reconstruction's `qe_filter`: "lensed" the fully lensed C_TT (one QE pass, no
-#delensing - only delensed_covariance.py's default W still uses it), "delensed" iterated to the
-#partially delensed fixed point, "unlensed" the unlensed C_TT. "qe_<filter>" is the NPHI_SOURCE
-QE_FILTERS = ("lensed", "delensed", "unlensed")
-
-#which TT spectrum the quadratic estimator's RESPONSE f(l, l') is built from - the `cf_tt`
-#argument of simulate.scalar_quadratic_estimate. Independent of the filter:
-#  "unlensed"  (DEFAULT) C_l^TT unlensed, Hu & Okamoto's original expression and what the
-#              sampler's own QE norm uses
-#  "gradient"  CAMB's lensed temperature-gradient spectrum C_l^(T grad T)
-#              (gradient_cls_at_params), the correct weight (Lewis, Challinor & Hanson 2011),
-#              which resums the N^(2) bias into the normalization. Under the "delensed" filter
-#              every iteration after the first rebuilds it from the DELENSED T-grad-T at the
-#              current Alens_L (delensed_gradient_cls_at_params)
-#Measured at nside 64 / 5' / 5 uK, T-only: "gradient" raises N_phi by 0.4-2.6% and moves the
-#marginalized sigmas by < 0.35%
-QE_RESPONSE_SOURCES = ("unlensed", "gradient")
-DEFAULT_QE_RESPONSE = "unlensed"
-
-#the f block's C_TT: CAMB's unlensed, lensed or partially delensed (at the frozen Alens_L)
-#spectrum, or "measured", the empirical one of a merged delensed_covariance.npz
-T_BLOCKS = ("unlensed", "lensed", "delensed", "measured")
-DEFAULT_T_BLOCK = "delensed"
-
-#relative tolerance for "these two parameter vectors are the same cosmology" (used by
-#delensed_covariance.py): the values round-trip through np.savez as float64
-PARAM_RTOL = 1e-12
-
-#CAMB is deterministic in the parameters, and the stencil re-queries the fiducial point
-#for every parameter, so memoize across calls (and across the modules that import this one)
-_CAMB_CACHE = {}
-_CAMB_RESULTS_CACHE = {}
-_GRADIENT_CACHE = {}
+#the key a merged phi noise file holds its per-mode rfft2 noise matrix under
+STORED_NPHI_KEY = "nphi"
+#the file-name label of a forecast whose N_phi was read from a file
+MEASURED_NPHI_LABEL = "measured_nphi"
+#a Fisher matrix with a condition number above this is reported as near-degenerate
+MAX_CONDITION_NUMBER = 1e12
+#the E and B instrument noise over the temperature noise (noise_cls)
+POLARIZATION_NOISE_FACTOR = 2
 
 
 def output_dir():
-    #a directory next to the package modules, as sample_lcdm.py's sample_lcdm_output, so the
-    #same relative layout works on the laptop and the cluster
+    #a directory next to the package modules, as sample_lcdm.py's sample_lcdm_output
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "fisher_output")
 
 
-# ── CAMB ──────────────────────────────────────────────────────────────────
-
-def _camb_key(params, camb_lmax):
-    return tuple(round(float(params[name]), 12) for name in PARAM_ORDER) + (camb_lmax,)
-
-
-def camb_results_at_params(params, camb_lmax = None):
-    """(CAMBparams, CAMBdata) at an arbitrary 5-parameter point, memoized per (point, lmax).
-    Set up through simulate.camb_parameters, so the run is identical to load_sim's: H0 solved
-    from cosmomc_theta, r = 0, mnu = 0.06, tau = 0.05, nt = 0, k_pivot = 0.05, Alens = 1,
-    non-linear lensing. The results object is kept because the delensed and gradient spectra
-    are post-processing calls on it. `camb_lmax` defaults to CAMB_LMAX.
-    """
-    camb_lmax = CAMB_LMAX if camb_lmax is None else int(camb_lmax)
-    key = _camb_key(params, camb_lmax)
-    if key not in _CAMB_RESULTS_CACHE:
-        pars = camb_parameters(None, params["ombh2"], params["omch2"],
-                               params["theta_MC_100"] / 100, 0.0, DEFAULT_MNU, DEFAULT_TAUREIO,
-                               np.exp(params["logA"]) * 1e-10, 0, params["ns"], camb_lmax,
-                               DEFAULT_K_PIVOT, DEFAULT_A_LENSE)
-        _CAMB_RESULTS_CACHE[key] = (pars, camb.get_results(pars))
-    return _CAMB_RESULTS_CACHE[key]
+def nphi_label(qe_filter = DEFAULT_QE_FILTER, phi_noise = None):
+    """The N_phi's name in file names: "qe_<filter>", or MEASURED_NPHI_LABEL for a file."""
+    return f"qe_{qe_filter}" if phi_noise is None else MEASURED_NPHI_LABEL
 
 
-def camb_cls_at_params(params, camb_lmax = None):
-    """Full cls dict from one CAMB run at an arbitrary 5-parameter point.
-    The spectra are exactly what simulate._run_camb extracts (same calls, same units, same
-    _extract_all_cls), on ells 2..camb_lmax-1 with no extrapolation. Every downstream axis is
-    derived from the returned arrays' LENGTH, so raising camb_lmax propagates on its own.
-    """
-    camb_lmax = CAMB_LMAX if camb_lmax is None else int(camb_lmax)
-    key = _camb_key(params, camb_lmax)
-    if key not in _CAMB_CACHE:
-        pars, results = camb_results_at_params(params, camb_lmax = camb_lmax)
-        power_spectra = results.get_cmb_power_spectra(pars, lmax = camb_lmax - 1,
-                                                      CMB_unit = "muK")
-        lens_potential = results.get_lens_potential_cls(lmax = camb_lmax - 1,
-                                                        CMB_unit = "muK")[:, :2]
-        _CAMB_CACHE[key] = _extract_all_cls(jnp.asarray(power_spectra["unlensed_scalar"]),
-                                            jnp.asarray(power_spectra["tensor"]),
-                                            jnp.asarray(power_spectra["total"]),
-                                            jnp.asarray(lens_potential), camb_lmax, camb_lmax)
-    return _CAMB_CACHE[key]
+def forecast_file_suffix(pol, nphi_label, noise_level):
+    """The tag of one forecast's output files, e.g. "_I_qe_unlensed_5_uk"."""
+    return f"_{pol}_{nphi_label}_{noise_level:g}_uk"
 
 
-def gradient_cls_at_params(params, camb_lmax = None):
-    """C_l^(T grad T): the lensed TEMPERATURE-GRADIENT cross spectrum, on 2..camb_lmax-1.
-
-    The spectrum the TT quadratic estimator's response should be built from (Lewis, Challinor
-    & Hanson 2011, appendix C): CAMB's get_lensed_gradient_cls, column 0. Accurate to 8e-5 at
-    l = 1000 and 1.4e-3 at l = 3000 against a longer run, degrading to 3% in the last ~100
-    multipoles below the run's own max_l. Memoized separately from camb_cls_at_params because
-    it costs ~5 s and only the fiducial point needs it.
-    """
-    camb_lmax = CAMB_LMAX if camb_lmax is None else int(camb_lmax)
-    key = _camb_key(params, camb_lmax)
-    if key not in _GRADIENT_CACHE:
-        _, results = camb_results_at_params(params, camb_lmax = camb_lmax)
-        #l(l+1)/2pi convention with raw_cl = False, exactly what dl2cl's default branch inverts
-        gradient = results.get_lensed_gradient_cls(lmax = camb_lmax - 1, CMB_unit = "muK")
-        _GRADIENT_CACHE[key] = dl2cl(jnp.asarray(gradient[:, 0]), camb_lmax, camb_lmax)
-    return _GRADIENT_CACHE[key]
-
-
-def delensed_gradient_cls_at_params(params, alens, camb_lmax = None):
-    """C_l^(T grad T) of the partially DELENSED map: gradient_cls_at_params with C_L^phiphi
-    scaled per multipole by `alens` (zero-based in L; multipoles past its end carry its last
-    value). The response an iterated quadratic estimator needs. Alens = 1 everywhere
-    reproduces gradient_cls_at_params to 3e-10. ~5 s per call, not memoized."""
-    camb_lmax = CAMB_LMAX if camb_lmax is None else int(camb_lmax)
-    pars, results = camb_results_at_params(params, camb_lmax = camb_lmax)
-    #[L(L+1)]^2 C_L^phiphi / 2pi, zero-based to Params.max_l - the convention CAMB's clpp
-    #argument takes, and what get_partially_lensed_cls scales the same way
-    clpp = results.get_lens_potential_cls(lmax = pars.max_l)[:, 0] * _alens_scaling(pars, alens)
-    gradient = results.get_lensed_gradient_cls(lmax = camb_lmax - 1, CMB_unit = "muK",
-                                               clpp = clpp)
-    return dl2cl(jnp.asarray(gradient[:, 0]), camb_lmax, camb_lmax)
-
-
-def delensed_cls_at_params(params, alens, camb_lmax = None):
-    """camb_cls_at_params plus "delensed_TT": CAMB lensing the unlensed spectra at `params`
-    with C_L^phiphi scaled by the per-L `alens` (zero-based in L, Alens_L = 1 meaning no
-    delensing at that L).
-
-    get_partially_lensed_cls reruns CAMB's full non-perturbative correlation-function lensing
-    with the scaled potential - NOT a linear interpolation between the unlensed and lensed
-    spectra, which it differs from at the percent level. Multipoles past the end of `alens`
-    (CAMB lenses with C_L^phiphi up to Params.max_l) carry its last value. ~0.02 s once the
-    results object is cached.
-    """
-    cls = dict(camb_cls_at_params(params, camb_lmax = camb_lmax))
-    pars, results = camb_results_at_params(params, camb_lmax = camb_lmax)
-    #the delensed spectrum must land on the SAME axis as the rest of the dict
-    lmax = 2 + cls["scalar_TT"].shape[0]
-    partial = results.get_partially_lensed_cls(_alens_scaling(pars, alens), lmax = lmax - 1,
-                                               CMB_unit = "muK", lensing_method = 3)
-    cls["delensed_TT"] = dl2cl(jnp.asarray(partial[:, 0]), lmax, lmax)
-    return cls
-
-
-def _alens_scaling(pars, alens):
-    scaling = np.full(pars.max_l + 1, float(alens[-1]))
-    scaling[:len(alens)] = alens
-    return scaling
-
-
-def cls_with_qe_response(params, qe_response = DEFAULT_QE_RESPONSE, camb_lmax = None):
-    """camb_cls_at_params, carrying the extra spectrum `qe_response` needs ("gradient_TT" for
-    "gradient"; nothing for "unlensed", which reads scalar_TT)."""
-    cls = dict(camb_cls_at_params(params, camb_lmax = camb_lmax))
-    if qe_response == "gradient":
-        cls["gradient_TT"] = gradient_cls_at_params(params, camb_lmax = camb_lmax)
-    return cls
-
-
-def qe_response_cl(cls, qe_response = DEFAULT_QE_RESPONSE):
-    """The TT spectrum the quadratic estimator's response is built from."""
-    if qe_response == "gradient":
-        return cls["gradient_TT"]
-    return cls["scalar_TT"]
-
-
-def load_sim_cosmology(param_ground):
-    """param_ground translated into load_sim's keyword names (cosmomc_theta, As)."""
-    camb_kwargs = dict(param_ground)
-    camb_kwargs["cosmomc_theta"] = camb_kwargs.pop("theta_MC_100") / 100
-    camb_kwargs["As"] = float(np.exp(camb_kwargs.pop("logA")) * 1e-10)
-    return camb_kwargs
-
-
-# ── Box / cosmology checks (used by delensed_covariance.py) ───────────────
-
-def same_cosmology(first, second):
-    return all(np.isclose(first[name], second[name], rtol = PARAM_RTOL, atol = 0)
-               for name in PARAM_ORDER)
-
-
-def check_box(merged, nside, theta_pix, noise_level, l_knee, path = "", what = "file"):
-    """Refuse a measurement taken on a different box (nside / theta_pix / noise / l_knee)."""
-    measured = dict(nside = int(merged["nside"]), theta_pix = float(merged["theta_pix"]),
-                    noise_level = float(merged["noise_level"]),
-                    l_knee = float(merged["l_knee"]))
-    wanted = dict(nside = int(nside), theta_pix = float(theta_pix),
-                  noise_level = float(noise_level), l_knee = float(l_knee))
-    if measured != wanted:
-        raise ValueError(f"the {what} {path} was measured at {measured} but this run is at "
-                         f"{wanted}; re-measure it at this box")
-
-
-# ── The rfft grid ─────────────────────────────────────────────────────────
+# ── Covariance blocks ─────────────────────────────────────────────────────
 
 def fourier_weights(nside):
-    """w_k, the independent real DOF per rfft entry, broadcast over the (nside, nside//2+1)
-    grid (get_fourier_weights indexes the half axis, i.e. the columns)."""
-    return jnp.broadcast_to(jnp.real(get_fourier_weights((nside, nside // 2 + 1))),
-                            (nside, nside // 2 + 1))
+    """w_k, the independent real DOF per rfft entry, on the (nside, nside//2+1) grid
+    (get_fourier_weights indexes the half axis, i.e. the columns)."""
+    return np.broadcast_to(np.real(np.asarray(get_fourier_weights((nside, nside // 2 + 1)))),
+                           (nside, nside // 2 + 1))
 
 
-def _covar(nside, pix_width, ell_grid, cl):
-    """A Cl on 2..len+1 put on the rfft grid by covar_matrix_from_cls, origin zeroed."""
-    ells = jnp.arange(2, 2 + cl.shape[0]).astype(jnp.float64)
-    return covar_matrix_from_cls(nside, pix_width, ell_grid, ells, cl, origin_value = 0)
+def phi_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm, l_cutoff,
+                     pol = DEFAULT_POL, qe_filter = DEFAULT_QE_FILTER, phi_noise = None):
+    """N_phi on the rfft grid: the box QE N^(0) with `qe_filter`, or the "nphi" matrix of
+    the npz at `phi_noise` (NaN where unmeasured)."""
+    if phi_noise is not None:
+        return np.asarray(np.load(phi_noise)[STORED_NPHI_KEY], dtype = float)
+    return np.asarray(qe_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee,
+                                      beam_fwhm, l_cutoff, pol = pol, qe_filter = qe_filter))
 
 
-def _instrument_matrices(nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
-                         l_cutoff, lmax_prime = None):
-    """(noise, mask, beam) on the rfft grid - the theta-INDEPENDENT part of the TT block.
+def scalar_block(matrix):
+    """A per-mode scalar as a 1 x 1 block, (1, 1, nside, nside//2+1)."""
+    return np.asarray(matrix)[None, None]
 
-    `lmax_prime` is the multipole axis the analytic noise is built on (default load_sim's);
-    pass the cls' own length so C_n and C_f share one axis when CAMB ran past CAMB_LMAX.
+
+def field_blocks(delensed, noise, pol = DEFAULT_POL, include_bb = True):
+    """The field covariance blocks at one stencil point, each (n, n, nside, nside//2+1).
+
+    `delensed` maps a component ("TT", "TE", "EE", "BB") to its measured per-mode delensed
+    covariance; `noise` is the temperature noise matrix (E and B carry twice it). See the
+    module docstring for the blocks of each `pol`.
     """
-    lmax_prime = min(DEFAULT_MAX_ELL, CAMB_LMAX) if lmax_prime is None else int(lmax_prime)
-    n_tt, _, _, _ = noise_cls(lmax_prime, noise_level, beam_fwhm = beam_fwhm,
-                              l_knee = l_knee)
-    noise = covar_matrix_from_cls(nside, pix_width, ell_grid,
-                                  jnp.arange(2, lmax_prime).astype(jnp.float64), n_tt,
-                                  origin_value = 0)
-    beam = get_beam(nside, pix_width, ell_grid, lmax_prime, beam_fwhm = beam_fwhm)
-    mask = get_mask(l_cutoff, nside, pix_width, ell_grid)
-    return noise, mask, beam
-
-
-def qe_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
-                    l_cutoff, filter_tt = None, qe_response = DEFAULT_QE_RESPONSE):
-    """N_phi: the scalar quadratic-estimate reconstruction noise matrix on the rfft grid.
-
-    simulate.scalar_quadratic_estimate(noise, response, filter, mask, beam), the same QE norm
-    the sampler's G matrix uses, except (1) the response spectrum is `qe_response`'s and
-    (2) there is no division by NPHI_FAC, a preconditioning choice inherited from
-    CMBLensing.jl that cancels inside G - so this is the physical N^(0). `filter_tt` is the
-    TT spectrum in the estimator's inverse-variance filter, the lensed one by default.
-    """
-    noise, mask, beam = _instrument_matrices(nside, pix_width, ell_grid, noise_level,
-                                             l_knee, beam_fwhm, l_cutoff)
-    if filter_tt is None:
-        filter_tt = cls["total_TT"]
-    response = _covar(nside, pix_width, ell_grid, qe_response_cl(cls, qe_response))
-    filter_matrix = _covar(nside, pix_width, ell_grid, filter_tt)
-    return scalar_quadratic_estimate(noise, response, filter_matrix, mask, beam, pix_width)
-
-
-def prior_covariances(params, nside, pix_width, ell_grid):
-    """(C_f, C_phi) on the rfft grid at one cosmology - the bare priors (no C_n, no N_phi)."""
-    cls = camb_cls_at_params(params)
-    return (_covar(nside, pix_width, ell_grid, cls["scalar_TT"]),
-            _covar(nside, pix_width, ell_grid, cls["phi"]))
-
-
-def delensing_efficiency(cphi, nphi):
-    """The C_phi-weighted mean Wiener factor C_phi / (C_phi + N_phi): 1 is a perfect
-    reconstruction, 0 none. A one-number summary for the printed report."""
-    good = (cphi > 0) & jnp.isfinite(nphi)
-    rho_squared = jnp.where(good, cphi / (cphi + jnp.where(good, nphi, 0.0)), 0.0)
-    weight = jnp.where(good, cphi, 0.0)
-    return float(jnp.sum(weight * rho_squared) / jnp.sum(weight))
-
-
-def interpolate_spectrum(ells, source_ells, spectrum):
-    """A positive spectrum moved onto `ells` by log-log interpolation, extrapolated as a
-    power law past either end - the jnp.interp call covar_matrix_from_cls uses."""
-    return np.asarray(jnp.exp(jnp.interp(jnp.log(ells), jnp.log(source_ells),
-                                        jnp.log(spectrum), left = "extrapolate",
-                                        right = "extrapolate")))
-
-
-def camb_lmax_for_grid(ell_grid):
-    """The CAMB lmax that covers every mode the rfft grid carries - the stencil's default.
-
-    The grid's largest multipole is the corner mode sqrt(2) pi / pix_width (3055 at 5', 6109
-    at 2.5', for every nside). covar_matrix_from_cls log-log EXTRAPOLATES past a spectrum's
-    support, and the damping tail falls faster than any power law: at nside 128 / 2.5' 32.6%
-    of the grid's DOF sit past CAMB_LMAX's 3999, and the extrapolated lensed TT is 2.5x too
-    small at the corner (19% on sigma(theta_MC_100) in the delensed forecast). Floored at
-    DEFAULT_MAX_ELL; rounded up so the corner mode itself is interior. load_sim, the 1D
-    spline caches and the 5D grid all stay on 2..3999.
-    """
-    corner = float(np.max(np.asarray(ell_grid)))
-    return max(DEFAULT_MAX_ELL, int(np.ceil(corner)) + 1)
-
-
-def radial_cl_profile(matrix, ell_grid, pix_width, ell_axis, label = "N_phi"):
-    """Azimuthally average an rfft-grid noise matrix back onto the 1D `ell_axis`, in Cl units.
-
-    The QE norm is anisotropic on the square box (1.6x around an annulus at L = 540, 5.7x at
-    L = 2090 on nside 64 / 5'), so the 1D N_L behind Alens_L is an annulus average. The
-    1/pix_width**2 of covar_matrix_from_cls is undone; annuli are one fundamental wide and
-    weighted by w_k; each annulus is the mean of log N at the geometric-mean l, which is
-    EXACT for the local power law the log-log interpolation assumes (an arithmetic mean
-    overestimated N_phi by 3.6% at one-fundamental annuli). Non-positive and non-finite
-    entries (the origin, the QE's diverged modes, an empirical file's unmeasured modes) are
-    left out. The profile is log-log interpolated onto `ell_axis` and extrapolated at both
-    ends, with a warning past the grid's largest mode; below the fundamental the box holds no
-    modes, so that end is pure continuation (good to 14% at L = 2 against Hu & Okamoto).
-    """
-    nside = np.asarray(ell_grid).shape[0]
-    ells = np.asarray(ell_grid).ravel()
-    values = np.asarray(matrix).ravel() * pix_width**2
-    dof = np.asarray(fourier_weights(nside)).ravel()
-
-    usable = (ells > 0) & np.isfinite(values) & (values > 0)
-    fundamental = 2 * np.pi / (nside * pix_width)
-    index = np.floor(ells[usable] / fundamental).astype(int)
-    weight = dof[usable]
-    n_bin = int(index.max()) + 1
-    total = np.bincount(index, weights = weight * np.log(values[usable]), minlength = n_bin)
-    norm = np.bincount(index, weights = weight, minlength = n_bin)
-    centre = np.bincount(index, weights = weight * np.log(ells[usable]), minlength = n_bin)
-    filled = norm > 0
-    profile_ell = np.exp(centre[filled] / norm[filled])
-    profile = np.exp(total[filled] / norm[filled])
-
-    grid_max = float(np.max(ells[usable]))
-    if np.max(ell_axis) > grid_max:
-        print(f"  WARNING: {label} is log-log extrapolated past l = {grid_max:.0f} (the "
-              f"grid's largest mode) out to l = {np.max(ell_axis):.0f}")
-    return interpolate_spectrum(ell_axis, profile_ell, profile)
-
-
-def delensing_alens(cls, nphi_cl):
-    """Alens_L = N_L / (C_L^phiphi + N_L): the fraction of the lensing power left in the map
-    after delensing with the Wiener-filtered reconstruction C / (C + N) phi_hat. Zero-based in
-    L (CAMB's convention for get_partially_lensed_cls) with Alens = 1 at L = 0, 1."""
-    cphi = np.asarray(cls["phi"])
-    nphi = np.asarray(nphi_cl)
-    alens = np.ones(2 + len(cphi))
-    alens[2:] = nphi / (cphi + nphi)
-    return alens
-
-
-# ── The reconstruction noise ──────────────────────────────────────────────
-
-def _qe_noise_cl(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm, l_cutoff,
-                 filter_tt, qe_response):
-    """(N_phi matrix, its radial profile on the cls' own 2..lmax-1 axis)."""
-    matrix = qe_noise_matrix(cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
-                             l_cutoff, filter_tt = filter_tt, qe_response = qe_response)
-    ells = np.arange(2, 2 + cls["total_TT"].shape[0], dtype = np.float64)
-    return matrix, radial_cl_profile(matrix, ell_grid, pix_width, ells,
-                                     label = "N_phi (QE matrix)")
-
-
-def iterative_delensing(param_ground, cls, nside, pix_width, ell_grid, noise_level,
-                        l_knee, beam_fwhm, l_cutoff, max_iterations = 25,
-                        tolerance = 1e-6, verbose = True,
-                        qe_response = DEFAULT_QE_RESPONSE, camb_lmax = None):
-    """Fixed-point iteration between the per-L delensing fraction and the QE noise.
-
-    Delensing quiets the map, which quiets the estimator's filter, which lowers N_phi, which
-    delenses better - iterated to a fixed point as iterative lensing reconstruction does
-    (Hirata & Seljak 2003; Smith et al. 2012):
-
-        Alens_0        = 1                       (the filter sees the lensed map)
-        N_n            = radial profile of the QE matrix with the delensed TT_n as the filter
-                         and, for qe_response = "gradient", the delensed T-grad-T_n as response
-        Alens_{n+1}    = N_n / (C_phi + N_n)
-        TT_{n+1}       = CAMB partially lensed at Alens_{n+1}   (delensed_cls_at_params)
-        TgradT_{n+1}   = CAMB T-grad-T at Alens_{n+1}   (delensed_gradient_cls_at_params)
-
-    `cls` must carry what `qe_response` needs (cls_with_qe_response). The first iteration is
-    the one-shot lensed-filter answer. Returns (alens, nphi_cl, delensed_tt, response_cls,
-    converged, iterations), with response_cls `cls` carrying the final step's response.
-    """
-    alens = np.ones(2 + cls["phi"].shape[0])
-    filter_tt = cls["total_TT"]
-    response_cls = cls
-    converged = False
-    for iteration in range(1, max_iterations + 1):
-        _, nphi_cl = _qe_noise_cl(response_cls, nside, pix_width, ell_grid, noise_level,
-                                  l_knee, beam_fwhm, l_cutoff, filter_tt, qe_response)
-        updated = delensing_alens(cls, nphi_cl)
-        shift = float(np.max(np.abs(updated - alens)))
-        alens = updated
-        filter_tt = delensed_cls_at_params(param_ground, alens, camb_lmax = camb_lmax)["delensed_TT"]
-        if qe_response == "gradient":
-            response_cls = dict(cls, gradient_TT = delensed_gradient_cls_at_params(
-                param_ground, alens, camb_lmax = camb_lmax))
-        if verbose:
-            print(f"    iteration {iteration}: max Alens shift {shift:.2e}")
-        if shift < tolerance:
-            converged = True
-            break
-
-    if not converged and verbose:
-        print(f"    WARNING: delensing iteration did not converge in {max_iterations} "
-              f"steps (last shift {shift:.2e}); the reported Alens_L is the last iterate")
-    return alens, nphi_cl, filter_tt, response_cls, converged, iteration
-
-
-def qe_reconstruction(param_ground, nside, pix_width, ell_grid, noise_level, l_knee,
-                      beam_fwhm, l_cutoff, qe_filter, qe_response = DEFAULT_QE_RESPONSE,
-                      camb_lmax = None, verbose = True):
-    """(N_phi matrix, Alens_L) of the box's quadratic estimator at `param_ground`.
-
-    `qe_filter` (QE_FILTERS) is the TT spectrum in the estimator's filter: "lensed" the lensed
-    C_TT, "delensed" iterated to the partially delensed fixed point (iterative_delensing; the
-    matrix is then rebuilt with the final step's filter AND response, and Alens_L is the
-    iteration's), "unlensed" the unlensed C_TT. Alens_L is delensing_alens of the matrix's
-    radial profile otherwise. `qe_response` (QE_RESPONSE_SOURCES) applies to all three.
-    """
-    cls = cls_with_qe_response(param_ground, qe_response, camb_lmax = camb_lmax)
-    if qe_filter == "delensed":
-        if verbose:
-            print(f"  iterating the QE filter from the lensed to the delensed C_TT "
-                  f"({qe_response} response):")
-        alens, _, delensed_tt, response_cls, converged, iterations = iterative_delensing(
-            param_ground, cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
-            l_cutoff, verbose = verbose, qe_response = qe_response, camb_lmax = camb_lmax)
-        nphi = qe_noise_matrix(response_cls, nside, pix_width, ell_grid, noise_level, l_knee,
-                               beam_fwhm, l_cutoff, filter_tt = delensed_tt,
-                               qe_response = qe_response)
-        if verbose:
-            print(f"  converged {converged} after {iterations} iterations")
-        return nphi, alens
-
-    if qe_filter == "unlensed":
-        filter_tt = cls["scalar_TT"]
-    else:
-        filter_tt = cls["total_TT"]
-    nphi, nphi_cl = _qe_noise_cl(cls, nside, pix_width, ell_grid, noise_level, l_knee,
-                                 beam_fwhm, l_cutoff, filter_tt, qe_response)
-    return nphi, delensing_alens(cls, nphi_cl)
-
-
-def load_phi_noise_matrix(path):
-    """The per-mode N_phi stored under "nphi" in a merged map_joint_phi_noise.npz /
-    sampler_phi_noise.npz: an (nside, nside // 2 + 1) rfft grid, NaN where unmeasured."""
-    return np.asarray(np.load(path)["nphi"], dtype = float)
-
-
-def frozen_reconstruction(param_ground, nside, theta_pix, noise_level, l_knee, beam_fwhm,
-                          l_cutoff, nphi_source, qe_response = DEFAULT_QE_RESPONSE,
-                          phi_noise = None, camb_lmax = None, verbose = True):
-    """(N_phi matrix, Alens_L, description) at the fiducial point, held across the stencil.
-
-    The "qe_" sources run qe_reconstruction with the filter their name gives. The file
-    sources load the `nphi` of `phi_noise`; Alens_L is then delensing_alens of its radial
-    profile. `description` records what was used (for the report and the output npz).
-    """
-    ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    if camb_lmax is None:
-        camb_lmax = camb_lmax_for_grid(ell_grid)
-    cls = camb_cls_at_params(param_ground, camb_lmax = camb_lmax)
-
-    if nphi_source in QE_NPHI_SOURCES:
-        qe_filter = nphi_source[len("qe_"):]
-        nphi, alens = qe_reconstruction(param_ground, nside, pix_width, ell_grid,
-                                        noise_level, l_knee, beam_fwhm, l_cutoff, qe_filter,
-                                        qe_response = qe_response, camb_lmax = camb_lmax,
-                                        verbose = verbose)
-        description = dict(nphi_source = nphi_source, qe_filter = qe_filter,
-                           qe_response = qe_response, phi_noise = "")
-        text = f"box QE matrix, {qe_filter} C_TT in the filter, {qe_response} response"
-    else:
-        stored = load_phi_noise_matrix(phi_noise)
-        ells = np.arange(2, 2 + cls["total_TT"].shape[0], dtype = np.float64)
-        nphi_cl = radial_cl_profile(stored, ell_grid, pix_width, ells,
-                                    label = f"N_phi ({nphi_source})")
-        alens = delensing_alens(cls, nphi_cl)
-        nphi = jnp.asarray(stored)
-        description = dict(nphi_source = nphi_source, qe_filter = "", qe_response = "",
-                           phi_noise = str(phi_noise))
-        unmeasured = int(np.sum(~np.isfinite(stored)))
-        text = (f"`nphi` from {phi_noise}; {unmeasured} unmeasured modes carry no phi "
-                f"information")
-
-    if verbose:
-        alpha = delensing_efficiency(_covar(nside, pix_width, ell_grid, cls["phi"]), nphi)
-        samples = ", ".join(f"L={L} {alens[L]:.2f}" for L in (50, 100, 300, 1000, 2000))
-        print(f"  N_phi [{nphi_source}]: {text}")
-        print(f"  delensing: C_phi-weighted mean efficiency {alpha:.3f}; residual fraction "
-              f"Alens_L at {samples}")
-    return nphi, alens, description
-
-
-# ── Covariance blocks and the stencil ─────────────────────────────────────
-
-def covariance_blocks(t_cl, phi_cl, nside, pix_width, ell_grid, noise, nphi):
-    """{"f": C_TT + C_n, "phi": C_phi + N_phi} on the rfft grid, built through the same
-    covar_matrix_from_cls the sampler uses, so signal and noise share a normalization (the
-    trace formula is invariant under any theta-independent rescaling)."""
-    return {"f": _covar(nside, pix_width, ell_grid, t_cl) + noise,
-            "phi": _covar(nside, pix_width, ell_grid, phi_cl) + nphi}
-
-
-def temperature_cl_at_params(params, t_block, alens, camb_lmax):
-    """(C_TT of the f block, C_phi) at params: CAMB's unlensed, lensed or partially delensed
-    (at the frozen Alens_L) C_TT. "measured" returns the delensed one, which
-    covariance_stencil then replaces with the file's."""
-    if t_block == "unlensed":
-        cls = camb_cls_at_params(params, camb_lmax = camb_lmax)
-        return cls["scalar_TT"], cls["phi"]
-    if t_block == "lensed":
-        cls = camb_cls_at_params(params, camb_lmax = camb_lmax)
-        return cls["total_TT"], cls["phi"]
-    cls = delensed_cls_at_params(params, alens, camb_lmax = camb_lmax)
-    return cls["delensed_TT"], cls["phi"]
-
-
-def sampled_names_and_steps(is_sampled, step_fracs = None):
-    """(names, steps): the sampled subset in OUTPUT_PARAM_ORDER and its FD steps
-    step_fracs[name] * PARAM_SIGMA[name] (step_fracs defaults to FD_STEP_FRAC)."""
-    if step_fracs is None:
-        step_fracs = FD_STEP_FRAC
-    names = [name for name in OUTPUT_PARAM_ORDER if is_sampled.get(name, False)]
-    steps = [step_fracs[name] * PARAM_SIGMA[name] for name in names]
-    return names, steps
+    polarization_noise = POLARIZATION_NOISE_FACTOR * noise
+    blocks = []
+    if pol == "I":
+        blocks.append(scalar_block(delensed["TT"] + noise))
+    if pol == "P":
+        blocks.append(scalar_block(delensed["EE"] + polarization_noise))
+    if pol == "IP":
+        blocks.append(np.array([[delensed["TT"] + noise, delensed["TE"]],
+                                [delensed["TE"], delensed["EE"] + polarization_noise]]))
+    if pol != "I" and include_bb:
+        blocks.append(scalar_block(delensed["BB"] + polarization_noise))
+    return blocks
 
 
 def covariance_stencil(nside, theta_pix, noise_level, is_sampled, param_ground,
-                       nphi_source = DEFAULT_NPHI_SOURCE, phi_noise = None,
-                       qe_response = DEFAULT_QE_RESPONSE, t_block = DEFAULT_T_BLOCK,
-                       delensed_covariance = None, step_fracs = None, l_knee = 0,
-                       beam_fwhm = 0, l_cutoff = DEFAULT_ELL_CUTOFF, camb_lmax = None,
-                       verbose = True):
-    """The covariance blocks the forecast differences.
+                       delensed_covariance, pol = DEFAULT_POL, qe_filter = DEFAULT_QE_FILTER,
+                       phi_noise = None, include_bb = True, l_knee = 0, beam_fwhm = 0,
+                       l_cutoff = DEFAULT_ELL_CUTOFF, camb_lmax = CAMB_LMAX):
+    """The covariance blocks the forecast differences. Arguments as forecast().
 
-    Returns (names, steps, blocks_fid, blocks_plus, blocks_minus, description): the sampled
-    names, their FD steps, the block dicts at theta_0 and at theta_0 +/- h_i (one dict per
-    sampled parameter), and frozen_reconstruction's description of the N_phi. N_phi and
-    Alens_L are built once at theta_0. `t_block` (T_BLOCKS) sets the f block's C_TT: CAMB's
-    unlensed, lensed or delensed spectrum at every point, or with "measured" the empirical one
-    of `delensed_covariance` (a merged delensed_covariance.npz; C_n still added analytically),
-    whose steps then replace the FD_STEP_FRAC ones. `camb_lmax` defaults to
-    camb_lmax_for_grid.
+    Returns (names, steps, blocks_fid, blocks_plus, blocks_minus): the sampled names in
+    PARAM_ORDER, the file's steps h_i for them, the list of blocks at theta_0 (the field
+    blocks, then the phi block) and that list at theta_0 +/- h_i for every sampled parameter.
     """
-    names, steps = sampled_names_and_steps(is_sampled, step_fracs)
+    if delensed_covariance is None:
+        raise ValueError("the forecast needs delensed_covariance, a merged "
+                         "delensed_covariance.npz: there is no analytic delensing fallback")
+    measured = load_merged_covariance(delensed_covariance)
+    names = [name for name in PARAM_ORDER if is_sampled.get(name, False)]
+    #the file's own parameter list may be longer and in another order
+    file_index = [measured["names"].index(name) for name in names]
+    steps = [float(measured["steps"][index]) for index in file_index]
+
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
-    if camb_lmax is None:
-        camb_lmax = camb_lmax_for_grid(ell_grid)
-
-    empirical = None
-    if t_block == "measured":
-        empirical = np.load(delensed_covariance, allow_pickle = True)
-        measured_names = [str(name) for name in empirical["names"]]
-        steps = [float(empirical["steps"][measured_names.index(name)]) for name in names]
-
-    nphi, alens, description = frozen_reconstruction(
-        param_ground, nside, theta_pix, noise_level, l_knee, beam_fwhm, l_cutoff, nphi_source,
-        qe_response = qe_response, phi_noise = phi_noise, camb_lmax = camb_lmax,
-        verbose = verbose)
-
     cls_fid = camb_cls_at_params(param_ground, camb_lmax = camb_lmax)
-    noise, _, _ = _instrument_matrices(nside, pix_width, ell_grid, noise_level, l_knee,
-                                       beam_fwhm, l_cutoff,
-                                       lmax_prime = 2 + cls_fid["total_TT"].shape[0])
+    noise = np.asarray(instrument_matrices(nside, pix_width, ell_grid, noise_level, l_knee,
+                                           beam_fwhm, l_cutoff)[0])
+    #N_phi is built once, at theta_0
+    nphi = phi_noise_matrix(cls_fid, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm,
+                            l_cutoff, pol = pol, qe_filter = qe_filter, phi_noise = phi_noise)
 
-    def blocks_at(params):
-        t_cl, phi_cl = temperature_cl_at_params(params, t_block, alens, camb_lmax)
-        return covariance_blocks(t_cl, phi_cl, nside, pix_width, ell_grid, noise, nphi)
+    def blocks_at(params, delensed_stack):
+        delensed = dict(zip(measured["components"], delensed_stack))
+        cphi = np.asarray(covar_from_cl(nside, pix_width, ell_grid,
+                                        camb_cls_at_params(params, camb_lmax = camb_lmax)["phi"]))
+        return field_blocks(delensed, noise, pol, include_bb) + [scalar_block(cphi + nphi)]
 
-    blocks_fid = blocks_at(param_ground)
+    blocks_fid = blocks_at(param_ground, measured["delensed_fid"])
     blocks_plus = []
     blocks_minus = []
-    for name, step in zip(names, steps):
+    for name, step, index in zip(names, steps, file_index):
         up = dict(param_ground)
         up[name] = param_ground[name] + step
         down = dict(param_ground)
         down[name] = param_ground[name] - step
-        blocks_plus.append(blocks_at(up))
-        blocks_minus.append(blocks_at(down))
-
-    if empirical is not None:
-        blocks_fid["f"] = jnp.asarray(empirical["delensed_fid"]) + noise
-        for i, name in enumerate(names):
-            j = measured_names.index(name)
-            blocks_plus[i]["f"] = jnp.asarray(empirical["delensed_plus"][j]) + noise
-            blocks_minus[i]["f"] = jnp.asarray(empirical["delensed_minus"][j]) + noise
-
-    return names, steps, blocks_fid, blocks_plus, blocks_minus, description
+        blocks_plus.append(blocks_at(up, measured["delensed_plus"][index]))
+        blocks_minus.append(blocks_at(down, measured["delensed_minus"][index]))
+    return names, steps, blocks_fid, blocks_plus, blocks_minus
 
 
 def fisher_from_blocks(blocks_fid, blocks_plus, blocks_minus, steps, nside):
-    """F_ij = 1/2 sum_blocks sum_k w_k dln(C)/dtheta_i dln(C)/dtheta_j.
+    """F_ij = 1/2 sum_blocks sum_k w_k Tr[C^-1 dC/dtheta_i C^-1 dC/dtheta_j].
 
-    Entries whose centre is not positive and finite carry no information: the zeroed origin,
-    and an empirical N_phi's unmeasured (NaN) modes.
+    blocks_fid is a list of (n, n, nside, nside//2+1) blocks; blocks_plus[i] / blocks_minus[i]
+    the same list at theta_0 +/- steps[i]. A mode whose centre block is not finite and
+    positive definite carries no information: the zeroed origin, and a measured N_phi's
+    unmeasured (NaN) modes.
     """
     weights = fourier_weights(nside)
     n_param = len(steps)
     fisher = np.zeros((n_param, n_param))
-    for name in blocks_fid:
-        c_fid = blocks_fid[name]
-        good = jnp.isfinite(c_fid) & (c_fid > 0)
-        safe = jnp.where(good, c_fid, 1.0)
-        dlog = []
+    for block_index, block_fid in enumerate(blocks_fid):
+        #(nside, nside//2+1, n, n): one small matrix per mode
+        centre = np.moveaxis(block_fid, (0, 1), (-2, -1))
+        size = centre.shape[-1]
+        with np.errstate(invalid = "ignore"):
+            good = np.all(np.isfinite(centre), axis = (-2, -1)) & (centre[..., 0, 0] > 0)
+            good &= np.linalg.det(np.where(good[..., None, None], centre, np.eye(size))) > 0
+        inverse = np.linalg.inv(np.where(good[..., None, None], centre, np.eye(size)))
+
+        #C^-1 dC/dtheta_i per mode, zero where the mode carries no information
+        normalized_derivatives = []
         for i in range(n_param):
-            difference = blocks_plus[i][name] - blocks_minus[i][name]
-            dlog.append(jnp.where(good, difference / (2 * steps[i] * safe), 0.0))
+            difference = np.moveaxis(blocks_plus[i][block_index] - blocks_minus[i][block_index],
+                                     (0, 1), (-2, -1))
+            derivative = np.where(good[..., None, None], difference / (2 * steps[i]), 0.0)
+            normalized_derivatives.append(inverse @ derivative)
         for i in range(n_param):
             for j in range(n_param):
-                fisher[i, j] += 0.5 * float(jnp.sum(weights * dlog[i] * dlog[j]))
+                trace = np.einsum("...ab,...ba->...", normalized_derivatives[i],
+                                  normalized_derivatives[j])
+                fisher[i, j] += 0.5 * np.sum(weights * trace)
     return fisher
 
 
-def forecast(nside, theta_pix, noise_level, is_sampled, param_ground,
-             nphi_source = DEFAULT_NPHI_SOURCE, phi_noise = None,
-             qe_response = DEFAULT_QE_RESPONSE, t_block = DEFAULT_T_BLOCK,
-             delensed_covariance = None, step_fracs = None, l_knee = 0, beam_fwhm = 0,
-             l_cutoff = DEFAULT_ELL_CUTOFF, camb_lmax = None, verbose = True):
+def forecast(nside, theta_pix, noise_level, is_sampled, param_ground, delensed_covariance,
+             pol = DEFAULT_POL, qe_filter = DEFAULT_QE_FILTER, phi_noise = None,
+             include_bb = True, l_knee = 0, beam_fwhm = 0, l_cutoff = DEFAULT_ELL_CUTOFF,
+             camb_lmax = CAMB_LMAX):
     """Gaussian Fisher matrix for the sampled LCDM parameters on an nside x nside box.
 
     Args:
-        nside, theta_pix, noise_level: the box (pixels per side, arcmin, uK-arcmin)
+        nside, theta_pix, noise_level: the box (pixels per side, arcmin, uK-arcmin in
+                      temperature; the polarization noise is sqrt(2) higher)
         is_sampled:   {param_name: bool}; False parameters are held FIXED
         param_ground: {param_name: float} fiducial point, all five
-        nphi_source:  NPHI_SOURCES - "qe_unlensed" (the upper bound on the information,
-                      default), "qe_delensed" (the lower bound), "map_joint" or
-                      "sample_joint" (the `nphi` of the `phi_noise` npz)
-        qe_response:  QE_RESPONSE_SOURCES, the "qe_" sources' response spectrum
-        t_block:      T_BLOCKS - the f block's C_TT: CAMB's "unlensed", "lensed" or
-                      "delensed" (default, at the frozen Alens_L), or "measured"
-        delensed_covariance: for t_block "measured", a merged delensed_covariance.npz; its
-                      empirical delensed T block is used at every stencil point and its steps
-                      replace FD_STEP_FRAC
-        step_fracs:   override for FD_STEP_FRAC (fractions of PARAM_SIGMA)
+        delensed_covariance: a merged delensed_covariance.npz measured at this box, noise
+                      level and `pol` (required): the field blocks' delensed signal at
+                      theta_0 and theta_0 +/- h, and the steps h
+        pol:          "I" (temperature), "P" (polarization) or "IP" (both): the data
+        qe_filter:    "unlensed" (default) or "lensed": the spectra in the filter of the
+                      quadratic-estimate N0 used as the phi noise. Its response always uses
+                      the unlensed spectra. The estimator is load_sim's: TT for "I", EB for
+                      "P" and "IP"
+        phi_noise:    a merged map_joint_phi_noise.npz / sampler_phi_noise.npz whose `nphi`
+                      replaces the QE N0
+        include_bb:   for "P" / "IP", whether the delensed BB block is counted
         l_knee, beam_fwhm: 1/f knee (0 = white, as every sampler entry point) and beam FWHM
-        camb_lmax:    how far CAMB is run; default camb_lmax_for_grid (the box's corner)
+        camb_lmax:    how far CAMB is run (default CAMB_LMAX, the simulations' support)
 
     Returns:
-        (fisher, names) - the n_sampled x n_sampled matrix and the names in
-        OUTPUT_PARAM_ORDER.
+        (fisher, names) - the n_sampled x n_sampled matrix and the sampled names, both in
+        constants.PARAM_ORDER.
+
+    Raises:
+        ValueError: if delensed_covariance is None.
     """
-    names, steps, blocks_fid, blocks_plus, blocks_minus, _ = covariance_stencil(
-        nside, theta_pix, noise_level, is_sampled, param_ground, nphi_source = nphi_source,
-        phi_noise = phi_noise, qe_response = qe_response, t_block = t_block,
-        delensed_covariance = delensed_covariance, step_fracs = step_fracs, l_knee = l_knee,
-        beam_fwhm = beam_fwhm, l_cutoff = l_cutoff, camb_lmax = camb_lmax, verbose = verbose)
+    names, steps, blocks_fid, blocks_plus, blocks_minus = covariance_stencil(
+        nside, theta_pix, noise_level, is_sampled, param_ground, delensed_covariance,
+        pol = pol, qe_filter = qe_filter, phi_noise = phi_noise, include_bb = include_bb,
+        l_knee = l_knee, beam_fwhm = beam_fwhm, l_cutoff = l_cutoff, camb_lmax = camb_lmax)
     return fisher_from_blocks(blocks_fid, blocks_plus, blocks_minus, steps, nside), names
 
 
@@ -769,7 +272,7 @@ def covariance_from_fisher(fisher, names):
     """F^-1, with a warning when F is close to singular."""
     eigenvalues = np.linalg.eigvalsh(fisher)
     condition = eigenvalues[-1] / eigenvalues[0]
-    if condition > 1e12 or eigenvalues[0] <= 0:
+    if condition > MAX_CONDITION_NUMBER or eigenvalues[0] <= 0:
         print(f"WARNING: Fisher eigenvalues {eigenvalues} (condition number {condition:.3g}): "
               f"at least one direction over {names} is near-degenerate, so the inverse is "
               f"unreliable")
@@ -783,46 +286,12 @@ def correlation_from_covariance(covariance):
 
 
 def report_sigmas(covariance, names, label):
-    """Print the marginalized 1-sigma errors and the strongest degeneracy."""
+    """Print the marginalized 1-sigma errors."""
     sigmas = np.sqrt(np.diag(covariance))
     print(f"\nForecast 1-sigma errors [{label}]:")
     print(f"  {'parameter':<14s} {'sigma':>12s} {'sigma/PARAM_SIGMA':>20s}")
-    for i, name in enumerate(names):
-        print(f"  {name:<14s} {sigmas[i]:>12.4g} {sigmas[i] / PARAM_SIGMA[name]:>20.3g}")
-    if len(names) > 1:
-        correlation = correlation_from_covariance(covariance)
-        strongest = (0.0, 0, 1)
-        for i in range(len(names)):
-            for j in range(i + 1, len(names)):
-                if abs(correlation[i, j]) >= strongest[0]:
-                    strongest = (abs(correlation[i, j]), i, j)
-        _, i, j = strongest
-        print(f"  strongest degeneracy: {names[i]} - {names[j]}  (r = {correlation[i, j]:+.2f})")
-
-
-# ── Plotting ──────────────────────────────────────────────────────────────
-
-def annotated_heatmap(axis, matrix, names, title, colorbar_label):
-    """Heatmap coloured by the correlation-normalized matrix (bounded, readable) with the
-    raw entries annotated - the raw values span many orders of magnitude across parameters
-    with wildly different units, so colouring by them directly is useless."""
-    diagonal = np.sqrt(np.abs(np.diag(matrix)))
-    normalized = matrix / np.outer(diagonal, diagonal)
-
-    image = axis.imshow(normalized, cmap = "RdBu_r", vmin = -1, vmax = 1)
-    axis.set_xticks(range(len(names)))
-    axis.set_yticks(range(len(names)))
-    axis.set_xticklabels(names, rotation = 45, ha = "right")
-    axis.set_yticklabels(names)
-    axis.set_title(title)
-    for i in range(len(names)):
-        for j in range(len(names)):
-            shade = "white" if abs(normalized[i, j]) > 0.6 else "black"
-            axis.text(j, i, f"{matrix[i, j]:.2e}", ha = "center", va = "center",
-                      color = shade, fontsize = 7)
-    colorbar = plt.colorbar(image, ax = axis, fraction = 0.046, pad = 0.04)
-    colorbar.set_label(colorbar_label)
-    return image
+    for name, sigma in zip(names, sigmas):
+        print(f"  {name:<14s} {sigma:>12.4g} {sigma / PARAM_SIGMA[name]:>20.3g}")
 
 
 def plot_fisher_matrix(fisher, names, path, subtitle = ""):
@@ -830,43 +299,14 @@ def plot_fisher_matrix(fisher, names, path, subtitle = ""):
     annotated_heatmap(axis, fisher, names, f"Fisher matrix $F_{{ij}}$\n{subtitle}",
                       r"$F_{ij}\,/\,\sqrt{F_{ii}F_{jj}}$")
     figure.tight_layout()
-    figure.savefig(path, dpi = 150)
+    figure.savefig(path, dpi = FIGURE_DPI)
     plt.close(figure)
 
 
-def plot_annotated_matrix(matrix, param_names, title, path, cmap = "coolwarm", norm = None,
-                          fmt = "{:+.3f}"):
-    """A square matrix as a coloured grid with every entry printed in its box (black or white
-    text by the luminance behind it). `norm` defaults to a linear scale symmetric about 0."""
-    matrix = np.asarray(matrix)
-    n = len(param_names)
-    if norm is None:
-        limit = np.max(np.abs(matrix))
-        norm = matplotlib.colors.Normalize(vmin = -limit, vmax = limit)
-    fig, ax = plt.subplots(figsize = (1.7 * n + 2.5, 1.7 * n + 1.5))
-    image = ax.imshow(matrix, cmap = cmap, norm = norm)
-    ax.set_xticks(range(n)); ax.set_xticklabels(param_names, rotation = 45, ha = "right")
-    ax.set_yticks(range(n)); ax.set_yticklabels(param_names)
-    #minor ticks give the white grid lines separating the boxes
-    ax.set_xticks(np.arange(n + 1) - 0.5, minor = True)
-    ax.set_yticks(np.arange(n + 1) - 0.5, minor = True)
-    ax.grid(which = "minor", color = "white", linewidth = 2)
-    ax.tick_params(which = "minor", length = 0)
-    for i in range(n):
-        for j in range(n):
-            rgba = image.cmap(norm(matrix[i, j]))
-            luminance = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]
-            ax.text(j, i, fmt.format(matrix[i, j]), ha = "center", va = "center",
-                    color = "white" if luminance < 0.5 else "black", fontsize = 11)
-    fig.colorbar(image, ax = ax, fraction = 0.046, pad = 0.04)
-    ax.set_title(title)
-    plt.savefig(path, dpi = 150, bbox_inches = "tight")
-    plt.close(fig)
-
-
 def plot_covariance_matrix(covariance, names, path, subtitle = ""):
+    """The covariance heat map next to the marginalized sigmas in units of PARAM_SIGMA."""
     sigmas = np.sqrt(np.diag(covariance))
-    ratios = np.array([sigmas[i] / PARAM_SIGMA[name] for i, name in enumerate(names)])
+    ratios = np.array([sigma / PARAM_SIGMA[name] for name, sigma in zip(names, sigmas)])
 
     figure, (left, right) = plt.subplots(
         1, 2, figsize = (12.5, 6.0), gridspec_kw = {"width_ratios": [1.35, 1]})
@@ -890,7 +330,7 @@ def plot_covariance_matrix(covariance, names, path, subtitle = ""):
         right.text(ratio, position, f"  {sigma:.3g}", va = "center", fontsize = 8)
 
     figure.tight_layout()
-    figure.savefig(path, dpi = 150)
+    figure.savefig(path, dpi = FIGURE_DPI)
     plt.close(figure)
 
 
@@ -914,112 +354,62 @@ def save_outputs(fisher, covariance, names, suffix, subtitle, config):
           f"fisher{suffix}.npz to {directory}")
 
 
-def step_stability(forecast_at_steps, factor = 2.0):
-    """Recompute a forecast at `factor` x the step size and print the per-parameter
-    fractional drift in sigma. `forecast_at_steps(step_fracs) -> (fisher, names)`; the CAMB
-    runs are memoized, so the doubled-step run is one extra set of calls."""
-    doubled = {name: factor * frac for name, frac in FD_STEP_FRAC.items()}
-    fisher, names = forecast_at_steps(FD_STEP_FRAC)
-    fisher_doubled, _ = forecast_at_steps(doubled)
-    sigma = np.sqrt(np.diag(covariance_from_fisher(fisher, names)))
-    sigma_doubled = np.sqrt(np.diag(covariance_from_fisher(fisher_doubled, names)))
-    drift = np.abs(sigma_doubled / sigma - 1)
-
-    print(f"\nStep stability (h vs {factor:g}h), fractional change in forecast sigma:")
-    for name, value in zip(names, drift):
-        flag = "  <-- unstable" if value > 0.01 else ""
-        print(f"  {name:<14s} {value:.2%}{flag}")
-    if np.max(drift) > 0.01:
-        print("  tune FD_STEP_FRAC until every entry is well under 1%")
-    return drift
-
-
 # ── CLI ───────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(
-        description = "Gaussian Fisher forecast for the LCDM parameters on the "
-                      "sample_lcdm.py flat-sky box: delensed T block + phi block")
+        description = "Gaussian Fisher forecast for the LCDM parameters on the sample_lcdm.py "
+                      "flat-sky box: measured delensed field blocks + a phi block")
+    parser.add_argument("--delensed_covariance", type = str, default = None,
+                        help = "a merged delensed_covariance.npz at this box, noise level "
+                               "and pol (required): the field blocks and the steps")
     parser.add_argument("--nside", type = int, default = 128)
     parser.add_argument("--theta_pix", type = float, default = 2.5,
                         help = "pixel width in arcmin")
     parser.add_argument("--noise", type = float, default = 2.5,
-                        help = "white noise level in uK-arcmin")
+                        help = "white temperature noise level in uK-arcmin")
+    parser.add_argument("--pol", choices = POLS, default = DEFAULT_POL,
+                        help = "the data: I (temperature), P (polarization) or IP (both)")
+    parser.add_argument("--qe_filter", choices = QE_FILTERS, default = DEFAULT_QE_FILTER,
+                        help = "the spectra in the filter of the QE N0 used as the phi noise "
+                               "(its response always uses the unlensed spectra)")
+    parser.add_argument("--phi_noise", type = str, default = None,
+                        help = "a merged map_joint_phi_noise.npz / sampler_phi_noise.npz "
+                               "whose `nphi` replaces the QE N0")
+    parser.add_argument("--no_bb", action = "store_true",
+                        help = "for P / IP: leave the delensed BB block out")
     parser.add_argument("--l_knee", type = float, default = 0.0,
                         help = "1/f knee; 0 (default) matches every sampler entry point")
     parser.add_argument("--beam_fwhm", type = float, default = 0.0)
     parser.add_argument("--params", nargs = "*", default = ["logA", "omch2", "theta_MC_100"],
                         choices = PARAM_ORDER, help = "the sampled parameters")
-    parser.add_argument("--nphi_source", choices = NPHI_SOURCES, default = DEFAULT_NPHI_SOURCE,
-                        help = "the reconstruction noise N_phi in the phi block and behind "
-                               "Alens_L. 'qe_unlensed': the box QE with the unlensed C_TT in "
-                               "its filter, the UPPER bound on the information; "
-                               "'qe_delensed' (default): the filter iterated to the "
-                               "partially delensed C_TT, the LOWER bound; 'map_joint' / "
-                               "'sample_joint': the `nphi` of --phi_noise")
-    parser.add_argument("--phi_noise", type = str, default = None,
-                        help = "for map_joint / sample_joint: a merged "
-                               "map_joint_phi_noise.npz / sampler_phi_noise.npz")
-    parser.add_argument("--qe_response", choices = QE_RESPONSE_SOURCES,
-                        default = DEFAULT_QE_RESPONSE,
-                        help = "the TT spectrum weighting the QE response for the qe_ "
-                               "sources: 'unlensed' (default, Hu & Okamoto; what the sampler "
-                               "uses) or 'gradient' (CAMB's lensed T-grad-T, iterated with "
-                               "the filter under qe_delensed)")
-    parser.add_argument("--t_block", choices = T_BLOCKS, default = None,
-                        help = "the f block's C_TT: CAMB 'unlensed', 'lensed' or 'delensed', "
-                               "or 'measured' (--delensed_covariance). Default: 'measured' "
-                               f"with --delensed_covariance, '{DEFAULT_T_BLOCK}' otherwise")
-    parser.add_argument("--delensed_covariance", type = str, default = None,
-                        help = "a merged delensed_covariance.npz: the f block's delensed "
-                               "signal at theta_0 and theta_0 +/- h is the EMPIRICAL "
-                               "per-mode covariance of the box's own delensing instead of "
-                               "CAMB's partially lensed spectrum, and the steps come from "
-                               "that file")
-    parser.add_argument("--camb_lmax", type = int, default = None,
-                        help = "how far to run CAMB; default: the rfft grid's corner mode "
-                               f"(camb_lmax_for_grid). {DEFAULT_MAX_ELL} reproduces the "
-                               f"load_sim support")
-    parser.add_argument("--stability", action = "store_true",
-                        help = "also recompute at 2x the step size and report the drift "
-                               "(meaningless with --delensed_covariance, whose steps are "
-                               "fixed by the file)")
+    parser.add_argument("--camb_lmax", type = int, default = CAMB_LMAX,
+                        help = "how far to run CAMB")
     args = parser.parse_args()
+    if args.delensed_covariance is None:
+        parser.error("--delensed_covariance is required")
+
     is_sampled = {name: name in args.params for name in PARAM_ORDER}
-    t_block = args.t_block
-    if t_block is None:
-        t_block = "measured" if args.delensed_covariance else DEFAULT_T_BLOCK
-
-    box = dict(nphi_source = args.nphi_source, phi_noise = args.phi_noise,
-               qe_response = args.qe_response, t_block = t_block,
-               delensed_covariance = args.delensed_covariance,
-               l_knee = args.l_knee, beam_fwhm = args.beam_fwhm, camb_lmax = args.camb_lmax)
-    names, steps, blocks_fid, blocks_plus, blocks_minus, description = covariance_stencil(
-        args.nside, args.theta_pix, args.noise, is_sampled, GROUND_TRUTH, **box)
-    fisher = fisher_from_blocks(blocks_fid, blocks_plus, blocks_minus, steps, args.nside)
+    include_bb = not args.no_bb
+    fisher, names = forecast(args.nside, args.theta_pix, args.noise, is_sampled, GROUND_TRUTH,
+                             args.delensed_covariance, pol = args.pol,
+                             qe_filter = args.qe_filter, phi_noise = args.phi_noise,
+                             include_bb = include_bb, l_knee = args.l_knee,
+                             beam_fwhm = args.beam_fwhm, camb_lmax = args.camb_lmax)
     covariance = covariance_from_fisher(fisher, names)
-    label = f"N_phi {args.nphi_source}, {t_block} T"
-    report_sigmas(covariance, names, label)
+    label = nphi_label(args.qe_filter, args.phi_noise)
+    title = f"pol {args.pol}, N_phi {label}"
+    report_sigmas(covariance, names, title)
 
-    if args.stability:
-        def forecast_at_steps(step_fracs):
-            return forecast(args.nside, args.theta_pix, args.noise, is_sampled, GROUND_TRUTH,
-                            step_fracs = step_fracs, verbose = False, **box)
-        step_stability(forecast_at_steps)
-
-    subtitle = (f"{label}  |  nside {args.nside}, {args.theta_pix:g}', "
-                f"{args.noise:g} uK-arcmin\n"
-                r"$F_{ij} = \frac{1}{2}\sum_k w_k\,\partial_i\ln C_k\,\partial_j\ln C_k$")
+    subtitle = (f"{title}  |  nside {args.nside}, {args.theta_pix:g}', "
+                f"{args.noise:g} uK-arcmin")
     config = dict(nside = args.nside, theta_pix = args.theta_pix, noise_level = args.noise,
-                  l_knee = args.l_knee, beam_fwhm = args.beam_fwhm,
-                  steps = np.asarray(steps, dtype = float),
-                  step_fracs = np.array([step / PARAM_SIGMA[name]
-                                         for name, step in zip(names, steps)]),
-                  t_block = t_block, delensed_covariance = args.delensed_covariance or "",
-                  camb_lmax = args.camb_lmax or 0, **description)
+                  l_knee = args.l_knee, beam_fwhm = args.beam_fwhm, pol = args.pol,
+                  include_bb = include_bb, qe_filter = args.qe_filter,
+                  phi_noise = args.phi_noise or "",
+                  delensed_covariance = args.delensed_covariance, camb_lmax = args.camb_lmax)
     save_outputs(fisher, covariance, names,
-                 f"_{args.nphi_source}_{t_block}_{args.noise}_uk", subtitle,
-                 config)
+                 forecast_file_suffix(args.pol, label, args.noise), subtitle, config)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,8 @@ cmb_lensing/map_joint_phi_noise.py.
 import argparse
 import os
 import numpy as np
-from cmb_lensing.map_joint_phi_noise import measure_phi_noise
+from cmb_lensing.map_joint_phi_noise import measure_phi_noise, DEFAULT_MAP_JOINT_STEPS
+from cmb_lensing.camb_spectra import POLS, DEFAULT_POL
 from cmb_lensing.constants import GROUND_TRUTH, PARAM_ORDER
 
 parser = argparse.ArgumentParser()
@@ -20,13 +21,15 @@ parser.add_argument("--nside", type = int, required = True)
 parser.add_argument("--theta_pix", type = float, required = True)
 parser.add_argument("--noise_level", type = float, required = True)
 parser.add_argument("--l_knee", type = float, default = 0.0)
-parser.add_argument("--map_joint_steps", type = int, default = 30)
+parser.add_argument("--map_joint_steps", type = int, default = DEFAULT_MAP_JOINT_STEPS)
 parser.add_argument("--out_dir", type = str, required = True)
+parser.add_argument("--pol", choices = POLS, default = DEFAULT_POL)
 args = parser.parse_args()
 
 os.makedirs(args.out_dir, exist_ok = True)
 result = measure_phi_noise(args.nside, args.theta_pix, args.noise_level, args.map_seed,
-                           l_knee = args.l_knee, map_joint_steps = args.map_joint_steps)
+                           l_knee = args.l_knee, map_joint_steps = args.map_joint_steps,
+                           pol = args.pol)
 
 out_path = os.path.join(args.out_dir, f"map_joint_phi_noise_{args.realization_index:04d}.npz")
 np.savez(out_path,
@@ -37,6 +40,7 @@ np.savez(out_path,
          noise_level = args.noise_level,
          l_knee = args.l_knee,
          map_joint_steps = args.map_joint_steps,
+         pol = args.pol,
          params = np.array([GROUND_TRUTH[name] for name in PARAM_ORDER]),
          param_names = np.array(PARAM_ORDER),
          **result)

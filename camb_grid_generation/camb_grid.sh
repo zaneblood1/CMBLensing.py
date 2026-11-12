@@ -21,8 +21,7 @@ mnu=${mnu:-0.06} #pinned by prior, not gridded
 k_pivot=${k_pivot:-0.05}
 alens=${alens:-1}
 
-#CAMB accuracy. Defaults (all boosts = 1) match the existing 1D caches and load_sim's
-#default behavior
+#CAMB accuracy. Defaults (all boosts = 1) match load_sim's default behavior
 accuracy_boost=${accuracy_boost:-1}
 l_sample_boost=${l_sample_boost:-1}
 l_accuracy_boost=${l_accuracy_boost:-1}
@@ -30,11 +29,10 @@ l_accuracy_boost=${l_accuracy_boost:-1}
 #name of the output folder shared by every job, created inside this folder
 out_dir_name=${out_dir_name:-multi_param_CAMB_grid}
 
-#Grid ranges. logA / ns / ombh2 / omch2 use the same -5 sigma to +5 sigma endpoints as
-#sample_lcdm.sh so the existing 1D caches stay a valid check along each axis. H0 replaces
-#theta_MC_100 because the grid has to be rectangular: theta is derived from H0, ombh2 and
-#omch2 together, so a rectangular theta box has corners CAMB cannot solve (the 1D cache
-#already loses 8 of its 50 nodes to exactly that). H0 in [25, 130] covers
+#Grid ranges. logA / ns / ombh2 / omch2 cover the -5 sigma to +5 sigma box of sample_lcdm.sh
+#(omch2 reaches further down). H0 replaces theta_MC_100 because the grid has to be
+#rectangular: theta is derived from H0, ombh2 and omch2 together, so a rectangular theta
+#box has corners CAMB cannot solve. H0 in [25, 130] covers
 #theta_MC_100 in [0.8804, 1.1899] at the fiducial ombh2 / omch2
 h0_min=${h0_min:-25}
 h0_max=${h0_max:-130}
@@ -47,11 +45,12 @@ ombh2_max=${ombh2_max:-0.024389}
 omch2_min=${omch2_min:-0.079704}
 omch2_max=${omch2_max:-0.155541}
 
-#Nodes per axis, set by measuring the cubic-spline error on the existing 1D caches with
-#CAMB's own numerical noise projected out. lnCl^TT is very nearly analytic in logA and ns
+#Nodes per axis, set by measuring the cubic-spline error along 1D sweeps of each parameter
+#(50 CAMB nodes, the others at the fiducial values) with CAMB's own numerical noise
+#projected out. lnCl^TT is very nearly analytic in logA and ns
 #(residual ~1e-13), so those axes converge at 4-5 nodes. H0 is the only expensive axis
 #because moving it shifts the acoustic peaks in ell: 81 linearly spaced nodes hold the
-#theta spacing at 0.0053 across the whole box, which the 1D theta cache says is what
+#theta spacing at 0.0053 across the whole box, which the 1D theta sweep says is what
 #~1e-3 lnCl costs. Total = 81 x 5 x 5 x 5 x 7 = 70875 CAMB calls in 875 jobs
 h0_nodes=${h0_nodes:-81}
 log_a_nodes=${log_a_nodes:-5}

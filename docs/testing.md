@@ -10,7 +10,7 @@ Most tests are A/B comparisons against CMBLensing.jl: for the same inputs, the P
 | `test_wiener_filter.py`, `test_map_joint.py` | the Wiener filter and `map_joint` |
 | `test_camb_grid.py` | the 5D CAMB grid vs direct CAMB (skipped without the grid) |
 
-The sampler, the forecast, the 1D spline caches and the measurement modules are not tested.
+The sampler, the forecast and the measurement modules are not tested.
 
 ## Running
 

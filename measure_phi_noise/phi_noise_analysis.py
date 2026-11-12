@@ -5,8 +5,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from cmb_lensing.util import gen_ell_grid
 from cmb_lensing.constants import GROUND_TRUTH, DEFAULT_ELL_CUTOFF
-from cmb_lensing.fisher_forecast import (fourier_weights, camb_cls_at_params, iterative_delensing,
-                                         qe_noise_matrix, prior_covariances)
+from cmb_lensing.fisher_forecast import fourier_weights
+from cmb_lensing.camb_spectra import camb_cls_at_params, covar_from_cl, qe_noise_matrix
 from cmb_lensing.delensed_covariance import band_edges
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,24 +69,19 @@ def band_median_jackknife(nphi_leave_one_out, nphi_qe, use, index, n_band):
 
 def qe_noise_matrices(params, nside, theta_pix, noise_level, l_knee, beam_fwhm):
     """(C_phi, [(label, color, linestyle, N_phi^QE matrix)]) on the rfft grid from direct CAMB,
-    all with the unlensed response and undivided by NPHI_FAC: the box QE with the lensed C_TT
-    in its filter (the reference every ratio is taken against, first), the iterated-delensing
-    fixed point (fisher_forecast's qe_delensed filter) and the unlensed C_TT in the filter
-    (qe_unlensed)."""
+    for temperature data, all with the unlensed response and undivided by NPHI_FAC: the box
+    QE with the lensed C_TT in its filter (the reference every ratio is taken against,
+    first) and with the unlensed C_TT in its filter."""
     ell_grid, pix_width = gen_ell_grid(nside, theta_pix)
     cls = camb_cls_at_params(params)
-    delensed_tt = iterative_delensing(params, cls, nside, pix_width, ell_grid, noise_level,
-                                      l_knee, beam_fwhm, DEFAULT_ELL_CUTOFF, verbose = False,
-                                      qe_response = "unlensed")[2]
     matrices = []
-    for label, color, linestyle, filter_tt in (
-            ("QE: lensed filter, unlensed response", "C3", "--", cls["total_TT"]),
-            ("QE: delensed filter, unlensed response", "C4", "-.", delensed_tt),
-            ("QE: unlensed filter, unlensed response", "C5", "-.", cls["scalar_TT"])):
+    for label, color, linestyle, qe_filter in (
+            ("QE: lensed filter, unlensed response", "C3", "--", "lensed"),
+            ("QE: unlensed filter, unlensed response", "C5", "-.", "unlensed")):
         matrices.append((label, color, linestyle, np.asarray(qe_noise_matrix(
             cls, nside, pix_width, ell_grid, noise_level, l_knee, beam_fwhm, DEFAULT_ELL_CUTOFF,
-            filter_tt = filter_tt, qe_response = "unlensed"))))
-    cphi = np.asarray(prior_covariances(params, nside, pix_width, ell_grid)[1])
+            qe_filter = qe_filter))))
+    cphi = np.asarray(covar_from_cl(nside, pix_width, ell_grid, cls["phi"]))
     return cphi, matrices
 
 def plot_phi_noise_vs_qe(nside, theta_pix, noise, phi_noise_files, out_dir):

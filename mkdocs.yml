@@ -42,6 +42,7 @@ nav:
   - Tutorials:
       - MAP Joint: map_joint_tutorial.ipynb
       - Sample Joint: sample_joint_tutorial.ipynb
+      - Chain Analysis: chain_analysis_tutorial.ipynb
   - Pipelines:
       - Building the CAMB Grid: pipelines/camb-grid.md
       - LCDM Sampling on the HPC: pipelines/lcdm-chains.md
@@ -57,6 +58,7 @@ nav:
       - LCDM Sampling: api/sample-joint.md
       - Fields, Operators and Data Sets: api/fields.md
       - Fisher Forecast: api/fisher-forecast.md
+      - Chain Analysis: api/chain-analysis.md
   - Testing: testing.md
 
 plugins:

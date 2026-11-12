@@ -14,7 +14,7 @@ Open a [GitHub issue](https://github.com/zaneblood1/CMBLensing.py/issues) that i
 
 - what you ran: ideally a short, self-contained script that reproduces the problem
 - what you expected to happen and what happened instead, with the full error traceback if there is one
-- the run configuration: polarization mode (`"I"`, `"P"` or `"IP"`), `nside`, `theta_pix`, noise level, and which Cl source the sampler used (the 5D CAMB grid or the 1D splines)
+- the run configuration: polarization mode (`"I"`, `"P"` or `"IP"`), `nside`, `theta_pix`, noise level, and whether the 5D CAMB grid was the downloaded one or one you rebuilt
 - your environment: operating system, Python version, the versions of `jax`, `jaxlib` and `camb`, and whether you ran on CPU or GPU
 
 For numerical problems (a result that looks wrong rather than a crash), a plot or the numbers you compared against are very helpful.

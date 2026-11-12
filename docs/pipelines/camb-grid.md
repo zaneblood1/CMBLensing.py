@@ -24,12 +24,3 @@ A misspelled name is not an error: it is simply ignored and the default is used.
 Point `merge_camb_grid.py --grid_dir` at the folder you named.
 
 Regenerating the grid on an cluster will result in `81 x 5 x 5 x 5 x 7 = 70_875` CAMB calls in total. The jobs need only numpy and CAMB. The merge splines one spectrum at a time, in ell chunks, so the tables are never all in memory. Move the result to `camb_splines/camb_grid_spline.npz` (a file already there is used as is, never re-downloaded). If the new grid should replace the shared one, upload it to the [Hugging Face dataset](https://huggingface.co/datasets/zaneblood1/5D_LCDM_CAMB_Grid_Spline) and tell everyone to delete their local copy.
-
-## The 1D caches
-
-```bash
-python camb_grid_generation/precompute_camb_1d.py <theta_MC_100|logA|ns|ombh2|omch2|all> [--test]
-```
-
-If you only wish to sample one parameter at a time, you can just create a single 1-D spline. Precomputed versions of these splines are hosted on the Hugging Face dataset with the 5D grid and downloaded on first use. The above code sweeps one parameter over `PARAM_BOUNDS` (50 nodes) with the others held at `GROUND_TRUTH` and writes `camb_splines/camb_<param>_grid.npz`. The shipped caches were made with CAMB 2.0.0.
-

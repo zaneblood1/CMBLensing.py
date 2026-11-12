@@ -22,4 +22,5 @@ python3 "$SLURM_SUBMIT_DIR/get_map_joint_phi_noise_1_realization.py" \
     --noise_level "$5" \
     --l_knee "$6" \
     --map_joint_steps "$7" \
-    --out_dir "$8"
+    --out_dir "$8" \
+    --pol "$9"

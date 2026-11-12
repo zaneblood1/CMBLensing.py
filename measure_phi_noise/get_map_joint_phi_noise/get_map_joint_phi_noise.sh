@@ -31,6 +31,9 @@ theta_pix=${theta_pix:-2.5}
 noise_level=${noise_level:-5}
 l_knee=${l_knee:-0}
 
+#the data's polarization: I (temperature), P (polarization) or IP (both)
+pol=${pol:-I}
+
 #map_joint iterations for the phi reconstruction. 30 is the map_joint default.
 map_joint_steps=${map_joint_steps:-30}
 
@@ -50,6 +53,7 @@ nside=$nside
 theta_pix=$theta_pix
 noise_level=$noise_level
 l_knee=$l_knee
+pol=$pol
 map_joint_steps=$map_joint_steps
 num_realizations=$num_realizations
 seed_prefix=$seed_prefix
@@ -59,5 +63,5 @@ EOF
 for ((m=0; m<num_realizations; m++)); do
     map_seed=$((seed_prefix + m))
     submit_throttled get_map_joint_phi_noise_1_realization.sh "$m" "$map_seed" "$nside" "$theta_pix" \
-        "$noise_level" "$l_knee" "$map_joint_steps" "$out_dir"
+        "$noise_level" "$l_knee" "$map_joint_steps" "$out_dir" "$pol"
 done

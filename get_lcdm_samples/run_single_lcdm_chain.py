@@ -101,7 +101,7 @@ advanced_logging["plot_lcdm_sigmas"] = False
 
 #Plug the ground truth into sample_joint() to try and learn the LCDM distributions. The chains
 #go to the run's folder (sample_lcdm.sh's out_dir, lcdm_sampler_data/<experiment>/), where
-#chain_analysis.py reads them; sample_joint appends to files there but does not create it
+#cmb_lensing/chain_analysis.py reads them; sample_joint appends to files there but does not create it
 hpc_path = args.out_dir + os.sep
 os.makedirs(hpc_path, exist_ok = True)
 params, phi, sub_key = sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sample, args.noise_level, 

@@ -1,9 +1,7 @@
 """Evaluate the 5D CAMB grid spline at an arbitrary LCDM parameter vector.
 
-This is the five-parameter counterpart of camb_grid_generation/precompute_camb_1d.py,
-which puts a CubicSpline through lnCl along one parameter with the other four pinned.
-Here lnCl is known on a full tensor-product grid over (H0, logA, ns, ombh2, omch2), and
-the interpolant is the tensor-product cubic spline through it.
+lnCl is known on a full tensor-product grid over (H0, logA, ns, ombh2, omch2), and the
+interpolant is the tensor-product cubic spline through it.
 
 How the spline is built (spline_coefficients). A tensor-product spline is separable:
     s(x0, ..., x4) = sum_{i0..i4} c[i0, ..., i4] B_i0(x0) ... B_i4(x4)
