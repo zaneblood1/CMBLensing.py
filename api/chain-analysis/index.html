@@ -1,0 +1,2799 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="JAX port of CMBLensing.jl - CMB lensing simulation, MAP reconstruction and LCDM sampling">
+      
+      
+      
+        <link rel="canonical" href="https://zaneblood1.github.io/CMBLensing.py/api/chain-analysis/">
+      
+      
+        <link rel="prev" href="../fisher-forecast/">
+      
+      
+        <link rel="next" href="../../testing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Chain Analysis - CMBLensing.py</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#chain-analysis" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="CMBLensing.py" class="md-header__button md-logo" aria-label="CMBLensing.py" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CMBLensing.py
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Chain Analysis
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/zaneblood1/CMBLensing.py" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zaneblood1/CMBLensing.py
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="CMBLensing.py" class="md-nav__button md-logo" aria-label="CMBLensing.py" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    CMBLensing.py
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/zaneblood1/CMBLensing.py" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zaneblood1/CMBLensing.py
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/camb-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The CAMB Grid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/hpc-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Core concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fields and Operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/load-sim/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/map-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/sample-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../map_joint_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Joint
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sample_joint_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Joint
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chain_analysis_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain Analysis Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipelines
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Pipelines
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/camb-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building the CAMB Grid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/lcdm-chains/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling on the HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/map-joint-phi-noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Joint Phi Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/sampler-phi-noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampler Phi Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/delensed-covariance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Delensed Covariances
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/chain-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fisher-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fisher Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../map-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sample-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fields, Operators and Data Sets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fisher-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fisher Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain Analysis
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.chain_analysis.main" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        main
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.chain_analysis.load_chains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_chains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_avg_covariance_matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.chain_analysis.get_forecasted_covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_forecasted_covariance
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.chain_analysis.main" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        main
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.chain_analysis.load_chains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_chains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_avg_covariance_matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.chain_analysis.get_forecasted_covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_forecasted_covariance
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="chain-analysis">Chain Analysis<a class="headerlink" href="#chain-analysis" title="Permanent link">&para;</a></h1>
+<p>See <a href="../../pipelines/chain-analysis/">Chain Analysis</a> for the command-line interface and the <a href="../../chain_analysis_tutorial/">tutorial</a> for a worked example.</p>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="cmb_lensing.chain_analysis.main" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">cmb_lensing.chain_analysis.main</span>
+
+
+<a href="#cmb_lensing.chain_analysis.main" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">main</span><span class="p">(</span><span class="n">chain_dir</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="n">DEFAULT_NSIDE</span><span class="p">,</span> <span class="n">theta_pix</span><span class="o">=</span><span class="n">DEFAULT_THETA_PIX</span><span class="p">,</span> <span class="n">noise</span><span class="o">=</span><span class="n">DEFAULT_NOISE</span><span class="p">,</span> <span class="n">pol</span><span class="o">=</span><span class="n">DEFAULT_POL</span><span class="p">,</span> <span class="n">burn_in</span><span class="o">=</span><span class="n">DEFAULT_BURN_IN</span><span class="p">,</span> <span class="n">ground_truth</span><span class="o">=</span><span class="n">GROUND_TRUTH</span><span class="p">,</span> <span class="n">should_thin</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">out_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">run_fisher</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">delensed_covariance</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">qe_filter</span><span class="o">=</span><span class="n">DEFAULT_QE_FILTER</span><span class="p">,</span> <span class="n">phi_noise</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_bb</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">camb_lmax</span><span class="o">=</span><span class="n">CAMB_LMAX</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Analyse a directory of LCDM chains: the MCMC plots and, optionally, the comparison
+with a Fisher forecast.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>chain_dir</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>directory of sample_joint's history files,
+        <code>&lt;param&gt;_map_&lt;seed&gt;_chain_&lt;index&gt;_history.txt</code>; the sampled parameters,
+        maps and sub-chains are read off the file names</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>nside, theta_pix, noise</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the box the chains ran on (pixels per side, arcmin,
+        uK-arcmin); they label the triangle plot and set the forecast's box</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>pol</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>"I", "P" or "IP", the data the chains saw; it labels the triangle plot
+        and is the data the forecast models</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.camb_spectra.DEFAULT_POL">DEFAULT_POL</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>burn_in</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>sweeps removed from the start of every sub-chain</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.chain_analysis.DEFAULT_BURN_IN">DEFAULT_BURN_IN</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ground_truth</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>{param_name: value} the maps were simulated at (all five parameters)</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.GROUND_TRUTH">GROUND_TRUTH</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>should_thin</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>thin each sub-chain by its integrated autocorrelation time before the
+        per-parameter plots (the covariance always uses the unthinned chains)</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>out_dir</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>where the plots go (default <code>&lt;chain_dir&gt;/chain_analysis_output</code>)</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>run_fisher</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>also run the Fisher forecast for data of this <code>pol</code> and compare it with
+        the chains. Needs <code>delensed_covariance</code></p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>delensed_covariance</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>a merged delensed_covariance.npz measured at this box, noise
+        level and <code>pol</code>: the forecast's field blocks</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>qe_filter</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>"unlensed" (default) or "lensed": the spectra in the filter of the QE N0
+        the forecast uses as its phi noise (the response is always unlensed)</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.camb_spectra.DEFAULT_QE_FILTER">DEFAULT_QE_FILTER</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>phi_noise</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>a merged map_joint_phi_noise.npz / sampler_phi_noise.npz whose <code>nphi</code>
+        replaces the QE N0</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>include_bb</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>for "P" / "IP" chains, whether the forecast counts the delensed BB block</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>camb_lmax</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>how far the forecast runs CAMB</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.CAMB_LMAX">CAMB_LMAX</span></code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A dict: <code>param_names</code>, <code>map_seeds</code>, <code>chains</code> (load_chains' output), <code>summaries</code></p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(per parameter: the product mean / std / z-score with their errors, the average</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>single-map std, R-hat per map and the acceptance rate), <code>measured_covariance</code> with</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>measured_covariance_error</code> and <code>measured_sigma_error</code> (delete-one-map jackknife),</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>forecast_covariance</code> (None without run_fisher) and <code>out_dir</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>cmb_lensing/chain_analysis.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-802">802</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-803">803</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-804">804</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-805">805</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-806">806</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-807">807</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-808">808</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-809">809</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-810">810</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-811">811</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-812">812</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-813">813</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-814">814</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-815">815</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-816">816</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-817">817</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-818">818</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-819">819</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-820">820</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-821">821</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-822">822</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-823">823</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-824">824</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-825">825</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-826">826</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-827">827</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-828">828</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-829">829</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-830">830</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-831">831</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-832">832</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-833">833</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-834">834</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-835">835</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-836">836</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-837">837</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-838">838</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-839">839</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-840">840</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-841">841</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-842">842</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-843">843</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-844">844</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-845">845</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-846">846</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-847">847</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-848">848</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-849">849</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-850">850</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-851">851</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-852">852</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-853">853</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-854">854</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-855">855</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-856">856</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-857">857</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-858">858</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-859">859</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-860">860</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-861">861</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-862">862</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-863">863</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-864">864</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-865">865</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-866">866</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-867">867</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-868">868</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-869">869</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-870">870</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-871">871</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-872">872</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-873">873</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-874">874</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-875">875</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-876">876</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-877">877</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-878">878</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.main--source--__codelineno-0-879">879</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-802" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-802"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">(</span><span class="n">chain_dir</span><span class="p">,</span> <span class="n">nside</span> <span class="o">=</span> <span class="n">DEFAULT_NSIDE</span><span class="p">,</span> <span class="n">theta_pix</span> <span class="o">=</span> <span class="n">DEFAULT_THETA_PIX</span><span class="p">,</span> <span class="n">noise</span> <span class="o">=</span> <span class="n">DEFAULT_NOISE</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-803" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-803"></a>         <span class="n">pol</span> <span class="o">=</span> <span class="n">DEFAULT_POL</span><span class="p">,</span> <span class="n">burn_in</span> <span class="o">=</span> <span class="n">DEFAULT_BURN_IN</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-804" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-804"></a>         <span class="n">ground_truth</span> <span class="o">=</span> <span class="n">GROUND_TRUTH</span><span class="p">,</span> <span class="n">should_thin</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">out_dir</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">run_fisher</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-805" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-805"></a>         <span class="n">delensed_covariance</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">qe_filter</span> <span class="o">=</span> <span class="n">DEFAULT_QE_FILTER</span><span class="p">,</span> <span class="n">phi_noise</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-806" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-806"></a>         <span class="n">include_bb</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">camb_lmax</span> <span class="o">=</span> <span class="n">CAMB_LMAX</span><span class="p">):</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-807" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-807"></a><span class="w">    </span><span class="sd">"""Analyse a directory of LCDM chains: the MCMC plots and, optionally, the comparison</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-808" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-808"></a><span class="sd">    with a Fisher forecast.</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-809" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-809"></a>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-810" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-810"></a><span class="sd">    Args:</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-811" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-811"></a><span class="sd">        chain_dir:  directory of sample_joint's history files,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-812" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-812"></a><span class="sd">                    `&lt;param&gt;_map_&lt;seed&gt;_chain_&lt;index&gt;_history.txt`; the sampled parameters,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-813" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-813"></a><span class="sd">                    maps and sub-chains are read off the file names</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-814" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-814"></a><span class="sd">        nside, theta_pix, noise: the box the chains ran on (pixels per side, arcmin,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-815" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-815"></a><span class="sd">                    uK-arcmin); they label the triangle plot and set the forecast's box</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-816" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-816"></a><span class="sd">        pol:        "I", "P" or "IP", the data the chains saw; it labels the triangle plot</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-817" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-817"></a><span class="sd">                    and is the data the forecast models</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-818" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-818"></a><span class="sd">        burn_in:    sweeps removed from the start of every sub-chain</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-819" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-819"></a><span class="sd">        ground_truth: {param_name: value} the maps were simulated at (all five parameters)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-820" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-820"></a><span class="sd">        should_thin: thin each sub-chain by its integrated autocorrelation time before the</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-821" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-821"></a><span class="sd">                    per-parameter plots (the covariance always uses the unthinned chains)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-822" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-822"></a><span class="sd">        out_dir:    where the plots go (default `&lt;chain_dir&gt;/chain_analysis_output`)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-823" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-823"></a><span class="sd">        run_fisher: also run the Fisher forecast for data of this `pol` and compare it with</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-824" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-824"></a><span class="sd">                    the chains. Needs `delensed_covariance`</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-825" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-825"></a><span class="sd">        delensed_covariance: a merged delensed_covariance.npz measured at this box, noise</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-826" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-826"></a><span class="sd">                    level and `pol`: the forecast's field blocks</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-827" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-827"></a><span class="sd">        qe_filter:  "unlensed" (default) or "lensed": the spectra in the filter of the QE N0</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-828" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-828"></a><span class="sd">                    the forecast uses as its phi noise (the response is always unlensed)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-829" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-829"></a><span class="sd">        phi_noise:  a merged map_joint_phi_noise.npz / sampler_phi_noise.npz whose `nphi`</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-830" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-830"></a><span class="sd">                    replaces the QE N0</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-831" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-831"></a><span class="sd">        include_bb: for "P" / "IP" chains, whether the forecast counts the delensed BB block</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-832" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-832"></a><span class="sd">        camb_lmax:  how far the forecast runs CAMB</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-833" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-833"></a>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-834" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-834"></a><span class="sd">    Returns:</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-835" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-835"></a><span class="sd">        A dict: `param_names`, `map_seeds`, `chains` (load_chains' output), `summaries`</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-836" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-836"></a><span class="sd">        (per parameter: the product mean / std / z-score with their errors, the average</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-837" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-837"></a><span class="sd">        single-map std, R-hat per map and the acceptance rate), `measured_covariance` with</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-838" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-838"></a><span class="sd">        `measured_covariance_error` and `measured_sigma_error` (delete-one-map jackknife),</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-839" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-839"></a><span class="sd">        `forecast_covariance` (None without run_fisher) and `out_dir`.</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-840" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-840"></a><span class="sd">    """</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-841" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-841"></a>    <span class="c1">#checked before the chains are analysed, not minutes later inside the forecast</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-842" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-842"></a>    <span class="k">if</span> <span class="n">run_fisher</span> <span class="ow">and</span> <span class="n">delensed_covariance</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-843" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-843"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"run_fisher needs delensed_covariance, a merged "</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-844" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-844"></a>                         <span class="s2">"delensed_covariance.npz: there is no analytic delensing fallback"</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-845" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-845"></a>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-846" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-846"></a>    <span class="k">if</span> <span class="n">out_dir</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-847" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-847"></a>        <span class="n">out_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">chain_dir</span><span class="p">,</span> <span class="n">OUTPUT_DIR_NAME</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-848" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-848"></a>    <span class="n">joint_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">JOINT_DIR_NAME</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-849" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-849"></a>    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">joint_dir</span><span class="p">,</span> <span class="n">exist_ok</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-850" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-850"></a>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-851" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-851"></a>    <span class="n">chains</span><span class="p">,</span> <span class="n">map_seeds</span> <span class="o">=</span> <span class="n">load_chains</span><span class="p">(</span><span class="n">chain_dir</span><span class="p">,</span> <span class="n">burn_in</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-852" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-852"></a>    <span class="n">param_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">chains</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-853" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-853"></a>    <span class="n">summaries</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-854" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-854"></a>    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">param_names</span><span class="p">:</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-855" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-855"></a>        <span class="n">summaries</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">per_param_analysis</span><span class="p">(</span><span class="n">chains</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">ground_truth</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">name</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-856" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-856"></a>                                             <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()),</span> <span class="n">should_thin</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-857" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-857"></a>    <span class="n">plot_z_score_table</span><span class="p">(</span><span class="n">summaries</span><span class="p">,</span> <span class="n">ground_truth</span><span class="p">,</span> <span class="n">joint_dir</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-858" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-858"></a>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-859" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-859"></a>    <span class="n">forecast_cov_mat</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-860" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-860"></a>    <span class="n">forecast_name</span> <span class="o">=</span> <span class="s2">""</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-861" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-861"></a>    <span class="k">if</span> <span class="n">run_fisher</span><span class="p">:</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-862" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-862"></a>        <span class="n">forecast_cov_mat</span> <span class="o">=</span> <span class="n">get_forecasted_covariance</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">noise</span><span class="p">,</span> <span class="n">param_names</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-863" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-863"></a>                                                     <span class="n">delensed_covariance</span><span class="p">,</span> <span class="n">pol</span> <span class="o">=</span> <span class="n">pol</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-864" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-864"></a>                                                     <span class="n">qe_filter</span> <span class="o">=</span> <span class="n">qe_filter</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-865" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-865"></a>                                                     <span class="n">phi_noise</span> <span class="o">=</span> <span class="n">phi_noise</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-866" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-866"></a>                                                     <span class="n">include_bb</span> <span class="o">=</span> <span class="n">include_bb</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-867" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-867"></a>                                                     <span class="n">ground_truth</span> <span class="o">=</span> <span class="n">ground_truth</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-868" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-868"></a>                                                     <span class="n">camb_lmax</span> <span class="o">=</span> <span class="n">camb_lmax</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-869" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-869"></a>        <span class="n">forecast_name</span> <span class="o">=</span> <span class="n">forecast_title</span><span class="p">(</span><span class="n">delensed_covariance</span><span class="p">,</span> <span class="n">qe_filter</span><span class="p">,</span> <span class="n">phi_noise</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-870" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-870"></a>    <span class="n">measured_cov_mat</span><span class="p">,</span> <span class="n">measured_cov_sigma</span><span class="p">,</span> <span class="n">measured_sigma_err</span> <span class="o">=</span> <span class="n">joint_param_analysis</span><span class="p">(</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-871" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-871"></a>        <span class="n">chains</span><span class="p">,</span> <span class="n">joint_dir</span><span class="p">,</span> <span class="n">forecast_cov_mat</span> <span class="o">=</span> <span class="n">forecast_cov_mat</span><span class="p">,</span> <span class="n">forecast_name</span> <span class="o">=</span> <span class="n">forecast_name</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-872" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-872"></a>        <span class="n">nside</span> <span class="o">=</span> <span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span> <span class="o">=</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">noise</span> <span class="o">=</span> <span class="n">noise</span><span class="p">,</span> <span class="n">pol</span> <span class="o">=</span> <span class="n">pol</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-873" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-873"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Plots written to </span><span class="si">{</span><span class="n">out_dir</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-874" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-874"></a>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-875" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-875"></a>    <span class="k">return</span> <span class="p">{</span><span class="s2">"param_names"</span><span class="p">:</span> <span class="n">param_names</span><span class="p">,</span> <span class="s2">"map_seeds"</span><span class="p">:</span> <span class="n">map_seeds</span><span class="p">,</span> <span class="s2">"chains"</span><span class="p">:</span> <span class="n">chains</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-876" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-876"></a>            <span class="s2">"summaries"</span><span class="p">:</span> <span class="n">summaries</span><span class="p">,</span> <span class="s2">"measured_covariance"</span><span class="p">:</span> <span class="n">measured_cov_mat</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-877" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-877"></a>            <span class="s2">"measured_covariance_error"</span><span class="p">:</span> <span class="n">measured_cov_sigma</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-878" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-878"></a>            <span class="s2">"measured_sigma_error"</span><span class="p">:</span> <span class="n">measured_sigma_err</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.main--source--__codelineno-0-879" name="cmb_lensing.chain_analysis.main--source--__codelineno-0-879"></a>            <span class="s2">"forecast_covariance"</span><span class="p">:</span> <span class="n">forecast_cov_mat</span><span class="p">,</span> <span class="s2">"out_dir"</span><span class="p">:</span> <span class="n">out_dir</span><span class="p">}</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="cmb_lensing.chain_analysis.load_chains" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">cmb_lensing.chain_analysis.load_chains</span>
+
+
+<a href="#cmb_lensing.chain_analysis.load_chains" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">load_chains</span><span class="p">(</span><span class="n">chain_dir</span><span class="p">,</span> <span class="n">burn_in</span><span class="o">=</span><span class="n">DEFAULT_BURN_IN</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Read every post-burn-in sub-chain in a directory of sample_joint history files.</p>
+<p>A sub-chain is kept when every parameter has its file. Its files are cut to their common
+length (they differ by a sweep when copied from a running job) BEFORE the burn-in is
+removed, so row k of every parameter is the same sweep; a sub-chain no longer than the
+burn-in is left out, and so is a map with no sub-chain left.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>chain_dir</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>directory holding <code>&lt;param&gt;_map_&lt;seed&gt;_chain_&lt;index&gt;_history.txt</code> files</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>burn_in</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>sweeps removed from the start of every sub-chain</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.chain_analysis.DEFAULT_BURN_IN">DEFAULT_BURN_IN</span></code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(chains, map_seeds) - <code>chains[param][map][sub_chain]</code> is a 1D array for every</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>GROUND_TRUTH parameter with files, in GROUND_TRUTH's order, with maps and sub-chains</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>in the same order for every parameter; map_seeds lists the kept maps.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>cmb_lensing/chain_analysis.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-120">120</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-121">121</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-122">122</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-123">123</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-124">124</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-125">125</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-126">126</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-127">127</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-128">128</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-129">129</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-130">130</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-131">131</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-132">132</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-133">133</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-134">134</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-135">135</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-136">136</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-137">137</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-138">138</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-139">139</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-140">140</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-141">141</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-142">142</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-143">143</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-144">144</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-145">145</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-146">146</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-147">147</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-148">148</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-149">149</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-150">150</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-151">151</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-152">152</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-153">153</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-154">154</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-155">155</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-156">156</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-157">157</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-158">158</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-159">159</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-160">160</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-162">162</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-120" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-120"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_chains</span><span class="p">(</span><span class="n">chain_dir</span><span class="p">,</span> <span class="n">burn_in</span> <span class="o">=</span> <span class="n">DEFAULT_BURN_IN</span><span class="p">):</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-121" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-121"></a><span class="w">    </span><span class="sd">"""Read every post-burn-in sub-chain in a directory of sample_joint history files.</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-122" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-122"></a>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-123" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-123"></a><span class="sd">    A sub-chain is kept when every parameter has its file. Its files are cut to their common</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-124" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-124"></a><span class="sd">    length (they differ by a sweep when copied from a running job) BEFORE the burn-in is</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-125" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-125"></a><span class="sd">    removed, so row k of every parameter is the same sweep; a sub-chain no longer than the</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-126" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-126"></a><span class="sd">    burn-in is left out, and so is a map with no sub-chain left.</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-127" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-127"></a>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-128" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-128"></a><span class="sd">    Args:</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-129" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-129"></a><span class="sd">        chain_dir: directory holding `&lt;param&gt;_map_&lt;seed&gt;_chain_&lt;index&gt;_history.txt` files</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-130" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-130"></a><span class="sd">        burn_in:   sweeps removed from the start of every sub-chain</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-131" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-131"></a>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-132" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-132"></a><span class="sd">    Returns:</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-133" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-133"></a><span class="sd">        (chains, map_seeds) - `chains[param][map][sub_chain]` is a 1D array for every</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-134" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-134"></a><span class="sd">        GROUND_TRUTH parameter with files, in GROUND_TRUTH's order, with maps and sub-chains</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-135" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-135"></a><span class="sd">        in the same order for every parameter; map_seeds lists the kept maps.</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-136" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-136"></a><span class="sd">    """</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-137" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-137"></a>    <span class="n">files</span> <span class="o">=</span> <span class="n">find_history_files</span><span class="p">(</span><span class="n">chain_dir</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-138" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-138"></a>    <span class="c1">#every sampled parameter, in GROUND_TRUTH's (= PARAM_ORDER's) order</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-139" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-139"></a>    <span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">GROUND_TRUTH</span> <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">files</span><span class="p">]</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-140" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-140"></a>    <span class="n">shared_keys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="nb">set</span><span class="p">(</span><span class="n">files</span><span class="p">[</span><span class="n">name</span><span class="p">])</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">params</span><span class="p">]))</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-141" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-141"></a>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-142" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-142"></a>    <span class="n">chains</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="p">[]</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">params</span><span class="p">}</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-143" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-143"></a>    <span class="n">map_seeds</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-144" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-144"></a>    <span class="n">num_discarded</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-145" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-145"></a>    <span class="k">for</span> <span class="n">map_seed</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">({</span><span class="n">key</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">shared_keys</span><span class="p">}):</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-146" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-146"></a>        <span class="n">sub_chains</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="p">[]</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">params</span><span class="p">}</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-147" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-147"></a>        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">shared_keys</span> <span class="k">if</span> <span class="n">key</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">map_seed</span><span class="p">]:</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-148" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-148"></a>            <span class="n">histories</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="n">files</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="n">key</span><span class="p">]))</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">params</span><span class="p">]</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-149" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-149"></a>            <span class="n">common_length</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">history</span><span class="p">)</span> <span class="k">for</span> <span class="n">history</span> <span class="ow">in</span> <span class="n">histories</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-150" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-150"></a>            <span class="k">if</span> <span class="n">common_length</span> <span class="o">&lt;=</span> <span class="n">burn_in</span><span class="p">:</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-151" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-151"></a>                <span class="n">num_discarded</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-152" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-152"></a>                <span class="k">continue</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-153" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-153"></a>            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">history</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">histories</span><span class="p">):</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-154" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-154"></a>                <span class="n">sub_chains</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">history</span><span class="p">[</span><span class="n">burn_in</span><span class="p">:</span><span class="n">common_length</span><span class="p">])</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-155" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-155"></a>        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sub_chains</span><span class="p">[</span><span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-156" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-156"></a>            <span class="n">map_seeds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">map_seed</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-157" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-157"></a>            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-158" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-158"></a>                <span class="n">chains</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sub_chains</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-159" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-159"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Loaded </span><span class="si">{</span><span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sub_chains</span><span class="p">)</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">sub_chains</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">chains</span><span class="p">[</span><span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span><span class="si">}</span><span class="s2"> sub-chains of "</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-160" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-160"></a>          <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">map_seeds</span><span class="p">)</span><span class="si">}</span><span class="s2"> maps for </span><span class="si">{</span><span class="n">params</span><span class="si">}</span><span class="s2">; discarded </span><span class="si">{</span><span class="n">num_discarded</span><span class="si">}</span><span class="s2"> no longer than the "</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-161" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-161"></a>          <span class="sa">f</span><span class="s2">"burn-in of </span><span class="si">{</span><span class="n">burn_in</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-162" name="cmb_lensing.chain_analysis.load_chains--source--__codelineno-0-162"></a>    <span class="k">return</span> <span class="n">chains</span><span class="p">,</span> <span class="n">map_seeds</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="cmb_lensing.chain_analysis.get_avg_covariance_matrix" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">cmb_lensing.chain_analysis.get_avg_covariance_matrix</span>
+
+
+<a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_avg_covariance_matrix</span><span class="p">(</span><span class="n">chains</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Map-averaged posterior covariance of the sampled parameters, with its jackknife error.</p>
+<p><code>chains</code> is load_chains' dict, whose sub-chains line up row by row across parameters.
+Each map's sub-chains are concatenated and give one covariance matrix, and those are
+averaged over maps. Samples from different maps are never pooled: each map is a
+different data realization with its own posterior mean, so pooling would add the scatter
+of those means to the diagonal. The average is a single-realization posterior, which is
+what a Fisher forecast predicts.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>(avg_cov_mat, param_names, cov_err, sigma_err), the last two from measured_errors:</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the element-wise error of the averaged covariance and the error of each width</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>sqrt(C_ii).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>cmb_lensing/chain_analysis.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-472">472</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-473">473</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-474">474</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-475">475</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-476">476</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-477">477</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-478">478</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-479">479</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-480">480</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-481">481</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-482">482</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-483">483</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-484">484</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-485">485</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-486">486</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-487">487</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-488">488</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-489">489</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-490">490</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-491">491</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-492">492</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-493">493</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-494">494</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-495">495</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-472" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-472"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_avg_covariance_matrix</span><span class="p">(</span><span class="n">chains</span><span class="p">):</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-473" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-473"></a><span class="w">    </span><span class="sd">"""Map-averaged posterior covariance of the sampled parameters, with its jackknife error.</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-474" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-474"></a>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-475" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-475"></a><span class="sd">    `chains` is load_chains' dict, whose sub-chains line up row by row across parameters.</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-476" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-476"></a><span class="sd">    Each map's sub-chains are concatenated and give one covariance matrix, and those are</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-477" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-477"></a><span class="sd">    averaged over maps. Samples from different maps are never pooled: each map is a</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-478" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-478"></a><span class="sd">    different data realization with its own posterior mean, so pooling would add the scatter</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-479" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-479"></a><span class="sd">    of those means to the diagonal. The average is a single-realization posterior, which is</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-480" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-480"></a><span class="sd">    what a Fisher forecast predicts.</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-481" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-481"></a>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-482" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-482"></a><span class="sd">    Returns:</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-483" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-483"></a><span class="sd">        (avg_cov_mat, param_names, cov_err, sigma_err), the last two from measured_errors:</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-484" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-484"></a><span class="sd">        the element-wise error of the averaged covariance and the error of each width</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-485" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-485"></a><span class="sd">        sqrt(C_ii).</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-486" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-486"></a><span class="sd">    """</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-487" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-487"></a>    <span class="n">param_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">chains</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-488" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-488"></a>    <span class="n">num_maps</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">chains</span><span class="p">[</span><span class="n">param_names</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-489" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-489"></a>    <span class="n">per_map_cov_mats</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-490" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-490"></a>    <span class="k">for</span> <span class="n">map_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_maps</span><span class="p">):</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-491" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-491"></a>        <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">chains</span><span class="p">[</span><span class="n">name</span><span class="p">][</span><span class="n">map_idx</span><span class="p">])</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">param_names</span><span class="p">]</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-492" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-492"></a>        <span class="n">per_map_cov_mats</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">atleast_2d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">(</span><span class="n">columns</span><span class="p">),</span> <span class="n">rowvar</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)))</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-493" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-493"></a>    <span class="n">per_map_cov_mats</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">per_map_cov_mats</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-494" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-494"></a>    <span class="n">cov_err</span><span class="p">,</span> <span class="n">sigma_err</span> <span class="o">=</span> <span class="n">measured_errors</span><span class="p">(</span><span class="n">per_map_cov_mats</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-495" name="cmb_lensing.chain_analysis.get_avg_covariance_matrix--source--__codelineno-0-495"></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">per_map_cov_mats</span><span class="p">,</span> <span class="n">axis</span> <span class="o">=</span> <span class="mi">0</span><span class="p">),</span> <span class="n">param_names</span><span class="p">,</span> <span class="n">cov_err</span><span class="p">,</span> <span class="n">sigma_err</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="cmb_lensing.chain_analysis.get_forecasted_covariance" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">cmb_lensing.chain_analysis.get_forecasted_covariance</span>
+
+
+<a href="#cmb_lensing.chain_analysis.get_forecasted_covariance" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_forecasted_covariance</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">noise</span><span class="p">,</span> <span class="n">param_names</span><span class="p">,</span> <span class="n">delensed_covariance</span><span class="p">,</span> <span class="n">pol</span><span class="o">=</span><span class="n">DEFAULT_POL</span><span class="p">,</span> <span class="n">qe_filter</span><span class="o">=</span><span class="n">DEFAULT_QE_FILTER</span><span class="p">,</span> <span class="n">phi_noise</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">include_bb</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ground_truth</span><span class="o">=</span><span class="n">GROUND_TRUTH</span><span class="p">,</span> <span class="n">camb_lmax</span><span class="o">=</span><span class="n">CAMB_LMAX</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Fisher-forecast covariance of the sampled parameters, with white noise and no beam.</p>
+<p>A thin wrapper of fisher_forecast.forecast. Its field blocks are the empirical delensed
+covariance of <code>delensed_covariance</code> (plus the analytic noise); its phi block's noise is
+the box QE N0 or a measured matrix. Build the delensed covariance's Wiener filter from
+the same N_phi.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>nside, theta_pix, noise</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the chains' box (pixels per side, arcmin, uK-arcmin)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>param_names</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>the sampled parameters; the others are held fixed</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>delensed_covariance</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>a merged delensed_covariance.npz at this box, noise level and
+                 <code>pol</code> (required)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>pol</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>"I", "P" or "IP": the data the chains saw</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.camb_spectra.DEFAULT_POL">DEFAULT_POL</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>qe_filter</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>"unlensed" (default) or "lensed": the spectra in the QE N0's
+                 filter. The response always uses the unlensed spectra</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.camb_spectra.DEFAULT_QE_FILTER">DEFAULT_QE_FILTER</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>phi_noise</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>a merged map_joint_phi_noise.npz / sampler_phi_noise.npz; its
+                 <code>nphi</code> then replaces the QE N0</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>include_bb</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>for "P" / "IP", whether the delensed BB block is counted</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>ground_truth</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>{param_name: value}, the fiducial point, all five parameters</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.GROUND_TRUTH">GROUND_TRUTH</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>camb_lmax</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>how far CAMB is run</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.CAMB_LMAX">CAMB_LMAX</span></code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The covariance matrix F^-1 over param_names, rows and columns in</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>constants.PARAM_ORDER (the order load_chains returns its parameters in).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>cmb_lensing/chain_analysis.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-502">502</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-503">503</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-504">504</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-505">505</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-506">506</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-507">507</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-508">508</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-509">509</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-510">510</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-511">511</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-512">512</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-513">513</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-514">514</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-515">515</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-516">516</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-517">517</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-518">518</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-519">519</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-520">520</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-521">521</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-522">522</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-523">523</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-524">524</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-525">525</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-526">526</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-527">527</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-528">528</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-529">529</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-530">530</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-531">531</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-532">532</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-533">533</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-534">534</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-535">535</a></span>
+<span class="normal"><a href="#cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-536">536</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-502" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-502"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_forecasted_covariance</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">noise</span><span class="p">,</span> <span class="n">param_names</span><span class="p">,</span> <span class="n">delensed_covariance</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-503" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-503"></a>                              <span class="n">pol</span> <span class="o">=</span> <span class="n">DEFAULT_POL</span><span class="p">,</span> <span class="n">qe_filter</span> <span class="o">=</span> <span class="n">DEFAULT_QE_FILTER</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-504" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-504"></a>                              <span class="n">phi_noise</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">include_bb</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">ground_truth</span> <span class="o">=</span> <span class="n">GROUND_TRUTH</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-505" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-505"></a>                              <span class="n">camb_lmax</span> <span class="o">=</span> <span class="n">CAMB_LMAX</span><span class="p">):</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-506" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-506"></a><span class="w">    </span><span class="sd">"""Fisher-forecast covariance of the sampled parameters, with white noise and no beam.</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-507" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-507"></a>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-508" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-508"></a><span class="sd">    A thin wrapper of fisher_forecast.forecast. Its field blocks are the empirical delensed</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-509" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-509"></a><span class="sd">    covariance of `delensed_covariance` (plus the analytic noise); its phi block's noise is</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-510" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-510"></a><span class="sd">    the box QE N0 or a measured matrix. Build the delensed covariance's Wiener filter from</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-511" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-511"></a><span class="sd">    the same N_phi.</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-512" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-512"></a>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-513" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-513"></a><span class="sd">    Args:</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-514" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-514"></a><span class="sd">        nside, theta_pix, noise: the chains' box (pixels per side, arcmin, uK-arcmin)</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-515" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-515"></a><span class="sd">        param_names:         the sampled parameters; the others are held fixed</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-516" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-516"></a><span class="sd">        delensed_covariance: a merged delensed_covariance.npz at this box, noise level and</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-517" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-517"></a><span class="sd">                             `pol` (required)</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-518" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-518"></a><span class="sd">        pol:                 "I", "P" or "IP": the data the chains saw</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-519" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-519"></a><span class="sd">        qe_filter:           "unlensed" (default) or "lensed": the spectra in the QE N0's</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-520" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-520"></a><span class="sd">                             filter. The response always uses the unlensed spectra</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-521" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-521"></a><span class="sd">        phi_noise:           a merged map_joint_phi_noise.npz / sampler_phi_noise.npz; its</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-522" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-522"></a><span class="sd">                             `nphi` then replaces the QE N0</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-523" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-523"></a><span class="sd">        include_bb:          for "P" / "IP", whether the delensed BB block is counted</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-524" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-524"></a><span class="sd">        ground_truth:        {param_name: value}, the fiducial point, all five parameters</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-525" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-525"></a><span class="sd">        camb_lmax:           how far CAMB is run</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-526" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-526"></a>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-527" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-527"></a><span class="sd">    Returns:</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-528" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-528"></a><span class="sd">        The covariance matrix F^-1 over param_names, rows and columns in</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-529" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-529"></a><span class="sd">        constants.PARAM_ORDER (the order load_chains returns its parameters in).</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-530" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-530"></a><span class="sd">    """</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-531" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-531"></a>    <span class="n">is_sampled</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">param_names</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">ground_truth</span><span class="p">}</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-532" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-532"></a>    <span class="n">fisher</span><span class="p">,</span> <span class="n">names</span> <span class="o">=</span> <span class="n">forecast</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">theta_pix</span><span class="p">,</span> <span class="n">noise</span><span class="p">,</span> <span class="n">is_sampled</span><span class="p">,</span> <span class="n">ground_truth</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-533" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-533"></a>                             <span class="n">delensed_covariance</span><span class="p">,</span> <span class="n">pol</span> <span class="o">=</span> <span class="n">pol</span><span class="p">,</span> <span class="n">qe_filter</span> <span class="o">=</span> <span class="n">qe_filter</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-534" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-534"></a>                             <span class="n">phi_noise</span> <span class="o">=</span> <span class="n">phi_noise</span><span class="p">,</span> <span class="n">include_bb</span> <span class="o">=</span> <span class="n">include_bb</span><span class="p">,</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-535" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-535"></a>                             <span class="n">camb_lmax</span> <span class="o">=</span> <span class="n">camb_lmax</span><span class="p">)</span>
+<a id="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-536" name="cmb_lensing.chain_analysis.get_forecasted_covariance--source--__codelineno-0-536"></a>    <span class="k">return</span> <span class="n">covariance_from_fisher</span><span class="p">(</span><span class="n">fisher</span><span class="p">,</span> <span class="n">names</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../fisher-forecast/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Fisher Forecast">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Fisher Forecast
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../testing/" class="md-footer__link md-footer__link--next" aria-label="Next: Testing">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Testing
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "content.code.copy", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  <script data-mkdocs-jupyter-mathjax="{&quot;url&quot;: &quot;https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-mml-chtml.js&quot;, &quot;version&quot;: 4}">
+/* Shared by full pages and Material's instant navigation. */
+(() => {
+  const config = JSON.parse(document.currentScript.dataset.mkdocsJupyterMathjax);
+  if (window.mkdocsJupyterMathJax) return;
+
+  let loading;
+  let queue = Promise.resolve();
+  let previous = [];
+
+  const ready = async () => {
+    if (!loading) {
+      loading = (async () => {
+        let math = window.MathJax;
+        if (!math?.typesetPromise) {
+          const url = new URL(config.url, document.baseURI).href;
+          const existing = Array.from(document.scripts).find(script =>
+            script.src && (script.src === url || script.id === 'MathJax-script' ||
+              (/mathjax/i.test(script.src) &&
+               /\/(?:MathJax|latest|(?:tex|mml)(?:-mml)?-(?:chtml|svg))\.js(?:[?#]|$)/i.test(script.src))));
+          if (existing) {
+            if (!math?.startup?.promise) {
+              await new Promise((resolve, reject) => {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', reject, { once: true });
+              });
+            }
+          } else {
+            // Keep site macros, delimiters and startup hooks when supplied.
+            const options = math || {};
+            window.MathJax = {
+              ...options,
+              loader: {
+                ...options.loader,
+                load: Array.from(new Set(['ui/safe', ...(options.loader?.load || [])]))
+              },
+              startup: { typeset: false, ...options.startup },
+              tex: {
+                tags: 'ams',
+                useLabelIds: true,
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                ...options.tex
+              }
+            };
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = config.url;
+              script.id = 'MathJax-script';
+              script.async = true;
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+          }
+        }
+        math = window.MathJax;
+        await math.startup.promise;
+        return math;
+      })();
+    }
+    const math = await loading;
+    // A site owner can extend the v3 queue again on each navigation.
+    await math.startup.promise;
+    return math;
+  };
+
+  const unrendered = node => {
+    if (node.matches('mjx-container')) return [];
+    if (!node.querySelector('mjx-container')) return [node];
+    // In v3, scanning generated assistive MathML again produces nested output.
+    return Array.from(node.children).flatMap(unrendered);
+  };
+
+  const refresh = () => {
+    // A separate chain also serializes v3, without changing v4's startup promise.
+    queue = queue.then(async () => {
+      const notebooks = Array.from(document.querySelectorAll('.jupyter-wrapper'));
+      if (!notebooks.length && !previous.length) return;
+      if (notebooks.length === previous.length &&
+          notebooks.every((node, index) => node === previous[index])) return;
+      const math = await ready();
+      if (previous.length) {
+        math.typesetClear(previous);
+        math.texReset();
+      }
+      previous = notebooks.filter(node => node.isConnected);
+      const pending = previous.flatMap(unrendered);
+      if (pending.length) await math.typesetPromise(pending);
+    }).catch(error => console.error('mkdocs-jupyter: MathJax rendering failed', error));
+    return queue;
+  };
+
+  window.mkdocsJupyterMathJax = { refresh };
+  const start = () => {
+    if (typeof document$ !== 'undefined') document$.subscribe(refresh);
+    else refresh();
+  };
+  // Theme bundles and user-provided MathJax scripts can follow notebook content.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else start();
+})();
+
+</script>
+</body>
+</html>

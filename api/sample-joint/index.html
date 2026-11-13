@@ -1,0 +1,2601 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="JAX port of CMBLensing.jl - CMB lensing simulation, MAP reconstruction and LCDM sampling">
+      
+      
+      
+        <link rel="canonical" href="https://zaneblood1.github.io/CMBLensing.py/api/sample-joint/">
+      
+      
+        <link rel="prev" href="../map-joint/">
+      
+      
+        <link rel="next" href="../fields/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>LCDM Sampling - CMBLensing.py</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#lcdm-sampling" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="CMBLensing.py" class="md-header__button md-logo" aria-label="CMBLensing.py" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CMBLensing.py
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              LCDM Sampling
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/zaneblood1/CMBLensing.py" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zaneblood1/CMBLensing.py
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="CMBLensing.py" class="md-nav__button md-logo" aria-label="CMBLensing.py" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    CMBLensing.py
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/zaneblood1/CMBLensing.py" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    zaneblood1/CMBLensing.py
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/camb-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The CAMB Grid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/hpc-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Core concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fields and Operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/load-sim/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/map-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/sample-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../map_joint_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Joint
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sample_joint_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Joint
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chain_analysis_tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain Analysis Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipelines
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Pipelines
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/camb-grid/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building the CAMB Grid
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/lcdm-chains/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling on the HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/map-joint-phi-noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Joint Phi Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/sampler-phi-noise/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampler Phi Noise
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/delensed-covariance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Delensed Covariances
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pipelines/chain-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fisher-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fisher Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../simulate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulating Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../map-joint/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MAP Estimation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LCDM Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.sample_lcdm.sample_joint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sample_joint
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fields, Operators and Data Sets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fisher-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fisher Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chain-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#cmb_lensing.sample_lcdm.sample_joint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sample_joint
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="lcdm-sampling">LCDM Sampling<a class="headerlink" href="#lcdm-sampling" title="Permanent link">&para;</a></h1>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="cmb_lensing.sample_lcdm.sample_joint" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">cmb_lensing.sample_lcdm.sample_joint</span>
+
+
+<a href="#cmb_lensing.sample_lcdm.sample_joint" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">sample_joint</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">param_init</span><span class="p">,</span> <span class="n">proposal_sigmas</span><span class="p">,</span> <span class="n">param_ranges</span><span class="p">,</span> <span class="n">should_sample</span><span class="p">,</span> <span class="n">noise_level</span><span class="p">,</span> <span class="n">advanced_logging</span><span class="p">,</span> <span class="n">fixed_fields</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">phi_init</span><span class="o">=</span><span class="s1">'MAP'</span><span class="p">,</span> <span class="n">hmc_num_steps</span><span class="o">=</span><span class="n">DEFAULT_HMC_NUM_STEPS</span><span class="p">,</span> <span class="n">hmc_step_size</span><span class="o">=</span><span class="n">DEFAULT_HMC_STEP_SIZE</span><span class="p">,</span> <span class="n">iters_per_chain</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span> <span class="n">num_burn_in_fix_theta</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">num_burn_in_always_accept</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">resume_chain_dict</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">map_idx</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">sub_chain_idx</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">lmax</span><span class="o">=</span><span class="n">DEFAULT_MAX_ELL</span><span class="p">,</span> <span class="n">metropolis_num_steps</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">hpc_path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Gibbs-sample the joint posterior P(f, phi, theta | d) of the field, the lensing potential
+and the five LCDM parameters.</p>
+<p>Each iteration draws f from its conditional, takes one HMC step on the mixed phi, then one
+random-walk Metropolis move per sampled parameter on the mixed logpdf, and recomputes the
+covariance and mixing matrices at the accepted parameters. The parameters are named as in
+<code>constants.PARAM_ORDER</code>: "theta_MC_100", "logA", "ns", "ombh2", "omch2". The spectra come
+from the 5D CAMB grid spline (<code>camb_splines/camb_grid_spline.npz</code>, downloaded on first
+use).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>data_set</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The data, a <code>DataSetT</code>, <code>DataSetEB</code> or <code>DataSetTEB</code> (e.g. from
+<code>load_sim</code>). Its type sets the polarization mode.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>param_init</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>{name: value} starting point, all five parameters.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>proposal_sigmas</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>{name: width} of the Gaussian Metropolis proposal per parameter.
+The parameters are updated in this dict's order. Tune toward ~44 % acceptance.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>param_ranges</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>{name: (low, high)}; proposals outside the range are rejected.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>should_sample</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>{name: bool}; parameters set to False stay at <code>param_init</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>noise_level</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>White noise level of the data in uK-arcmin.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>advanced_logging</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>{"phi_acceptance", "lcdm_acceptance", "plot_log_pdf",
+"plot_lcdm_sigmas": bool}. The first two print running acceptance rates, the
+last two overwrite progress plots in <code>cmb_lensing/sample_lcdm_output/</code> (which
+must exist) every iteration.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>fixed_fields</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Debugging option: hold f and phi at the data set's true fields and
+sample theta only.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>phi_init</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Starting phi: "MAP" (the <code>map_joint</code> estimate, default), "RNG" (a draw
+from the phi step's inverse mass matrix) or anything else for zero.</p>
+              </div>
+            </td>
+            <td>
+                  <code>&#39;MAP&#39;</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>hmc_num_steps</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Leapfrog steps per phi HMC step.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_HMC_NUM_STEPS">DEFAULT_HMC_NUM_STEPS</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>hmc_step_size</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Leapfrog step size. Tune toward ~65 % phi acceptance.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_HMC_STEP_SIZE">DEFAULT_HMC_STEP_SIZE</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>iters_per_chain</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of Gibbs iterations.</p>
+              </div>
+            </td>
+            <td>
+                  <code>10000</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>num_burn_in_fix_theta</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Iterations before the parameters start to move.</p>
+              </div>
+            </td>
+            <td>
+                  <code>100</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>num_burn_in_always_accept</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Iterations for which every phi HMC step is accepted.</p>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>resume_chain_dict</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Restart a saved chain: a dict with one entry per parameter name,
+"phi_map" and "sub_key" (e.g. <code>np.load</code> of the npz <code>run_single_lcdm_chain.py</code>
+writes). Overrides <code>param_init</code> and <code>phi_init</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>seed</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Seed of the chain's random numbers. None draws one at random.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>map_idx</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Data-map index used in the history file names.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>sub_chain_idx</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Chain index used in the history file names.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>lmax</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Largest multipole of the spectra.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="cmb_lensing.constants.DEFAULT_MAX_ELL">DEFAULT_MAX_ELL</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>metropolis_num_steps</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Metropolis moves per parameter per iteration.</p>
+              </div>
+            </td>
+            <td>
+                  <code>1</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>hpc_path</code>
+            </td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If set, every iteration appends each sampled parameter's latest value to
+<code>{hpc_path}{name}_map_{map_idx}_chain_{sub_chain_idx}_history.txt</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code>(param_vals, phi, sub_key)</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>param_vals is a dict of per-parameter lists of the</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>chain's values (starting with <code>param_init</code>), phi the final lensing potential and</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>sub_key the final random key, which together with the last parameter values let a</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>chain be resumed.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>cmb_lensing/sample_lcdm.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-811"> 811</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-812"> 812</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-813"> 813</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-814"> 814</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-815"> 815</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-816"> 816</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-817"> 817</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-818"> 818</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-819"> 819</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-820"> 820</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-821"> 821</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-822"> 822</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-823"> 823</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-824"> 824</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-825"> 825</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-826"> 826</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-827"> 827</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-828"> 828</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-829"> 829</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-830"> 830</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-831"> 831</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-832"> 832</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-833"> 833</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-834"> 834</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-835"> 835</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-836"> 836</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-837"> 837</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-838"> 838</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-839"> 839</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-840"> 840</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-841"> 841</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-842"> 842</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-843"> 843</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-844"> 844</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-845"> 845</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-846"> 846</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-847"> 847</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-848"> 848</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-849"> 849</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-850"> 850</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-851"> 851</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-852"> 852</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-853"> 853</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-854"> 854</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-855"> 855</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-856"> 856</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-857"> 857</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-858"> 858</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-859"> 859</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-860"> 860</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-861"> 861</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-862"> 862</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-863"> 863</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-864"> 864</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-865"> 865</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-866"> 866</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-867"> 867</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-868"> 868</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-869"> 869</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-870"> 870</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-871"> 871</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-872"> 872</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-873"> 873</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-874"> 874</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-875"> 875</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-876"> 876</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-877"> 877</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-878"> 878</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-879"> 879</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-880"> 880</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-881"> 881</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-882"> 882</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-883"> 883</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-884"> 884</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-885"> 885</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-886"> 886</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-887"> 887</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-888"> 888</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-889"> 889</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-890"> 890</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-891"> 891</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-892"> 892</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-893"> 893</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-894"> 894</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-895"> 895</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-896"> 896</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-897"> 897</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-898"> 898</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-899"> 899</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-900"> 900</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-901"> 901</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-902"> 902</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-903"> 903</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-904"> 904</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-905"> 905</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-906"> 906</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-907"> 907</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-908"> 908</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-909"> 909</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-910"> 910</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-911"> 911</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-912"> 912</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-913"> 913</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-914"> 914</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-915"> 915</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-916"> 916</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-917"> 917</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-918"> 918</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-919"> 919</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-920"> 920</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-921"> 921</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-922"> 922</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-923"> 923</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-924"> 924</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-925"> 925</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-926"> 926</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-927"> 927</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-928"> 928</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-929"> 929</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-930"> 930</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-931"> 931</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-932"> 932</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-933"> 933</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-934"> 934</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-935"> 935</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-936"> 936</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-937"> 937</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-938"> 938</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-939"> 939</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-940"> 940</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-941"> 941</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-942"> 942</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-943"> 943</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-944"> 944</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-945"> 945</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-946"> 946</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-947"> 947</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-948"> 948</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-949"> 949</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-950"> 950</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-951"> 951</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-952"> 952</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-953"> 953</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-954"> 954</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-955"> 955</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-956"> 956</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-957"> 957</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-958"> 958</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-959"> 959</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-960"> 960</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-961"> 961</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-962"> 962</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-963"> 963</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-964"> 964</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-965"> 965</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-966"> 966</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-967"> 967</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-968"> 968</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-969"> 969</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-970"> 970</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-971"> 971</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-972"> 972</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-973"> 973</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-974"> 974</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-975"> 975</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-976"> 976</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-977"> 977</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-978"> 978</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-979"> 979</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-980"> 980</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-981"> 981</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-982"> 982</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-983"> 983</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-984"> 984</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-985"> 985</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-986"> 986</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-987"> 987</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-988"> 988</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-989"> 989</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-990"> 990</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-991"> 991</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-992"> 992</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-993"> 993</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-994"> 994</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-995"> 995</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-996"> 996</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-997"> 997</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-998"> 998</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-999"> 999</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1000">1000</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1001">1001</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1002">1002</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1003">1003</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1004">1004</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1005">1005</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1006">1006</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1007">1007</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1008">1008</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1009">1009</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1010">1010</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1011">1011</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1012">1012</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1013">1013</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1014">1014</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1015">1015</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1016">1016</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1017">1017</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1018">1018</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1019">1019</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1020">1020</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1021">1021</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1022">1022</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1023">1023</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1024">1024</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1025">1025</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1026">1026</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1027">1027</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1028">1028</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1029">1029</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1030">1030</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1031">1031</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1032">1032</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1033">1033</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1034">1034</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1035">1035</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1036">1036</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1037">1037</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1038">1038</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1039">1039</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1040">1040</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1041">1041</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1042">1042</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1043">1043</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1044">1044</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1045">1045</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1046">1046</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1047">1047</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1048">1048</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1049">1049</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1050">1050</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1051">1051</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1052">1052</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1053">1053</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1054">1054</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1055">1055</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1056">1056</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1057">1057</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1058">1058</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1059">1059</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1060">1060</a></span>
+<span class="normal"><a href="#cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1061">1061</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-811" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-811"></a><span class="k">def</span><span class="w"> </span><span class="nf">sample_joint</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">param_init</span><span class="p">,</span> <span class="n">proposal_sigmas</span><span class="p">,</span> <span class="n">param_ranges</span><span class="p">,</span> <span class="n">should_sample</span><span class="p">,</span> <span class="n">noise_level</span><span class="p">,</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-812" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-812"></a>                 <span class="n">advanced_logging</span><span class="p">,</span> <span class="n">fixed_fields</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">phi_init</span> <span class="o">=</span> <span class="s2">"MAP"</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-813" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-813"></a>                 <span class="n">hmc_num_steps</span> <span class="o">=</span> <span class="n">DEFAULT_HMC_NUM_STEPS</span><span class="p">,</span> <span class="n">hmc_step_size</span> <span class="o">=</span> <span class="n">DEFAULT_HMC_STEP_SIZE</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-814" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-814"></a>                 <span class="n">iters_per_chain</span> <span class="o">=</span> <span class="mi">10_000</span><span class="p">,</span> <span class="n">num_burn_in_fix_theta</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span> <span class="n">num_burn_in_always_accept</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-815" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-815"></a>                 <span class="n">resume_chain_dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">seed</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">map_idx</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">sub_chain_idx</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-816" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-816"></a>                 <span class="n">lmax</span> <span class="o">=</span> <span class="n">DEFAULT_MAX_ELL</span><span class="p">,</span> <span class="n">metropolis_num_steps</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">hpc_path</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-817" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-817"></a><span class="w">    </span><span class="sd">"""Gibbs-sample the joint posterior P(f, phi, theta | d) of the field, the lensing potential</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-818" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-818"></a><span class="sd">    and the five LCDM parameters.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-819" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-819"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-820" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-820"></a><span class="sd">    Each iteration draws f from its conditional, takes one HMC step on the mixed phi, then one</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-821" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-821"></a><span class="sd">    random-walk Metropolis move per sampled parameter on the mixed logpdf, and recomputes the</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-822" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-822"></a><span class="sd">    covariance and mixing matrices at the accepted parameters. The parameters are named as in</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-823" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-823"></a><span class="sd">    `constants.PARAM_ORDER`: "theta_MC_100", "logA", "ns", "ombh2", "omch2". The spectra come</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-824" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-824"></a><span class="sd">    from the 5D CAMB grid spline (`camb_splines/camb_grid_spline.npz`, downloaded on first</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-825" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-825"></a><span class="sd">    use).</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-826" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-826"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-827" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-827"></a><span class="sd">    Args:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-828" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-828"></a><span class="sd">        data_set: The data, a `DataSetT`, `DataSetEB` or `DataSetTEB` (e.g. from</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-829" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-829"></a><span class="sd">            `load_sim`). Its type sets the polarization mode.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-830" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-830"></a><span class="sd">        param_init: {name: value} starting point, all five parameters.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-831" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-831"></a><span class="sd">        proposal_sigmas: {name: width} of the Gaussian Metropolis proposal per parameter.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-832" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-832"></a><span class="sd">            The parameters are updated in this dict's order. Tune toward ~44 % acceptance.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-833" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-833"></a><span class="sd">        param_ranges: {name: (low, high)}; proposals outside the range are rejected.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-834" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-834"></a><span class="sd">        should_sample: {name: bool}; parameters set to False stay at `param_init`.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-835" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-835"></a><span class="sd">        noise_level: White noise level of the data in uK-arcmin.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-836" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-836"></a><span class="sd">        advanced_logging: {"phi_acceptance", "lcdm_acceptance", "plot_log_pdf",</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-837" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-837"></a><span class="sd">            "plot_lcdm_sigmas": bool}. The first two print running acceptance rates, the</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-838" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-838"></a><span class="sd">            last two overwrite progress plots in `cmb_lensing/sample_lcdm_output/` (which</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-839" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-839"></a><span class="sd">            must exist) every iteration.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-840" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-840"></a><span class="sd">        fixed_fields: Debugging option: hold f and phi at the data set's true fields and</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-841" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-841"></a><span class="sd">            sample theta only.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-842" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-842"></a><span class="sd">        phi_init: Starting phi: "MAP" (the `map_joint` estimate, default), "RNG" (a draw</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-843" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-843"></a><span class="sd">            from the phi step's inverse mass matrix) or anything else for zero.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-844" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-844"></a><span class="sd">        hmc_num_steps: Leapfrog steps per phi HMC step.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-845" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-845"></a><span class="sd">        hmc_step_size: Leapfrog step size. Tune toward ~65 % phi acceptance.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-846" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-846"></a><span class="sd">        iters_per_chain: Number of Gibbs iterations.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-847" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-847"></a><span class="sd">        num_burn_in_fix_theta: Iterations before the parameters start to move.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-848" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-848"></a><span class="sd">        num_burn_in_always_accept: Iterations for which every phi HMC step is accepted.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-849" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-849"></a><span class="sd">        resume_chain_dict: Restart a saved chain: a dict with one entry per parameter name,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-850" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-850"></a><span class="sd">            "phi_map" and "sub_key" (e.g. `np.load` of the npz `run_single_lcdm_chain.py`</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-851" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-851"></a><span class="sd">            writes). Overrides `param_init` and `phi_init`.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-852" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-852"></a><span class="sd">        seed: Seed of the chain's random numbers. None draws one at random.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-853" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-853"></a><span class="sd">        map_idx: Data-map index used in the history file names.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-854" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-854"></a><span class="sd">        sub_chain_idx: Chain index used in the history file names.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-855" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-855"></a><span class="sd">        lmax: Largest multipole of the spectra.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-856" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-856"></a><span class="sd">        metropolis_num_steps: Metropolis moves per parameter per iteration.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-857" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-857"></a><span class="sd">        hpc_path: If set, every iteration appends each sampled parameter's latest value to</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-858" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-858"></a><span class="sd">            `{hpc_path}{name}_map_{map_idx}_chain_{sub_chain_idx}_history.txt`.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-859" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-859"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-860" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-860"></a><span class="sd">    Returns:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-861" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-861"></a><span class="sd">        (param_vals, phi, sub_key): param_vals is a dict of per-parameter lists of the</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-862" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-862"></a><span class="sd">        chain's values (starting with `param_init`), phi the final lensing potential and</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-863" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-863"></a><span class="sd">        sub_key the final random key, which together with the last parameter values let a</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-864" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-864"></a><span class="sd">        chain be resumed.</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-865" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-865"></a><span class="sd">    """</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-866" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-866"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-867" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-867"></a>    <span class="c1">#polarization mode follows the dataset</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-868" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-868"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">DataSetTEB</span><span class="p">):</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-869" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-869"></a>        <span class="n">pol</span> <span class="o">=</span> <span class="s2">"IP"</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-870" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-870"></a>    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">DataSetEB</span><span class="p">):</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-871" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-871"></a>        <span class="n">pol</span> <span class="o">=</span> <span class="s2">"P"</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-872" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-872"></a>    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">DataSetT</span><span class="p">):</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-873" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-873"></a>        <span class="n">pol</span> <span class="o">=</span> <span class="s2">"I"</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-874" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-874"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-875" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-875"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"sample_joint supports DataSetT (pol = 'I'), DataSetEB "</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-876" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-876"></a>                         <span class="sa">f</span><span class="s2">"(pol = 'P') and DataSetTEB (pol = 'IP') datasets, got "</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-877" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-877"></a>                         <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">data_set</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-878" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-878"></a>    <span class="n">bb_is_zero</span> <span class="o">=</span> <span class="n">camb_grid_bb_is_zero</span><span class="p">()</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-879" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-879"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-880" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-880"></a>    <span class="c1">#if a resume_chain_dict is specified (e.g. np.load of the npz run_single_lcdm_chain.py</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-881" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-881"></a>    <span class="c1">#writes: one entry per parameter name, "phi_map" and "sub_key"), restart from its parameters</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-882" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-882"></a>    <span class="k">if</span> <span class="n">resume_chain_dict</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-883" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-883"></a>        <span class="n">param_init</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-884" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-884"></a>        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">PARAM_ORDER</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-885" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-885"></a>            <span class="n">param_init</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">resume_chain_dict</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-886" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-886"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-887" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-887"></a>    <span class="c1">#the sampled parameters, in PARAM_ORDER: the ones whose histories are logged</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-888" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-888"></a>    <span class="n">theta_log_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">PARAM_ORDER</span> <span class="k">if</span> <span class="n">should_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="kc">False</span><span class="p">)]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-889" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-889"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-890" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-890"></a>    <span class="c1">#the 5D grid predictors, checked at the starting point before anything heavy runs</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-891" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-891"></a>    <span class="n">predictors</span> <span class="o">=</span> <span class="n">get_camb_grid_predictors</span><span class="p">()</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-892" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-892"></a>    <span class="n">start_tt</span> <span class="o">=</span> <span class="n">predictors</span><span class="o">.</span><span class="n">tt</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">param_init</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">PARAM_ORDER</span><span class="p">]]))</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-893" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-893"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">bool</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">start_tt</span><span class="p">))):</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-894" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-894"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-895" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-895"></a>            <span class="sa">f</span><span class="s2">"the starting parameters </span><span class="si">{</span><span class="nb">dict</span><span class="p">((</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">param_init</span><span class="p">[</span><span class="n">k</span><span class="p">])</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">PARAM_ORDER</span><span class="p">)</span><span class="si">}</span><span class="s2"> "</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-896" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-896"></a>            <span class="sa">f</span><span class="s2">"fall outside the 5D CAMB grid, so the initial covariances would be NaN. "</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-897" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-897"></a>            <span class="sa">f</span><span class="s2">"Check that theta_MC_100 is reachable at this ombh2/omch2 - see "</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-898" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-898"></a>            <span class="sa">f</span><span class="s2">"theta_grid in </span><span class="si">{</span><span class="n">CAMB_GRID_PATH</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-899" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-899"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-900" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-900"></a>    <span class="c1">#Set the initial parameter values to the user specified starting guesses</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-901" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-901"></a>    <span class="n">param_vals</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-902" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-902"></a>    <span class="k">for</span> <span class="n">theta</span><span class="p">,</span> <span class="n">theta_val</span> <span class="ow">in</span> <span class="n">param_init</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-903" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-903"></a>        <span class="n">param_vals</span><span class="p">[</span><span class="n">theta</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">theta_val</span><span class="p">]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-904" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-904"></a>    <span class="c1">#Also store the current parameter values in a JAX array</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-905" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-905"></a>    <span class="n">current_params</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">param_init</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">PARAM_ORDER</span><span class="p">],</span> <span class="n">dtype</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-906" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-906"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-907" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-907"></a>    <span class="c1">#Add data that will be used throughout the sampling algorithm to an args dictionary</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-908" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-908"></a>    <span class="n">args</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-909" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-909"></a>    <span class="n">args</span> <span class="o">=</span> <span class="n">add_metadata_to_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">data_set</span><span class="p">,</span> <span class="n">lmax</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-910" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-910"></a>    <span class="n">args</span> <span class="o">=</span> <span class="n">add_starting_matrices_to_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">data_set</span><span class="p">,</span> <span class="n">noise_level</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-911" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-911"></a>                                         <span class="n">param_init</span><span class="p">,</span> <span class="n">current_params</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-912" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-912"></a>                                         <span class="n">predictors</span><span class="p">,</span> <span class="n">pol</span> <span class="o">=</span> <span class="n">pol</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-913" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-913"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-914" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-914"></a>    <span class="c1">#change data_set covariance matrices from ground truth to initial</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-915" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-915"></a>    <span class="c1">#starting point in cosmological parameter space</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-916" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-916"></a>    <span class="n">data_set</span> <span class="o">=</span> <span class="n">set_initial_ds_conditions</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-917" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-917"></a>    <span class="n">data_field</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">data</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-918" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-918"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-919" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-919"></a>    <span class="c1">#Use a seed to get reproduceable results if so desired</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-920" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-920"></a>    <span class="c1">#otherwise use machine entropy to generate a random number</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-921" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-921"></a>    <span class="k">if</span> <span class="n">seed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-922" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-922"></a>        <span class="n">sub_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-923" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-923"></a>    <span class="k">elif</span> <span class="n">resume_chain_dict</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-924" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-924"></a>        <span class="n">sub_key</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">resume_chain_dict</span><span class="p">[</span><span class="s2">"sub_key"</span><span class="p">])</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-925" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-925"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-926" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-926"></a>        <span class="n">sub_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">31</span><span class="p">))</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-927" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-927"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-928" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-928"></a>    <span class="c1">#Setting the starting point in phi-space to be the MAP estimate (the mode) plus a random realization</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-929" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-929"></a>    <span class="c1">#of the Hessian pre-conditioner empirically seems to decrease the burn-in time (DEFAULT).</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-930" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-930"></a>    <span class="c1">#A resumed chain starts from its saved phi whatever phi_init says</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-931" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-931"></a>    <span class="k">if</span> <span class="n">resume_chain_dict</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-932" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-932"></a>        <span class="n">phi</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">phi</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">scalar_matrix</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">resume_chain_dict</span><span class="p">[</span><span class="s2">"phi_map"</span><span class="p">]))</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-933" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-933"></a>    <span class="k">elif</span> <span class="n">phi_init</span> <span class="o">==</span> <span class="s2">"MAP"</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-934" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-934"></a>        <span class="n">_</span><span class="p">,</span> <span class="n">phi_map</span> <span class="o">=</span> <span class="n">map_joint</span><span class="p">(</span><span class="n">data_set</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-935" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-935"></a>        <span class="n">phi</span> <span class="o">=</span> <span class="n">phi_map</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-936" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-936"></a>    <span class="k">elif</span> <span class="n">phi_init</span> <span class="o">==</span> <span class="s2">"RNG"</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-937" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-937"></a>        <span class="n">inv_mass_matrix</span> <span class="o">=</span> <span class="n">pinv</span><span class="p">(</span><span class="n">pinv</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="s2">"phi_covariance"</span><span class="p">])</span> <span class="o">+</span> <span class="n">pinv</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="s2">"quadratic_estimate"</span><span class="p">]))</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-938" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-938"></a>        <span class="n">rng_key</span><span class="p">,</span> <span class="n">sub_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">sub_key</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-939" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-939"></a>        <span class="n">phi_rng_matrix</span> <span class="o">=</span> <span class="n">field_from_covar_single_key</span><span class="p">(</span><span class="n">data_set</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">nside</span><span class="p">,</span> <span class="n">inv_mass_matrix</span><span class="o">.</span><span class="n">scalar_matrix</span><span class="p">,</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-940" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-940"></a>        <span class="n">phi</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">phi</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">scalar_matrix</span> <span class="o">=</span> <span class="n">jfft</span><span class="o">.</span><span class="n">rfft2</span><span class="p">(</span><span class="n">phi_rng_matrix</span><span class="p">))</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-941" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-941"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-942" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-942"></a>        <span class="n">phi</span> <span class="o">=</span> <span class="mi">0</span><span class="o">*</span><span class="n">data_set</span><span class="o">.</span><span class="n">phi</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-943" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-943"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-944" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-944"></a>    <span class="c1">#We repeatedly draw a fresh temperature / polarization field, so we need a "zeroes" object</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-945" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-945"></a>    <span class="c1">#of the same class as the temperature / polarization field</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-946" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-946"></a>    <span class="n">field_zeroes</span> <span class="o">=</span> <span class="mi">0</span><span class="o">*</span><span class="n">data_set</span><span class="o">.</span><span class="n">unlensed_field</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-947" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-947"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-948" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-948"></a>    <span class="c1">#the stacked data matrices handed to every jitted theta kernel</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-949" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-949"></a>    <span class="n">data_stack</span> <span class="o">=</span> <span class="n">field_matrix_stack</span><span class="p">(</span><span class="n">data_field</span><span class="p">,</span> <span class="n">pol</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-950" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-950"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-951" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-951"></a>    <span class="c1">#lists used to track sampling acceptance rates</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-952" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-952"></a>    <span class="n">phi_acceptance</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-953" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-953"></a>    <span class="n">mixed_logpdf_values</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-954" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-954"></a>    <span class="n">lcdm_acceptance</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-955" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-955"></a>    <span class="n">lcdm_acceptance</span><span class="p">[</span><span class="s2">"theta_MC_100"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-956" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-956"></a>    <span class="n">lcdm_acceptance</span><span class="p">[</span><span class="s2">"ombh2"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-957" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-957"></a>    <span class="n">lcdm_acceptance</span><span class="p">[</span><span class="s2">"omch2"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-958" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-958"></a>    <span class="n">lcdm_acceptance</span><span class="p">[</span><span class="s2">"ns"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-959" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-959"></a>    <span class="n">lcdm_acceptance</span><span class="p">[</span><span class="s2">"logA"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-960" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-960"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-961" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-961"></a>    <span class="k">for</span> <span class="nb">iter</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">iters_per_chain</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-962" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-962"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-963" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-963"></a>        <span class="c1">#The "fixed_fields" flag can be used for quick debugging of the theta step </span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-964" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-964"></a>        <span class="c1">#assuming we have perfect knowledge of the ground truth (f, phi) pair</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-965" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-965"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">fixed_fields</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-966" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-966"></a>            <span class="c1">#1. sample the temperature field</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-967" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-967"></a>            <span class="n">rng_key</span><span class="p">,</span> <span class="n">sub_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">sub_key</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-968" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-968"></a>            <span class="n">temp_field</span> <span class="o">=</span> <span class="n">gibbs_sample_f</span><span class="p">(</span><span class="n">field_zeroes</span><span class="p">,</span> <span class="n">data_field</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">rng_key</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-969" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-969"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-970" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-970"></a>            <span class="c1">#2. mix the fields</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-971" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-971"></a>            <span class="n">mixed_temp</span><span class="p">,</span> <span class="n">mixed_phi</span> <span class="o">=</span> <span class="n">mix</span><span class="p">(</span><span class="n">temp_field</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span> <span class="n">args</span><span class="p">[</span><span class="s2">"mixing_d"</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="s2">"mixing_g"</span><span class="p">])</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-972" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-972"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-973" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-973"></a>            <span class="c1">#3. sample the lensing potential phi</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-974" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-974"></a>            <span class="n">rng_key</span><span class="p">,</span> <span class="n">sub_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">sub_key</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-975" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-975"></a>            <span class="n">mixed_phi</span><span class="p">,</span> <span class="n">delta_h</span><span class="p">,</span> <span class="n">accept</span> <span class="o">=</span> <span class="n">gibbs_sample_phi</span><span class="p">(</span><span class="n">mixed_phi</span><span class="p">,</span> <span class="n">mixed_temp</span><span class="p">,</span> <span class="n">data_field</span><span class="p">,</span> <span class="n">rng_key</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-976" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-976"></a>                                                          <span class="n">args</span><span class="p">,</span> <span class="nb">iter</span><span class="p">,</span> <span class="n">num_burn_in_always_accept</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-977" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-977"></a>                                                          <span class="n">hmc_num_steps</span> <span class="o">=</span> <span class="n">hmc_num_steps</span><span class="p">,</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-978" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-978"></a>                                                          <span class="n">hmc_step_size</span> <span class="o">=</span> <span class="n">hmc_step_size</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-979" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-979"></a>            <span class="k">if</span> <span class="n">advanced_logging</span><span class="p">[</span><span class="s2">"phi_acceptance"</span><span class="p">]:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-980" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-980"></a>                <span class="n">phi_acceptance</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">accept</span><span class="p">))</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-981" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-981"></a>                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Phi accept rate = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">phi_acceptance</span><span class="p">))</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">phi_acceptance</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-982" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-982"></a>                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"delta_H = </span><span class="si">{</span><span class="n">delta_h</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-983" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-983"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-984" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-984"></a>            <span class="n">mixed_temp</span><span class="p">,</span> <span class="n">mixed_phi</span> <span class="o">=</span> <span class="n">mix</span><span class="p">(</span><span class="n">data_set</span><span class="o">.</span><span class="n">unlensed_field</span><span class="p">,</span> <span class="n">data_set</span><span class="o">.</span><span class="n">phi</span><span class="p">,</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-985" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-985"></a>                                        <span class="n">args</span><span class="p">[</span><span class="s2">"mixing_d"</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="s2">"mixing_g"</span><span class="p">])</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-986" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-986"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-987" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-987"></a>        <span class="c1">#4. sample your cosmo parameters</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-988" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-988"></a>        <span class="k">if</span> <span class="nb">iter</span> <span class="o">&gt;=</span> <span class="n">num_burn_in_fix_theta</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-989" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-989"></a>            <span class="k">for</span> <span class="n">theta</span><span class="p">,</span> <span class="n">proposal_sigma</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">proposal_sigmas</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-990" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-990"></a>                <span class="k">if</span> <span class="n">should_sample</span><span class="p">[</span><span class="n">theta</span><span class="p">]:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-991" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-991"></a>                    <span class="n">rng_key</span><span class="p">,</span> <span class="n">sub_key</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">sub_key</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-992" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-992"></a>                    <span class="n">theta_key_idx</span> <span class="o">=</span> <span class="n">PARAM_INDEX</span><span class="p">[</span><span class="n">theta</span><span class="p">]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-993" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-993"></a>                    <span class="n">theta_val</span> <span class="o">=</span> <span class="n">gibbs_sample_theta</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">theta_key_idx</span><span class="p">),</span> <span class="n">param_ranges</span><span class="p">[</span><span class="n">theta</span><span class="p">],</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-994" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-994"></a>                                                   <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">param_vals</span><span class="p">[</span><span class="n">theta</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]),</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-995" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-995"></a>                                                   <span class="n">lcdm_acceptance</span><span class="p">,</span> <span class="n">advanced_logging</span><span class="p">[</span><span class="s2">"lcdm_acceptance"</span><span class="p">],</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-996" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-996"></a>                                                   <span class="n">field_matrix_stack</span><span class="p">(</span><span class="n">mixed_temp</span><span class="p">,</span> <span class="n">pol</span><span class="p">),</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-997" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-997"></a>                                                   <span class="n">mixed_phi</span><span class="o">.</span><span class="n">scalar_matrix</span><span class="p">,</span> <span class="n">data_stack</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-998" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-998"></a>                                                   <span class="n">current_params</span><span class="p">,</span> <span class="n">rng_key</span><span class="p">,</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-999" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-999"></a>                                                   <span class="n">args</span><span class="p">[</span><span class="s2">"nside"</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="s2">"pix_width"</span><span class="p">],</span> <span class="n">data_field</span><span class="o">.</span><span class="n">theta_pix</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1000" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1000"></a>                                                   <span class="n">args</span><span class="p">[</span><span class="s2">"ell_grid"</span><span class="p">],</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1001" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1001"></a>                                                   <span class="n">args</span><span class="p">[</span><span class="s2">"quadratic_estimate"</span><span class="p">]</span><span class="o">.</span><span class="n">scalar_matrix</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1002" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1002"></a>                                                   <span class="n">op_matrix_stack</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="s2">"noise_covariance"</span><span class="p">],</span> <span class="n">pol</span><span class="p">),</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1003" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1003"></a>                                                   <span class="n">op_shared_matrix</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="s2">"mask"</span><span class="p">],</span> <span class="n">pol</span><span class="p">),</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1004" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1004"></a>                                                   <span class="n">op_shared_matrix</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="s2">"beam"</span><span class="p">],</span> <span class="n">pol</span><span class="p">),</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1005" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1005"></a>                                                   <span class="n">data_field</span><span class="o">.</span><span class="n">fourier_weights</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1006" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1006"></a>                                                   <span class="n">proposal_sigma</span> <span class="o">=</span> <span class="n">proposal_sigma</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1007" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1007"></a>                                                   <span class="n">metropolis_num_steps</span> <span class="o">=</span> <span class="n">metropolis_num_steps</span><span class="p">,</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1008" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1008"></a>                                                   <span class="n">pol</span> <span class="o">=</span> <span class="n">pol</span><span class="p">,</span> <span class="n">bb_is_zero</span> <span class="o">=</span> <span class="n">bb_is_zero</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1009" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1009"></a>                    <span class="n">param_vals</span><span class="p">[</span><span class="n">theta</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">theta_val</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1010" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1010"></a>                    <span class="n">current_params</span> <span class="o">=</span> <span class="n">current_params</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">theta_key_idx</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">theta_val</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1011" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1011"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1012" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1012"></a>            <span class="c1">#5. recompute mixing and covariance matrices using the newly sampled parameter values</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1013" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1013"></a>            <span class="n">args</span> <span class="o">=</span> <span class="n">update_args_after_sample</span><span class="p">(</span><span class="n">current_params</span><span class="p">,</span> <span class="n">predictors</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">pol</span> <span class="o">=</span> <span class="n">pol</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1014" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1014"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1015" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1015"></a>        <span class="c1">#6. unmix the fields using the updated version of the G &amp; D matrices</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1016" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1016"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">fixed_fields</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1017" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1017"></a>            <span class="n">_</span><span class="p">,</span> <span class="n">phi</span> <span class="o">=</span> <span class="n">unmix</span><span class="p">(</span><span class="n">mixed_temp</span><span class="p">,</span> <span class="n">mixed_phi</span><span class="p">,</span> <span class="n">args</span><span class="p">[</span><span class="s2">"mixing_d"</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="s2">"mixing_g"</span><span class="p">])</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1018" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1018"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1019" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1019"></a>        <span class="c1">#7. plot certain diagnostics if user specified</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1020" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1020"></a>        <span class="k">if</span> <span class="n">advanced_logging</span><span class="p">[</span><span class="s2">"plot_log_pdf"</span><span class="p">]:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1021" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1021"></a>            <span class="n">mixed_logpdf_value</span> <span class="o">=</span> <span class="n">mixed_logpdf</span><span class="p">(</span><span class="n">mixed_temp</span><span class="p">,</span> <span class="n">mixed_phi</span><span class="p">,</span> <span class="n">data_field</span><span class="p">,</span> <span class="n">args</span><span class="p">[</span><span class="s2">"noise_covariance"</span><span class="p">],</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1022" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1022"></a>                                              <span class="n">args</span><span class="p">[</span><span class="s2">"phi_covariance"</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="s2">"field_covariance"</span><span class="p">],</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1023" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1023"></a>                                              <span class="n">args</span><span class="p">[</span><span class="s2">"mask"</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="s2">"beam"</span><span class="p">],</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1024" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1024"></a>                                              <span class="n">args</span><span class="p">[</span><span class="s2">"mixing_g"</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="s2">"mixing_d"</span><span class="p">])</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1025" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1025"></a>            <span class="n">mixed_logpdf_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mixed_logpdf_value</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1026" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1026"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1027" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1027"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">mixed_logpdf_values</span><span class="p">,</span> <span class="n">marker</span> <span class="o">=</span> <span class="s2">"o"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1028" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1028"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">"Mixed LogPDF Over Time"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1029" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1029"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">"Iteration"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1030" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1030"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">"Mixed LogPDF Value"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1031" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1031"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1032" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1032"></a>            <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))),</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1033" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1033"></a>                                <span class="s2">"cmb_lensing"</span><span class="p">,</span> <span class="s2">"sample_lcdm_output"</span><span class="p">,</span> <span class="s2">"logpdf_progress.png"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1034" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1034"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1035" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1035"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span> 
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1036" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1036"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1037" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1037"></a>        <span class="k">if</span> <span class="n">advanced_logging</span><span class="p">[</span><span class="s2">"plot_lcdm_sigmas"</span><span class="p">]:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1038" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1038"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1039" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1039"></a>            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">theta_log_names</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1040" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1040"></a>                <span class="n">normalized</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">param_vals</span><span class="p">[</span><span class="n">name</span><span class="p">])</span> <span class="o">-</span> <span class="n">GROUND_TRUTH</span><span class="p">[</span><span class="n">name</span><span class="p">])</span> <span class="o">/</span> <span class="n">PARAM_SIGMA</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1041" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1041"></a>                <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">normalized</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="n">name</span><span class="p">,</span> <span class="n">marker</span> <span class="o">=</span> <span class="s2">"o"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1042" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1042"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">color</span> <span class="o">=</span> <span class="s2">"black"</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="s2">"Zero Sigma"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1043" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1043"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">color</span> <span class="o">=</span> <span class="s2">"grey"</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="s2">"+/- 1 Sigma"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1044" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1044"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">color</span> <span class="o">=</span> <span class="s2">"grey"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1045" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1045"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">"(mean - sample)/sigma"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1046" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1046"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">"Iteration"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1047" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1047"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">"Standard Deviations"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1048" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1048"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1049" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1049"></a>            <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))),</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1050" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1050"></a>                                <span class="s2">"cmb_lensing"</span><span class="p">,</span> <span class="s2">"sample_lcdm_output"</span><span class="p">,</span> <span class="s2">"lcdm_progress.png"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1051" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1051"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1052" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1052"></a>            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1053" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1053"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1054" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1054"></a>        <span class="c1">#Log chains to .txt files if we are running a larger experiment on an HPC</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1055" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1055"></a>        <span class="k">if</span> <span class="n">hpc_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1056" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1056"></a>            <span class="k">for</span> <span class="n">theta</span> <span class="ow">in</span> <span class="n">theta_log_names</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1057" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1057"></a>                <span class="n">theta_path</span> <span class="o">=</span> <span class="n">hpc_path</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">theta</span><span class="si">}</span><span class="s2">_map_</span><span class="si">{</span><span class="n">map_idx</span><span class="si">}</span><span class="s2">_chain_</span><span class="si">{</span><span class="n">sub_chain_idx</span><span class="si">}</span><span class="s2">_history.txt"</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1058" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1058"></a>                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">theta_path</span><span class="p">,</span> <span class="s2">"a"</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1059" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1059"></a>                    <span class="n">file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">param_vals</span><span class="p">[</span><span class="n">theta</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1060" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1060"></a>
+<a id="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1061" name="cmb_lensing.sample_lcdm.sample_joint--source--__codelineno-0-1061"></a>    <span class="k">return</span> <span class="n">param_vals</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span> <span class="n">sub_key</span> 
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../map-joint/" class="md-footer__link md-footer__link--prev" aria-label="Previous: MAP Estimation">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                MAP Estimation
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../fields/" class="md-footer__link md-footer__link--next" aria-label="Next: Fields, Operators and Data Sets">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Fields, Operators and Data Sets
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "content.code.copy", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  <script data-mkdocs-jupyter-mathjax="{&quot;url&quot;: &quot;https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-mml-chtml.js&quot;, &quot;version&quot;: 4}">
+/* Shared by full pages and Material's instant navigation. */
+(() => {
+  const config = JSON.parse(document.currentScript.dataset.mkdocsJupyterMathjax);
+  if (window.mkdocsJupyterMathJax) return;
+
+  let loading;
+  let queue = Promise.resolve();
+  let previous = [];
+
+  const ready = async () => {
+    if (!loading) {
+      loading = (async () => {
+        let math = window.MathJax;
+        if (!math?.typesetPromise) {
+          const url = new URL(config.url, document.baseURI).href;
+          const existing = Array.from(document.scripts).find(script =>
+            script.src && (script.src === url || script.id === 'MathJax-script' ||
+              (/mathjax/i.test(script.src) &&
+               /\/(?:MathJax|latest|(?:tex|mml)(?:-mml)?-(?:chtml|svg))\.js(?:[?#]|$)/i.test(script.src))));
+          if (existing) {
+            if (!math?.startup?.promise) {
+              await new Promise((resolve, reject) => {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', reject, { once: true });
+              });
+            }
+          } else {
+            // Keep site macros, delimiters and startup hooks when supplied.
+            const options = math || {};
+            window.MathJax = {
+              ...options,
+              loader: {
+                ...options.loader,
+                load: Array.from(new Set(['ui/safe', ...(options.loader?.load || [])]))
+              },
+              startup: { typeset: false, ...options.startup },
+              tex: {
+                tags: 'ams',
+                useLabelIds: true,
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true,
+                ...options.tex
+              }
+            };
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = config.url;
+              script.id = 'MathJax-script';
+              script.async = true;
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+          }
+        }
+        math = window.MathJax;
+        await math.startup.promise;
+        return math;
+      })();
+    }
+    const math = await loading;
+    // A site owner can extend the v3 queue again on each navigation.
+    await math.startup.promise;
+    return math;
+  };
+
+  const unrendered = node => {
+    if (node.matches('mjx-container')) return [];
+    if (!node.querySelector('mjx-container')) return [node];
+    // In v3, scanning generated assistive MathML again produces nested output.
+    return Array.from(node.children).flatMap(unrendered);
+  };
+
+  const refresh = () => {
+    // A separate chain also serializes v3, without changing v4's startup promise.
+    queue = queue.then(async () => {
+      const notebooks = Array.from(document.querySelectorAll('.jupyter-wrapper'));
+      if (!notebooks.length && !previous.length) return;
+      if (notebooks.length === previous.length &&
+          notebooks.every((node, index) => node === previous[index])) return;
+      const math = await ready();
+      if (previous.length) {
+        math.typesetClear(previous);
+        math.texReset();
+      }
+      previous = notebooks.filter(node => node.isConnected);
+      const pending = previous.flatMap(unrendered);
+      if (pending.length) await math.typesetPromise(pending);
+    }).catch(error => console.error('mkdocs-jupyter: MathJax rendering failed', error));
+    return queue;
+  };
+
+  window.mkdocsJupyterMathJax = { refresh };
+  const start = () => {
+    if (typeof document$ !== 'undefined') document$.subscribe(refresh);
+    else refresh();
+  };
+  // Theme bundles and user-provided MathJax scripts can follow notebook content.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else start();
+})();
+
+</script>
+</body>
+</html>
