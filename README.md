@@ -37,7 +37,18 @@ pip install -e ".[dev]"    #pytest + jupyter
 pip install -e ".[docs]"   #MkDocs, to build the documentation locally
 ```
 
-`sample_joint` reads its theory spectra from a 5D CAMB spline (~7.9 GB), which is downloaded automatically from [Hugging Face](https://huggingface.co/datasets/zaneblood1/5D_LCDM_CAMB_Grid_Spline) into `camb_splines/` the first time it is needed. To fetch it ahead of time (e.g. on a cluster login node), run `cmb-lensing-download-splines`.
+`sample_joint` reads its theory spectra from a 5D CAMB spline (~7.9 GB), which is downloaded automatically from [Hugging Face](https://huggingface.co/datasets/zaneblood1/cmb_lensing_data) into `camb_splines/` the first time it is needed. To fetch it ahead of time (e.g. on a cluster login node), run `cmb-lensing-download-splines`.
+
+## Data
+
+All of the repository's large data is stored on the Hugging Face dataset [zaneblood1/cmb_lensing_data](https://huggingface.co/datasets/zaneblood1/cmb_lensing_data), since it is too large for GitHub: the 5D CAMB grid, the LCDM chains, the `map_joint` and sampler lensing reconstruction noise, the delensed covariances used by the Fisher forecast, and the Python vs Julia `map_joint` comparison outputs (~23 GB in total). Only the CAMB grid is downloaded automatically. To fetch one of the other folders, e.g. the chains:
+
+```bash
+hf download zaneblood1/cmb_lensing_data --repo-type dataset \
+    --include "joint_inference_data/*" --local-dir cmb_lensing_data
+```
+
+The dataset card and the [data documentation](https://zaneblooddev.com/CMBLensing.py/getting-started/data/) describe every folder and how the scripts here read it.
 
 ## Quick start
 

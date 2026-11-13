@@ -17,6 +17,7 @@ All array operations run in JAX (float64), so the code runs on CPU and GPU and i
 | install the package | [Installation](getting-started/installation.md) |
 | simulate a map and run `map_joint` | [MAP Estimation Tutorial](map_joint_tutorial.ipynb) |
 | learn more about sampling the LCDM parameters | [Sampling Tutorial](sample_joint_tutorial.ipynb), [LCDM Sampling](concepts/sample-joint.md) |
+| download the chains and other data behind the results | [Data](getting-started/data.md) |
 | run a full experiment on a cluster | [HPC Setup](getting-started/hpc-setup.md) |
 | compare sampler data to the Fisher forecast | [Fisher Forecast](fisher-forecast.md), [Chain Analysis](pipelines/chain-analysis.md) |
 | change the code | [Testing](testing.md) |

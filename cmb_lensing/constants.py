@@ -77,11 +77,13 @@ CAMB_LMAX = DEFAULT_MAX_ELL
 
 #where the 5D CAMB grid spline the sampler reads lives: camb_splines/camb_grid_spline.npz at
 #the repository root (~8 GB). The folder is gitignored; the file is downloaded from the
-#Hugging Face dataset CAMB_SPLINES_REPO on first use (camb_splines.py)
+#Hugging Face dataset CAMB_SPLINES_REPO on first use (camb_splines.py). That dataset holds all
+#of the repository's large data: the grid at its root, and the chains, phi noise, delensed
+#covariance and map_joint comparison outputs in folders next to it (docs/getting-started/data.md)
 CAMB_SPLINES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "camb_splines")
 CAMB_GRID_FILE = "camb_grid_spline.npz"
 CAMB_GRID_PATH = os.path.join(CAMB_SPLINES_DIR, CAMB_GRID_FILE)
-CAMB_SPLINES_REPO = "zaneblood1/5D_LCDM_CAMB_Grid_Spline"
+CAMB_SPLINES_REPO = "zaneblood1/cmb_lensing_data"
 
 #The default field and operator constants are defined for a square 256 x 256 map
 #with 2 arcminute resolution...

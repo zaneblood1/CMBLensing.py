@@ -29,7 +29,7 @@ If you wish to run the unit tests or actively contribute to the development of t
 
 ## Downloading the 5D CAMB grid
 
-`sample_joint` evaluates its theory spectra through a 5D CAMB spline, `camb_splines/camb_grid_spline.npz` (~7.9 GB). This file is too large to store on GitHub. It is hosted on the Hugging Face dataset [zaneblood1/5D_LCDM_CAMB_Grid_Spline](https://huggingface.co/datasets/zaneblood1/5D_LCDM_CAMB_Grid_Spline) and is **downloaded automatically into `camb_splines/` the first time the code needs it** (`cmb_lensing/camb_splines.py`). No manual step is needed.
+`sample_joint` evaluates its theory spectra through a 5D CAMB spline, `camb_splines/camb_grid_spline.npz` (~7.9 GB). This file is too large to store on GitHub. It is hosted on the Hugging Face dataset [zaneblood1/cmb_lensing_data](https://huggingface.co/datasets/zaneblood1/cmb_lensing_data) and is **downloaded automatically into `camb_splines/` the first time the code needs it** (`cmb_lensing/camb_splines.py`). No manual step is needed.
 
 To fetch it ahead of time, run
 
@@ -38,6 +38,8 @@ cmb-lensing-download-splines
 ```
 
 On a cluster, run this once on a login node: compute nodes often have no internet access. You can also rebuild the grid yourself ([Building the CAMB Grid](../pipelines/camb-grid.md)) and place it at `camb_splines/camb_grid_spline.npz`. See [The CAMB Grid](camb-grid.md) for more information on how the grid is used.
+
+The same dataset holds the chains, phi noise, delensed covariance and `map_joint` comparison outputs. None of those is downloaded automatically; see [Data](data.md).
 
 ## HPC setup (`hpc_local.sh`)
 

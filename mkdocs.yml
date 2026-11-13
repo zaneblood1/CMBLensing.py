@@ -33,6 +33,7 @@ nav:
   - Getting started:
       - Installation: getting-started/installation.md
       - The CAMB Grid: getting-started/camb-grid.md
+      - Data: getting-started/data.md
       - HPC Setup: getting-started/hpc-setup.md
   - Core concepts:
       - Fields and Operators: concepts/fields.md

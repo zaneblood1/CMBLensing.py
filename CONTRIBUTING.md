@@ -31,7 +31,7 @@ cd CMBLensing.py
 pip install -e ".[dev,docs]"
 ```
 
-The LCDM sampler needs precomputed CAMB spectra, which are hosted on the Hugging Face dataset [`zaneblood1/5D_LCDM_CAMB_Grid_Spline`](https://huggingface.co/datasets/zaneblood1/5D_LCDM_CAMB_Grid_Spline). They are downloaded into `camb_splines/` automatically the first time they are needed, or ahead of time with
+The LCDM sampler needs precomputed CAMB spectra, which are hosted on the Hugging Face dataset [`zaneblood1/cmb_lensing_data`](https://huggingface.co/datasets/zaneblood1/cmb_lensing_data), together with the rest of the repository's large data (chains, phi noise, delensed covariances, the `map_joint` comparison outputs). They are downloaded into `camb_splines/` automatically the first time they are needed, or ahead of time with
 
 ```bash
 cmb-lensing-download-splines
