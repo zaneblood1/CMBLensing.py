@@ -234,8 +234,10 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground, delensed_c
     """Gaussian Fisher matrix for the sampled LCDM parameters on an nside x nside box.
 
     Args:
-        nside, theta_pix, noise_level: the box (pixels per side, arcmin, uK-arcmin in
-                      temperature; the polarization noise is sqrt(2) higher)
+        nside:        pixels per side of the box
+        theta_pix:    pixel width in arcmin
+        noise_level:  noise in uK-arcmin in temperature; the polarization noise is sqrt(2)
+                      higher
         is_sampled:   {param_name: bool}; False parameters are held FIXED
         param_ground: {param_name: float} fiducial point, all five
         delensed_covariance: a merged delensed_covariance.npz measured at this box, noise
@@ -249,12 +251,14 @@ def forecast(nside, theta_pix, noise_level, is_sampled, param_ground, delensed_c
         phi_noise:    a merged map_joint_phi_noise.npz / sampler_phi_noise.npz whose `nphi`
                       replaces the QE N0
         include_bb:   for "P" / "IP", whether the delensed BB block is counted
-        l_knee, beam_fwhm: 1/f knee (0 = white, as every sampler entry point) and beam FWHM
+        l_knee:       1/f knee of the noise (0 = white, as every sampler entry point)
+        beam_fwhm:    beam FWHM
         camb_lmax:    how far CAMB is run (default CAMB_LMAX, the simulations' support)
 
     Returns:
-        (fisher, names) - the n_sampled x n_sampled matrix and the sampled names, both in
-        constants.PARAM_ORDER.
+        fisher (numpy.ndarray): the n_sampled x n_sampled Fisher matrix, rows and columns
+            in constants.PARAM_ORDER.
+        names (list): the sampled parameter names, in constants.PARAM_ORDER.
 
     Raises:
         ValueError: if delensed_covariance is None.

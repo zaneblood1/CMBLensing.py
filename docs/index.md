@@ -20,4 +20,4 @@ All array operations run in JAX (float64), so the code runs on CPU and GPU and i
 | browse the results or download the chains and other data behind them | [Data Availability](getting-started/data.md) |
 | run a full experiment on a cluster | [HPC setup](getting-started/installation.md#hpc-setup) |
 | compare sampler data to the Fisher forecast | [Analyzing Chain Data](chain_analysis_tutorial.ipynb), [Fisher Forecast](api/fisher-forecast.md) |
-| change the code | [Unit Tests](getting-started/unit-tests.md) |
+| change the code | [Developing](getting-started/developing.md) |

@@ -3,9 +3,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-#Claude Code's local state is ignored, but the project skills (e.g. /update-docs) are tracked
-.claude/*
-!.claude/skills/
+#Claude Code's local state and the project skills (.claude/skills/) are local only
+.claude/
 #CAMB spline caches, downloaded from Hugging Face on first use (cmb_lensing/camb_splines.py)
 camb_splines/
 .vscode

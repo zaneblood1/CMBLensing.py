@@ -1,4 +1,35 @@
-# Unit Tests
+# Developing
+
+Bug reports, questions, documentation fixes and code contributions are all welcome. This page explains how to set up a development environment, run the unit tests and propose a change. The same guidelines are in the file [`CONTRIBUTING.md`](https://github.com/zaneblood1/CMBLensing.py/blob/master/CONTRIBUTING.md) of the repository.
+
+## Getting help and reporting a bug
+
+All support goes through [GitHub Issues](https://github.com/zaneblood1/CMBLensing.py/issues). For a question, say so in the title of the issue (for example "Question: ..."), and search the existing issues first in case it has already been answered.
+
+A bug report should include:
+
+- what you ran, ideally a short script that reproduces the problem,
+- what you expected to happen and what happened instead, with the full error traceback if there is one,
+- the run configuration: the polarization mode (`"I"`, `"P"` or `"IP"`), `nside`, `theta_pix`, the noise level, and whether the 5D CAMB grid was the downloaded one or one you rebuilt,
+- your environment: the operating system, the Python version, the versions of `jax`, `jaxlib` and `camb`, and whether you ran on a CPU or a GPU.
+
+For a result that looks wrong rather than a crash, include a plot or the numbers you compared against.
+
+To suggest a feature, open an issue that describes what you would like to do and why. For a larger change, open the issue before writing code, so the approach can be agreed on first.
+
+## Setting up a development environment
+
+Clone the repository and install it in editable mode, with the extra packages for the tests and the documentation:
+
+```bash
+git clone https://github.com/zaneblood1/CMBLensing.py.git
+cd CMBLensing.py
+pip install -e ".[dev,docs]"
+```
+
+The LCDM sampler also needs the 5D CAMB grid, which is downloaded on first use (see [Installation](installation.md)). Its folder `camb_splines/` is gitignored: never commit or force-add these files.
+
+## Unit tests
 
 Most tests compare CMBLensing.py with CMBLensing.jl: given the same inputs, the Python and Julia outputs should agree to numerical precision. The Julia outputs are stored in the repository, in the folder `tests/ground_truth_data/`, so the tests run without Julia installed.
 
@@ -16,7 +47,7 @@ The LCDM sampler, the Fisher forecast and the noise measurement modules have no 
 
 These comparisons are closer to validation benchmarks than to unit tests: they check whole functions against Julia. Each one fails when a regression is introduced that makes the Python and Julia versions differ past a threshold (see [When a test fails](#when-a-test-fails)). Unit tests that check small pieces of the code in isolation are an area for future development and improvement.
 
-## Running the tests
+### Running the tests
 
 Run every test from the repository root:
 
@@ -30,22 +61,16 @@ Or run a single file:
 pytest tests/test_lensing.py
 ```
 
-## When a test fails
+### When a test fails
 
 Every comparison measures a difference between the Python and the Julia output and fails when that difference exceeds a threshold. The thresholds are set from the differences measured on 2026-11-24, which each test file lists at its top (`MEASURED_NORM_DIFF`, `MEASURED_DECORRELATION`, ...): a comparison may reach `REGRESSION_MARGIN` (2) times its measured difference before it fails, and comparisons that agree to round-off are allowed `ROUND_OFF_TOLERANCE` (1e-12). Both constants are in `tests/regression_thresholds.py`.
 
-| Test file | Difference that is compared with the threshold |
-|---|---|
-| `test_covariance_matrices.py`, `test_lensing.py`, `test_gradients.py`, `test_wiener_filter.py`, `test_map_joint.py` | the norm of (Python - Julia) divided by the norm of the Julia output |
-| `test_lensing.py`, `test_gradients.py` | also 1 minus the cross correlation between the Python and Julia outputs, averaged over the multipole bins |
-| `test_logpdf.py` | the fractional difference of the two log-probabilities |
-| `test_simulated_cls.py` | the rms over the multipole bins of ln(C_l Python / C_l Julia). The two spectra are averages over independent sets of 100 simulations, so this difference is sample variance; the Python simulations are seeded so the test is reproducible |
 
 A failing test therefore means that a change to the code moved the Python output away from the Julia output. If the change is intended and the new difference is understood, update the measured value in the test file.
 
 The tests also write comparison plots into the folder `tests/test_generated_figures/` (the Python and Julia outputs, their difference and their cross correlation). The page `tests/index.html` displays them; open it through a local server such as the VS Code Live Server extension. Opening it is not necessary, since the tests fail on their own, but the plots can help with debugging when a test fails: they show where on the map, or at which multipoles, the two outputs differ.
 
-## Regenerating the Julia data
+### Regenerating the Julia data
 
 This is only needed when the Julia reference data has to change. It requires Julia, a CMBLensing.jl checkout at the commit above, and the Python package juliacall.
 
@@ -155,7 +180,7 @@ To regenerate the data and run the tests in one command:
 pytest --generate
 ```
 
-## Confirming the checkout works
+### Confirming the checkout works
 
 After regenerating the data, run the MAP estimate comparison:
 
@@ -171,16 +196,47 @@ tests/test_generated_figures/map_joint/polarization_only/
 tests/test_generated_figures/map_joint/intensity_and_polarization/
 ```
 
-Each folder holds two sub-folders of plots to inspect:
-
-| Plot | What to look for |
-|---|---|
-| `phi/julia_mle_phi.png` | Julia's estimate of the lensing potential: a smooth map with visible structure, like the Python estimate next to it |
-| `fields/julia_mle_field_*.png` | Julia's estimates of the unlensed fields, again matching the Python estimates |
-| `phi/phi_cross_correlation.png`, `fields/*_cross_correlation.png` | the estimates compared with the simulated truth: the "Julia x Sim" curve should be close to 1 on large scales and lie on top of the "Python x Sim" curve |
-
 A Julia result that is NaN or all zeros typically means one of three things:
 
 - the environment of the checkout was not activated (steps 5 and 8),
 - the Julia version is not 1.11 (step 2),
 - the checkout is not at the commit above (step 3).
+
+## Submitting a pull request
+
+1. Fork the repository and create a branch off `master`.
+2. Keep each pull request focused on one change.
+3. Run the tests that cover the code you touched.
+4. If your change affects numerical results, say in the pull request description how you checked it (for example against CMBLensing.jl or direct CAMB).
+5. If you change the commands or the outputs of a pipeline, update the matching page in `docs/` too.
+6. Open the pull request against `master` and describe what it changes and why.
+
+The LCDM sampler, the Fisher forecast and the noise measurement modules have no tests yet, so contributions there are especially welcome.
+
+## Code style
+
+There is no automatic formatter, so please follow these conventions:
+
+- Write plain, readable code, with variable names that follow the physics (`cphi`, `nphi`, `cl_tt`, ...). Readability should not cost performance.
+- If a standard library (numpy, scipy, jax, the Python standard library) already does the job, use it instead of writing your own version.
+- No magic numbers: give every constant a name, and put the widely used ones in `cmb_lensing/constants.py`.
+- Keep the code lean: do not add defensive input checks or machinery that the computation does not need.
+
+## Building the documentation
+
+This site is built with MkDocs Material. The pages are in the folder `docs/` and the navigation is in `mkdocs.yml`.
+
+```bash
+mkdocs serve            #local preview at http://127.0.0.1:8000
+mkdocs build --strict   #run this before pushing
+```
+
+The site is redeployed automatically on every push to `master`.
+
+## HPC scripts
+
+The cluster scripts read personal settings (the conda environment, the e-mail address, paths) from the gitignored file `hpc_local.sh`. Copy `hpc_local.example.sh` to `hpc_local.sh` and edit that copy, so that personal settings stay out of tracked files (see [HPC setup](installation.md#hpc-setup)).
+
+## License
+
+CMBLensing.py is released under the [MIT License](https://github.com/zaneblood1/CMBLensing.py/blob/master/LICENSE). By contributing, you agree that your contributions are licensed under the same terms.

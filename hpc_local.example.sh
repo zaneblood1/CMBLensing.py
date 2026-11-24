@@ -14,8 +14,10 @@ conda activate myenv
 # source activate myenv
 # export PATH=/scratch/user/<user>/.conda/envs/myenv/bin:$PATH
 
-#Use a line like below to stop code from executing on specific problematic nodes
-export SBATCH_EXCLUDE=ac006
+#optional: nodes no job may run on, comma separated. Every driver passes it to sbatch as
+#--exclude (hpc_submit.sh); sbatch reads no environment variable for this. A job submitted by
+#hand needs the option itself: sbatch --exclude=ac006 merge_sampler_phi_noise.sh
+export EXCLUDE_NODES=ac006
 
 #where Slurm mails job failures. sbatch reads SBATCH_MAIL_USER from the environment, so every
 #job a driver submits picks it up. A job submitted by hand (sbatch merge_*.sh) only sees it if

@@ -861,11 +861,11 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
         use_mask: Apply a sky mask. False (the default) uses a mask of all ones.
 
     Returns:
-        A `DataSetT` (pol = "I"), `DataSetEB` (pol = "P") or `DataSetTEB` (pol = "IP")
-        holding the fields (`unlensed_field`, `lensed_field`, `phi`, `data`) and the
-        operators (`field_covariance`, `phi_covariance`, `noise_covariance`, `mask`,
-        `beam`, `mixing_d`, `mixing_g`, `quadratic_estimate`, ...). All fields are in
-        Fourier space.
+        data_set (DataSetT | DataSetEB | DataSetTEB): a `DataSetT` (pol = "I"), `DataSetEB`
+            (pol = "P") or `DataSetTEB` (pol = "IP") holding the fields (`unlensed_field`,
+            `lensed_field`, `phi`, `data`) and the operators (`field_covariance`,
+            `phi_covariance`, `noise_covariance`, `mask`, `beam`, `mixing_d`, `mixing_g`,
+            `quadratic_estimate`, ...). All fields are in Fourier space.
 
     Example:
         ```python

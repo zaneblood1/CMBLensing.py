@@ -29,8 +29,9 @@ def map_joint(data_set, num_steps = 30, constant_step = False):
         constant_step: If True, skip the line search and take unit-length phi steps.
 
     Returns:
-        (f, phi): the estimated unlensed field (same type as `data_set.data`) and the
-        estimated lensing potential (a `FlatS0`), both in Fourier space.
+        f (FlatS0 | FlatS2 | FlatS02): the estimated unlensed field, of the same type as
+            `data_set.data`, in Fourier space.
+        phi (FlatS0): the estimated lensing potential, in Fourier space.
 
     Example:
         ```python

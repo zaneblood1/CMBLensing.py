@@ -33,7 +33,7 @@ nav:
   - Getting started:
       - Installation: getting-started/installation.md
       - Data Availability: getting-started/data.md
-      - Unit Tests: getting-started/unit-tests.md
+      - Developing: getting-started/developing.md
   - Tutorials:
       - Basic Concepts: concepts/basic-concepts.md
       - MAP Estimation: map_joint_tutorial.ipynb

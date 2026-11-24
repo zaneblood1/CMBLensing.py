@@ -137,9 +137,10 @@ def load_chains(chain_dir, burn_in = DEFAULT_BURN_IN):
         burn_in:   sweeps removed from the start of every sub-chain
 
     Returns:
-        (chains, map_seeds) - `chains[param][map][sub_chain]` is a 1D array for every
-        GROUND_TRUTH parameter with files, in GROUND_TRUTH's order, with maps and sub-chains
-        in the same order for every parameter; map_seeds lists the kept maps.
+        chains (dict): `chains[param][map][sub_chain]` is a 1D array for every GROUND_TRUTH
+            parameter with files, in GROUND_TRUTH's order, with maps and sub-chains in the
+            same order for every parameter.
+        map_seeds (list): the seeds of the kept maps.
     """
     files = find_history_files(chain_dir)
     #every sampled parameter, in GROUND_TRUTH's (= PARAM_ORDER's) order
@@ -508,9 +509,11 @@ def get_avg_covariance_matrix(chains):
     what a Fisher forecast predicts.
 
     Returns:
-        (avg_cov_mat, param_names, cov_err, sigma_err), the last two from measured_errors:
-        the element-wise error of the averaged covariance and the error of each width
-        sqrt(C_ii).
+        avg_cov_mat (numpy.ndarray): the per-map covariance matrix averaged over maps.
+        param_names (list): the parameters of its rows and columns.
+        cov_err (numpy.ndarray): the element-wise error of the averaged covariance, from
+            measured_errors.
+        sigma_err (numpy.ndarray): the error of each width sqrt(C_ii), from measured_errors.
     """
     param_names = list(chains.keys())
     num_maps = len(chains[param_names[0]])
@@ -539,7 +542,9 @@ def get_forecasted_covariance(nside, theta_pix, noise, param_names, delensed_cov
     the same N_phi.
 
     Args:
-        nside, theta_pix, noise: the chains' box (pixels per side, arcmin, uK-arcmin)
+        nside:               pixels per side of the chains' box
+        theta_pix:           pixel width in arcmin
+        noise:               noise level in uK-arcmin
         param_names:         the sampled parameters; the others are held fixed
         delensed_covariance: a merged delensed_covariance.npz at this box, noise level and
                              `pol` (required)
@@ -553,8 +558,9 @@ def get_forecasted_covariance(nside, theta_pix, noise, param_names, delensed_cov
         camb_lmax:           how far CAMB is run
 
     Returns:
-        The covariance matrix F^-1 over param_names, rows and columns in
-        constants.PARAM_ORDER (the order load_chains returns its parameters in).
+        covariance (numpy.ndarray): the covariance matrix F^-1 over param_names, rows and
+            columns in constants.PARAM_ORDER (the order load_chains returns its parameters
+            in).
     """
     is_sampled = {name: name in param_names for name in ground_truth}
     fisher, names = forecast(nside, theta_pix, noise, is_sampled, ground_truth,
@@ -855,8 +861,10 @@ def main(chain_dir, nside = DEFAULT_NSIDE, theta_pix = DEFAULT_THETA_PIX, noise 
         chain_dir:  directory of sample_joint's history files,
                     `<param>_map_<seed>_chain_<index>_history.txt`; the sampled parameters,
                     maps and sub-chains are read off the file names
-        nside, theta_pix, noise: the box the chains ran on (pixels per side, arcmin,
-                    uK-arcmin); they label the triangle plot and set the forecast's box
+        nside:      pixels per side of the box the chains ran on. With theta_pix and noise
+                    it labels the triangle plot and sets the forecast's box
+        theta_pix:  pixel width in arcmin
+        noise:      noise level in uK-arcmin
         pol:        "I", "P" or "IP", the data the chains saw; it labels the triangle plot
                     and is the data the forecast models
         burn_in:    sweeps removed from the start of every sub-chain
@@ -876,12 +884,12 @@ def main(chain_dir, nside = DEFAULT_NSIDE, theta_pix = DEFAULT_THETA_PIX, noise 
         camb_lmax:  how far the forecast runs CAMB
 
     Returns:
-        A dict: `param_names`, `map_seeds`, `chains` (load_chains' output), `summaries`
-        (per parameter: the product mean / std / z-score with their errors, the average
-        single-map std, the average per-map z-score with its standard error over maps,
-        R-hat per map and the acceptance rate), `measured_covariance` with
-        `measured_covariance_error` and `measured_sigma_error` (delete-one-map jackknife),
-        `forecast_covariance` (None without run_fisher) and `out_dir`.
+        results (dict): `param_names`, `map_seeds`, `chains` (load_chains' output),
+            `summaries` (per parameter: the product mean / std / z-score with their errors,
+            the average single-map std, the average per-map z-score with its standard error
+            over maps, R-hat per map and the acceptance rate), `measured_covariance` with
+            `measured_covariance_error` and `measured_sigma_error` (delete-one-map
+            jackknife), `forecast_covariance` (None without run_fisher) and `out_dir`.
     """
     #checked before the chains are analysed, not minutes later inside the forecast
     if run_fisher and delensed_covariance is None:

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=02:00:00 #run job for max X amount of time...
+#SBATCH --time=24:00:00 #run job for max X amount of time...
 #SBATCH --nodes=1 #i.e. the number of machines to run on... Since no MPI just set to 1
 #SBATCH --ntasks=1 #number of processor cores / tasks... Since no MPI just set to 1
 #SBATCH --mem-per-cpu=16G   #memory per CPU core

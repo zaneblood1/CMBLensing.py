@@ -1,6 +1,6 @@
 # Building the CAMB Grid
 
-Most users should [download the grid](../getting-started/installation.md#the-5d-camb-grid). Rebuild it when CAMB is upgraded or the grid's box changes.
+Most users should [download the grid](../getting-started/installation.md#downloading-the-camb-grid). Rebuild it when CAMB is upgraded or the grid's box changes.
 
 ## Background
 

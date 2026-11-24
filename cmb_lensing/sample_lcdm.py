@@ -858,10 +858,11 @@ def sample_joint(data_set, param_init, proposal_sigmas, param_ranges, should_sam
             `{hpc_path}{name}_map_{map_idx}_chain_{sub_chain_idx}_history.txt`.
 
     Returns:
-        (param_vals, phi, sub_key): param_vals is a dict of per-parameter lists of the
-        chain's values (starting with `param_init`), phi the final lensing potential and
-        sub_key the final random key, which together with the last parameter values let a
-        chain be resumed.
+        param_vals (dict): per parameter name, the list of the chain's values, starting
+            with `param_init`.
+        phi (FlatS0): the final lensing potential.
+        sub_key (jax.Array): the final random key. Together with `phi` and the last
+            parameter values it lets a chain be resumed.
     """
 
     #polarization mode follows the dataset

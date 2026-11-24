@@ -25,7 +25,7 @@ data_set = load_sim(nside = 64, theta_pix = 5, pol = "I", master_seed = 1)
 print(f"Pixel resolution = {data_set.theta_pix} arcminutes per pixel")
 ```
 
-If you wish to run the unit tests or actively contribute to the development of the repository it will also be necessary to have [`juliacall`](https://juliapy.github.io/PythonCall.jl/stable/juliacall/) installed and a [CMBLensing.jl](https://github.com/marius311/CMBLensing.jl) checkout - see [Unit Tests](unit-tests.md) for more information.
+If you wish to run the unit tests or actively contribute to the development of the repository it will also be necessary to have [`juliacall`](https://juliapy.github.io/PythonCall.jl/stable/juliacall/) installed and a [CMBLensing.jl](https://github.com/marius311/CMBLensing.jl) checkout - see [Developing](developing.md#unit-tests) for more information.
 
 ## Downloading the CAMB grid
 
@@ -97,7 +97,7 @@ A driver can be run from any directory. It `cd`s into its own folder, sources th
 
 ### Submission throttle
 
-Some clusters cancel every submission beyond a cap on queued jobs instead of leaving it pending. Every driver therefore submits through `submit_throttled` (repo-root `hpc_submit.sh`): before each `sbatch` it waits until you have fewer than `MAX_QUEUED_JOBS` jobs queued or running (default 85), checking every `SUBMIT_POLL_SECONDS` (default 60), and it retries a rejected `sbatch`. Override either value in `hpc_local.sh`.
+Some clusters cancel every submission beyond a cap on queued jobs instead of leaving it pending. Every driver therefore submits through `submit_throttled` (repo-root `hpc_submit.sh`): before each `sbatch` it waits until you have fewer than `MAX_QUEUED_JOBS` jobs queued or running (default 85), checking every `SUBMIT_POLL_SECONDS` (default 60), and it retries a rejected `sbatch`. Set `EXCLUDE_NODES` in `hpc_local.sh` (comma separated, e.g. `ac006`) to keep every job a driver submits off those nodes: it is passed as `sbatch --exclude`, since `sbatch` reads no environment variable for it. Override either value in `hpc_local.sh`.
 
 A driver therefore runs until its last job is submitted, which can take hours. Keep it alive after you log out:
 
