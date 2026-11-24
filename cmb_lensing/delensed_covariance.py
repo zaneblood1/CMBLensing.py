@@ -270,8 +270,10 @@ def measure_delensed_covariance(nside, theta_pix, noise_level, param_ground, map
 
 # ── Collecting the per-realization files ──────────────────────────────────
 
-def _read_config(data):
-    """Everything that must agree between two job files before they may be averaged."""
+def _read_config(data, legacy_format = False):
+    """Everything that must agree between two job files before they may be averaged.
+    `legacy_format`: the file was written before 2026-11-11 (temperature only, no `pol` /
+    `components`)."""
     config = {}
     config["nside"] = int(data["nside"])
     config["theta_pix"] = float(data["theta_pix"])
@@ -280,15 +282,23 @@ def _read_config(data):
     config["lense_steps"] = int(data["lense_steps"])
     config["step_sigma"] = float(data["step_sigma"])
     config["names"] = tuple(str(name) for name in data["names"])
-    config["pol"] = str(data["pol"])
-    config["components"] = tuple(str(component) for component in data["components"])
+    if legacy_format:
+        config["pol"] = DEFAULT_POL
+        config["components"] = POL_COMPONENTS[DEFAULT_POL]
+    else:
+        config["pol"] = str(data["pol"])
+        config["components"] = tuple(str(component) for component in data["components"])
     config["qe_filter"] = str(data["qe_filter"])
     config["wiener_nphi_source"] = str(data["wiener_nphi_source"])
     return config
 
 
-def load_covariance_directory(directory):
+def load_covariance_directory(directory, legacy_format = False):
     """Stack every delensed_covariance_*.npz in `directory`.
+
+    `legacy_format`: the job files were written before 2026-11-11, i.e. temperature only with
+    no `pol` / `components` and no component axis in `delensed`; they are read as pol "I" and
+    given the component axis.
 
     Refuses files that disagree on the box, pol, W, the stencil (names, step, fiducial
     cosmology) or that repeat a seed.
@@ -309,7 +319,7 @@ def load_covariance_directory(directory):
     stacked = []
     for path in paths:
         data = np.load(path)
-        current = _read_config(data)
+        current = _read_config(data, legacy_format)
         if config is None:
             config = current
             metadata = {key: data[key] for key in ("offsets", "point_params", "steps")}
@@ -321,7 +331,8 @@ def load_covariance_directory(directory):
             raise ValueError(f"{path} sits on a different stencil (cosmologies) than earlier "
                              f"files; averaging them would blur exactly the theta "
                              f"dependence being measured. Use one out_dir per stencil.")
-        stacked.append(np.asarray(data["delensed"]))
+        delensed = np.asarray(data["delensed"])
+        stacked.append(delensed[:, None] if legacy_format else delensed)
         seeds.append(int(data["map_seed"]))
 
     if len(set(seeds)) != len(seeds):
@@ -335,15 +346,17 @@ def load_covariance_directory(directory):
     return np.array(stacked), metadata
 
 
-def merge_delensed_covariance(directory):
+def merge_delensed_covariance(directory, legacy_format = False):
     """Average the per-realization delensed covariances into the 1 + 2k empirical ones: the
     realization MEAN at each stencil point, which is what the forecast differentiates.
+    `legacy_format` merges job files written before 2026-11-11 (temperature only, no `pol`)
+    into a current-format file.
 
     Returns the dict written to delensed_covariance.npz: `delensed_fid` (n_components, nside,
     nside // 2 + 1) at theta_0, `delensed_plus` / `delensed_minus` (k, n_components, ...) at
     theta_0 +/- h_i, with `components`, `pol`, the stencil and the box.
     """
-    stacked, metadata = load_covariance_directory(directory)
+    stacked, metadata = load_covariance_directory(directory, legacy_format)
     names = list(metadata["names"])
     centre, plus, minus = _stencil_indices(len(names))
     mean = np.mean(stacked, axis = 0)

@@ -54,7 +54,7 @@ python -m cmb_lensing.sampler_phi_noise --nside 64 --theta_pix 5 --n_maps 4 --n_
 
 ## Output: `sampler_phi_noise.npz`
 
-`nphi` (NaN where unmeasured, 0 at the origin), `nphi_error`, the N leave-one-out `nphi_leave_one_out`, `rhat_real` / `rhat_imaginary` (per map and mode), `cphi`, the mean moments, `burn_in`, `n_chains`, `n_used`, the seeds and the box / cosmology keys (including `pol`). Can be used for forecasting via `fisher_forecast --delensed_covariance <npz> --phi_noise sampler_phi_noise.npz` (with the matching `--pol`) or as the `phi_noise` key in [the delensed covariance](delensed-covariance.md) slurm script.
+`nphi` (NaN where unmeasured, 0 at the origin), `nphi_error`, the N leave-one-out `nphi_leave_one_out`, `rhat_real` / `rhat_imaginary` (per map and mode), `cphi`, the mean moments, every realization's moments (`auto_per_realization`, `cross_per_realization`, `true_auto_per_realization`, from which `nphi` and its jackknife can be rebuilt without the chain files), `burn_in`, `n_chains`, `n_used`, the seeds and the box / cosmology keys (including `pol`). Can be used for forecasting via `fisher_forecast --delensed_covariance <npz> --phi_noise sampler_phi_noise.npz` (with the matching `--pol`) or as the `phi_noise` key in [the delensed covariance](delensed-covariance.md) slurm script.
 
 ## Plotting the phi noise spectra
 

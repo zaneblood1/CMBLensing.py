@@ -1,15 +1,19 @@
 # Data
 
-The repository's large data is too big for GitHub. All of it is stored on the Hugging Face dataset [zaneblood1/cmb_lensing_data](https://huggingface.co/datasets/zaneblood1/cmb_lensing_data) (~23 GB). The dataset card there describes every file format.
+The repository's large data is too big for GitHub. All of it is stored on the Hugging Face dataset [zaneblood1/cmb_lensing_data](https://huggingface.co/datasets/zaneblood1/cmb_lensing_data) (~24 GB). The dataset card there describes every file format.
 
 | Dataset path | Size | Contents | Written by |
 |---|---|---|---|
 | `camb_grid_spline.npz` | 7.9 GB | the 5D CAMB grid ([The CAMB Grid](camb-grid.md)) | `camb_grid_generation/` |
-| `joint_inference_data/` | 512 MB | LCDM chains, one folder per run | `get_lcdm_samples/` ([LCDM Sampling on the HPC](../pipelines/lcdm-chains.md)) |
-| `delensed_field_covariance_data/` | 683 MB | empirical delensed covariances | `get_delensed_field_covariance/` ([Delensed Covariances](../pipelines/delensed-covariance.md)) |
-| `map_joint_phi_noise_data/` | 98 MB | `map_joint`'s per-mode N_phi | `measure_phi_noise/get_map_joint_phi_noise/` ([MAP Joint Phi Noise](../pipelines/map-joint-phi-noise.md)) |
-| `sampler_phi_noise_data/` | 787 MB | the sampler's per-mode N_phi | `measure_phi_noise/get_sampler_phi_noise/` ([Sampler Phi Noise](../pipelines/sampler-phi-noise.md)) |
+| `joint_inference_data/` | 659 MB | LCDM chains, one folder per run | `get_lcdm_samples/` ([LCDM Sampling on the HPC](../pipelines/lcdm-chains.md)) |
+| `delensed_field_covariance_data/` | 713 MB | empirical delensed covariances | `get_delensed_field_covariance/` ([Delensed Covariances](../pipelines/delensed-covariance.md)) |
+| `map_joint_phi_noise_data/` | 162 MB | `map_joint`'s per-mode N_phi | `measure_phi_noise/get_map_joint_phi_noise/` ([MAP Joint Phi Noise](../pipelines/map-joint-phi-noise.md)) |
+| `sampler_phi_noise_data/` | 1.0 GB | the sampler's per-mode N_phi | `measure_phi_noise/get_sampler_phi_noise/` ([Sampler Phi Noise](../pipelines/sampler-phi-noise.md)) |
 | `map_joint_comparison/` | 13 GB | `map_joint` timings and reconstructions, Python vs Julia | `runtime_comparison/` |
+
+## Browsing the results
+
+The figures made from this data are published in the [results visualizer](../results/index.html): `map_joint` against CMBLensing.jl, the LCDM chains and the phi noise spectra, one of the three at a time, with a toggle for the data set shown. It shows the PNGs under `experimental_results/<section>/<dataset>/` in the repository, so a new data set is added by dropping its folder there and pushing (see `experimental_results/README.md`).
 
 ## Downloading
 
@@ -20,7 +24,7 @@ hf download zaneblood1/cmb_lensing_data --repo-type dataset \
     --include "joint_inference_data/*" --local-dir cmb_lensing_data
 ```
 
-Drop the `--include` to download everything.
+Drop the `--include` to download everything. `cmb_lensing_data/` at the repository root is gitignored, and it is where `measure_phi_noise/phi_noise_analysis.py` and the chain analysis tutorial look for their input files.
 
 ## Using it
 

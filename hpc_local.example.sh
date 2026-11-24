@@ -9,6 +9,14 @@
 source /path/to/miniconda3/etc/profile.d/conda.sh
 conda activate myenv
 
+#Alternative method to activate the conda environment using modules and explicit PATH setting
+# module load Anaconda3/2022.10
+# source activate myenv
+# export PATH=/scratch/user/<user>/.conda/envs/myenv/bin:$PATH
+
+#Use a line like below to stop code from executing on specific problematic nodes
+export SBATCH_EXCLUDE=ac006
+
 #where Slurm mails job failures. sbatch reads SBATCH_MAIL_USER from the environment, so every
 #job a driver submits picks it up. A job submitted by hand (sbatch merge_*.sh) only sees it if
 #it is in your login shell too: put this line in ~/.bashrc as well, or source this file first

@@ -33,6 +33,8 @@ bash get_delensed_field_covariance/get_delensed_field_covariance.sh
 python get_delensed_field_covariance/merge_delensed_field_covariance.py --covariance_dir <delensed_covariance_output>
 ```
 
+Job files written before 2026-11-11 (temperature only, with no `pol` key) need `--legacy_format` added to the merge; the merged file is in the current format either way.
+
 Other settings in the driver: `pol` (`I`, `P` or `IP`; the forecast must use the same), `derivative_params` (the forecast's `--params` must be drawn from this list), `step_sigma` (0.05, in units of `PARAM_SIGMA`; accurate at nside 128 / 2.5' / 2.5 to 10 uK-arcmin, so for another box or noise level rerun with the step halved and check that the forecast does not change substantially), `num_realizations`, `seed_prefix`, `out_dir_name` (the output folder's name inside `get_delensed_field_covariance/`). A 3-point temperature job at nside 128 takes ~20 s.
 
 Every setting has a default in the driver and can be overridden on the command line as `--<name>=<value>`, e.g.

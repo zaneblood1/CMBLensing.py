@@ -132,12 +132,20 @@ def te_rho_from_cls(cl_te, cl_tt, cl_ee):
                      0.0)
 
 
+#TEMPORARY, REMOVE AFTER TESTING: size of the pre-2026-10-16 batch of pre-split keys
+LEGACY_NUM_KEYS = 100
+
 def field_from_covar(nside, covar_matrix, rng_key):
     """(field, rng_key): split a fresh subkey off `rng_key` for this one draw and hand back
     the key to split the next one from."""
-    rng_key, subkey = jax.random.split(rng_key)
-    field = field_from_covar_single_key(nside, covar_matrix, subkey)
-    return field, rng_key
+    #TEMPORARY, REMOVE AFTER TESTING: pre-2026-10-16 RNG keys (reproduces the August 2026
+    #maps). rng_key is the pair (keys, key_counter) and draw i uses keys[i]. Restore:
+    #    rng_key, subkey = jax.random.split(rng_key)
+    #    field = field_from_covar_single_key(nside, covar_matrix, subkey)
+    #    return field, rng_key
+    keys, key_counter = rng_key
+    field = field_from_covar_single_key(nside, covar_matrix, keys[key_counter])
+    return field, (keys, key_counter + 1)
 
 def field_from_covar_single_key(nside, covar_matrix, seed):
     #draw a real Gaussian field with power spectrum covar_matrix. building it as the rfft2 of
@@ -883,7 +891,10 @@ def load_sim(nside, theta_pix, pol, master_seed, uk_arcmin_t = 3, H0 = None,
     #ORDER (phi, the field(s), the noise) is fixed and independent of the cosmology, so two
     #calls at the same seed share every white-noise realization - the common random numbers
     #delensed_covariance.py's stencil relies on
-    rng_key = jax.random.PRNGKey(master_seed)
+    #TEMPORARY, REMOVE AFTER TESTING: pre-2026-10-16 RNG keys (reproduces the August 2026
+    #maps): one batch of pre-split keys, consumed in order. Restore:
+    #    rng_key = jax.random.PRNGKey(master_seed)
+    rng_key = (jax.random.split(jax.random.PRNGKey(master_seed), LEGACY_NUM_KEYS), 0)
     ells = jnp.arange(2, lmax).astype(jnp.float64)
 
     #ells arrays matched to the cls lengths: the emulator override returns ells

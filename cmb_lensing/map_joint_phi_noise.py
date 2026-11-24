@@ -197,7 +197,10 @@ def merge_phi_noise(directory):
 
     The error `nphi_error` is a delete-one-realization jackknife, recomputed through the
     same ratio as the answer, and `nphi_leave_one_out` holds the N leave-one-out N_phi it comes
-    from. Returns the dict written to map_joint_phi_noise.npz.
+    from. The per-realization moments are kept (`auto_per_realization`,
+    `cross_per_realization`, `true_auto_per_realization`: noise_with_jackknife's inputs), so
+    the N_phi and its jackknife can be rebuilt from the merged file alone. Returns the dict
+    written to map_joint_phi_noise.npz.
     """
     paths = sorted(glob.glob(os.path.join(directory, REALIZATION_GLOB)))
     n_realization = len(paths)
@@ -226,6 +229,8 @@ def merge_phi_noise(directory):
                 cphi = cphi,
                 mean_auto = mean_auto, mean_cross = mean_cross,
                 mean_true_auto = mean_true_auto,
+                auto_per_realization = autos, cross_per_realization = crosses,
+                true_auto_per_realization = true_autos,
                 n_realizations = n_realization, seeds = np.array(seeds),
                 params = np.array([GROUND_TRUTH[name] for name in PARAM_ORDER]),
                 param_names = np.array(PARAM_ORDER), pol = stored_pol(first),

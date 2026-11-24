@@ -8,6 +8,7 @@ from cmb_lensing.constants import GROUND_TRUTH, DEFAULT_ELL_CUTOFF
 from cmb_lensing.fisher_forecast import fourier_weights
 from cmb_lensing.camb_spectra import camb_cls_at_params, covar_from_cl, qe_noise_matrix
 from cmb_lensing.delensed_covariance import band_edges
+from cmb_lensing.map_joint_phi_noise import noise_with_jackknife
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLOT_ROOT = os.path.join(HERE, "phi_noise_plots")
@@ -18,6 +19,14 @@ SOURCE_STYLE = {"map_joint": ("C2", "^"),
 #the measured N_phi sources' names in the plots
 SOURCE_NAMES = {"map_joint": "Joint MAP",
                 "sample_joint": "Gibbs Sampler"}
+#how each source's N_phi is formed from its per-realization moments (noise_with_jackknife):
+#a MAP estimate needs the correlation with the truth, a posterior mean its response to it
+SOURCE_ESTIMATOR = {"map_joint": "correlation",
+                    "sample_joint": "response"}
+#r^2 of each estimator, as written in the legend
+ESTIMATOR_R_SQUARED = {
+    "correlation": r"$r_L^2 = \langle\hat\phi\phi^*\rangle^2 / (\langle|\hat\phi|^2\rangle\langle|\phi|^2\rangle)$",
+    "response": r"$r_L^2 = \langle\hat\phi\phi^*\rangle / \langle|\phi|^2\rangle$"}
 #font sizes
 SPECTRA_TITLE_FONTSIZE = 15
 SPECTRA_LABEL_FONTSIZE = 15
@@ -88,12 +97,14 @@ def plot_phi_noise_vs_qe(nside, theta_pix, noise, phi_noise_files, out_dir):
     """Per-mode phi noise spectra against the box QE matrix at this noise level:
     phi_noise_spectra_<noise>uk.png and phi_noise_spectra_over_qe_<noise>uk.png in out_dir.
 
-    Draws the `nphi` (C_phi (1/r^2 - 1), r^2 = <phi_bar phi*>^2 / (<|phi_bar|^2><|phi|^2>))
-    of every merged map_joint_phi_noise.npz / sampler_phi_noise.npz in `phi_noise_files`,
-    on the box at GROUND_TRUTH (white noise, no beam). phi_noise_spectra: band medians, with
+    Draws the N_phi = C_phi (1/r^2 - 1) of every merged map_joint_phi_noise.npz /
+    sampler_phi_noise.npz in `phi_noise_files`, rebuilt from the file's per-realization
+    moments with the source's estimator (SOURCE_ESTIMATOR: the correlation with the truth for
+    map_joint, the response to the truth for the sampler), on the box at GROUND_TRUTH (white
+    noise, no beam). phi_noise_spectra: band medians, with
     CAMB's C_L^phiphi and the QE matrices of qe_noise_matrices. phi_noise_spectra_over_qe: the
     band median of each series' per-mode ratio to the lensed-filter QE, the measured series
-    shaded +/- 1 jack-knife (band_median_jackknife, from the files' `nphi_leave_one_out`).
+    shaded +/- 1 jack-knife (band_median_jackknife, from the leave-one-out N_phi).
     """
     ell_grid = np.asarray(gen_ell_grid(nside, theta_pix)[0])
     use = ell_grid > 0
@@ -108,10 +119,13 @@ def plot_phi_noise_vs_qe(nside, theta_pix, noise, phi_noise_files, out_dir):
         merged = np.load(path)
         colour, marker = SOURCE_STYLE[nphi_source]
         short_name = f"{SOURCE_NAMES[nphi_source]} Effective $N_L^{{\\phi\\phi}}$"
-        name = (f"{short_name} = $C_L^{{\\phi\\phi}}(1/r_L^2 - 1)$ "
-                f"({int(merged['n_realizations'])} realizations)")
-        series.append((name, short_name, colour, marker, np.asarray(merged["nphi"]),
-                       np.asarray(merged["nphi_leave_one_out"])))
+        estimator = SOURCE_ESTIMATOR[nphi_source]
+        nphi, _, nphi_leave_one_out, _, _, _ = noise_with_jackknife(
+            merged["auto_per_realization"], merged["cross_per_realization"],
+            merged["true_auto_per_realization"], merged["cphi"], estimator = estimator)
+        name = (f"{short_name} = $C_L^{{\\phi\\phi}}(1/r_L^2 - 1)$, "
+                f"{ESTIMATOR_R_SQUARED[estimator]} ({int(merged['n_realizations'])} realizations)")
+        series.append((name, short_name, colour, marker, nphi, nphi_leave_one_out))
 
     top_figure, top = plt.subplots(figsize = (10, 6.5))
     bottom_figure, bottom = plt.subplots(figsize = (10, 5))
@@ -184,13 +198,16 @@ if __name__ == "__main__":
     theta_pix = 2.5
     noise_levels = [2.5, 5, 10]
 
-    #merged map_joint_phi_noise.npz / sampler_phi_noise.npz files at THIS box and noise level.
-    #Edit to wherever the merged files are; drop an entry to skip it
+    #merged phi noise files at THIS box and noise level, as downloaded from the Hugging Face
+    #dataset into <repository>/cmb_lensing_data (docs/getting-started/data.md). Each must hold the
+    #per-realization moments. Edit to wherever the merged files are; drop an entry to skip it
+    data_dir = os.path.join(HERE, "..", "cmb_lensing_data")
     for noise in noise_levels:
         phi_noise_files = {
-            "map_joint": os.path.join(HERE, "get_map_joint_phi_noise", "map_joint_phi_noise_new",
+            "map_joint": os.path.join(data_dir, "map_joint_phi_noise_data",
                                       f"map_joint_phi_noise_output_{noise}uk", "map_joint_phi_noise.npz"),
-            "sample_joint": os.path.join(HERE, "get_sampler_phi_noise", "sampler_phi_noise_data_old",
-                                         f"sampler_phi_noise_output_{noise}uk", "sampler_phi_noise.npz"),
+            "sample_joint": os.path.join(data_dir, "sampler_phi_noise_data",
+                                         f"sampler_phi_noise_output_{noise}uk_pre_refactor",
+                                         "sampler_phi_noise_response.npz"),
         }
         plot_phi_noise_vs_qe(nside, theta_pix, noise, phi_noise_files, plot_dir(noise))

@@ -107,13 +107,14 @@ camb_splines/                 the ~8 GB camb_grid_spline.npz (5D grid); the whol
 camb_grid_generation/         slurm / merge scripts for the 5D grid
 docs/                         MkDocs pages (getting-started/, concepts/, pipelines/, api/, fisher-forecast.md, testing.md)
                               + map_joint_tutorial.ipynb, sample_joint_tutorial.ipynb, chain_analysis_tutorial.ipynb
-experimental_results/         hand-maintained results (README + experimental_details.md per run)
+experimental_results/         hand-maintained results, laid out <section>/<dataset>/ (figures, SUMMARY.md, optional data/);
+                              the figures feed the results visualizer (docs/results/, built by build_results_site.py)
 paper/                        paper.md / paper.bib / figures / build_pdf.sh
 tests/                        Julia A/B benchmarks + test_camb_grid
 get_lcdm_samples/             sample_lcdm.sh, run_single_lcdm_chain.sh/.py (the chains are analysed by cmb_lensing/chain_analysis.py)
-  lcdm_sampler_data/            chain *_history.txt directories (gitignored; three older
-                                omch2_logA_theta_MC_100_joint_inference_* runs are tracked): sampler_output_2.5uk_11_10_2026/
-                                (10 maps x 5 chains) is the current local one. Each is a chain_analysis `chain_dir`
+  lcdm_sampler_data/            where the HPC driver writes chain *_history.txt directories (gitignored; nothing is kept
+                                locally since the 2026-11-23 cleanup: all data is on the Hugging Face dataset, downloaded
+                                into <repo>/cmb_lensing_data/ when needed). Each run is a chain_analysis `chain_dir`
     <run>/chain_analysis_output/  chain_analysis's default output (overwritten by every run):
       <param>/                    one folder per sampled parameter, all lowercase
       joint_information/          z_scores.png (per sampled parameter, standard notation value(err): product
@@ -132,7 +133,7 @@ get_lcdm_samples/             sample_lcdm.sh, run_single_lcdm_chain.sh/.py (the 
 - **Chain side** is independent of the data's polarization (`--pol I|P|IP` only labels the triangle plot): R-hat per map (printed, no pruning), acceptance rate, ACF / IAT, thinning by IAT (`--no_thin`) for the per-parameter plots, the product distribution with bootstrap errors, and the covariance = one `np.cov` per map (unthinned sub-chains concatenated) averaged over maps, jackknifed over maps (needs at least two maps).
 - **Forecast** is OFF by default (`--run_fisher` / `run_fisher = True`). `get_forecasted_covariance(nside, theta_pix, noise, param_names, delensed_covariance, pol, qe_filter, phi_noise, include_bb, ...)` is a thin wrapper of `fisher_forecast.forecast` at the chains' `pol` (white noise, no beam) and returns F^-1 in PARAM_ORDER, the order `load_chains` always returns its parameters in (no permutation anywhere). A missing `delensed_covariance` → `ValueError` / parser error. `--qe_filter {unlensed,lensed}`, `--phi_noise`, `--no_bb` (`include_bb`), `--camb_lmax` (default `CAMB_LMAX`) pass straight through. Never with error bars. The ratio plots colour each entry about 1 (`CenteredNorm(vcenter = 1)`).
 - The analytic-delensing comparison (CAMB delensed T block, iterated QE filter, gradient response) no longer exists anywhere; see "Removed features", 2026-11-11, for what it was and the commit that still has it.
-- `docs/chain_analysis_tutorial.ipynb` runs it on `experimental_results/lcdm_sampling/logA_omch2_theta_MC_100_2dot5uk_white_noise/data` (tracked); its forecast cells need the gitignored local delensed covariance / phi noise files. Executed locally; re-execute it when outputs change.
+- `docs/chain_analysis_tutorial.ipynb` runs it on `cmb_lensing_data/joint_inference_data/omch2_logA_theta_MC_100_joint_inference_09_02_26_low_noise` (the Hugging Face download of `docs/getting-started/data.md`; no chains are tracked since 2026-11-23); its forecast cells need the gitignored local delensed covariance / phi noise files. Executed locally; re-execute it when outputs change.
 
 The phi-noise spectra plots live in `measure_phi_noise/phi_noise_analysis.py` (2026-11-03), which holds `band_index` / `band_median` / `band_median_jackknife` / `qe_noise_matrices`. Only current-format files are supported (the legacy `sampler_effective_noise.npz` / `phi_noise_fid` paths are gone).
 
@@ -142,11 +143,6 @@ get_delensed_field_covariance/ get_delensed_field_covariance.sh, run_single_dele
 measure_phi_noise/            phi_noise_analysis.py (phi noise spectra plots -> phi_noise_plots/noise_level_<noise>uk/); moved here 2026-11-03
   get_sampler_phi_noise/        get_sampler_phi_noise.sh, *_1_chain.sh/.py, merge_sampler_phi_noise.sh/.py,
                                 plot_sampler_convergence.py
-    sampler_phi_noise_data_new/   sampler_phi_noise_output_{2.5,5,10}uk/sampler_phi_noise.npz (pre-2026-11-09 format: one chain per
-                                  map, 100 maps, burn_in 600, correlation estimator, no R-hat)
-    sampler_phi_noise_data_old/   the same folders holding pre-2026-10-20 sampler_effective_noise.npz (burn_in 1000 at 2.5 uK);
-                                  convert_old_sampler_phi_noise.py rebuilds a current-format sampler_phi_noise.npz next to each
-                                  from its moment_auto_naive / moment_cross_true / moment_true_auto (no Hermitian projection)
   get_map_joint_phi_noise/      get_map_joint_phi_noise.sh, get_map_joint_phi_noise_1_realization.sh/.py, merge_map_joint_phi_noise.py
     map_joint_phi_noise/          map_joint_phi_noise_output_{2.5,5,10}uk/map_joint_phi_noise.npz (100 realizations)
 runtime_comparison/           slurm scripts timing map_joint Python vs Julia, performance_analysis.py. run_performance_test.sh's settings

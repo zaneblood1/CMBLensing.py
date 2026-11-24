@@ -225,6 +225,11 @@ def merge_phi_noise(directory, burn_in):
                                                every mode's real / imaginary part across the
                                                realization's chains (NaN with one chain and at
                                                the origin)
+        auto_per_realization, cross_per_realization, true_auto_per_realization
+                                               every realization's |phi_mean|^2,
+                                               Re(phi_mean phi_true*) and |phi_true|^2
+                                               (noise_with_jackknife's inputs), so the N_phi
+                                               and its jackknife can be rebuilt from this file
     plus `cphi`, the mean moments, `n_chains`, `n_used` (post-burn-in sweeps per chain),
     `burn_in`, the seeds and the box / cosmology metadata.
     """
@@ -285,14 +290,19 @@ def merge_phi_noise(directory, burn_in):
     rhat_imaginary[:, 0, 0] = np.nan
 
     cphi = np.asarray(first["cphi"])
+    autos = np.array(autos)
+    crosses = np.array(crosses)
+    true_autos = np.array(true_autos)
     nphi, nphi_error, nphi_leave_one_out, mean_auto, mean_cross, mean_true_auto = noise_with_jackknife(
-                np.array(autos), np.array(crosses), np.array(true_autos), cphi, estimator = "response")
+                autos, crosses, true_autos, cphi, estimator = "response")
 
     return dict(nphi = nphi, nphi_error = nphi_error, nphi_leave_one_out = nphi_leave_one_out,
                 rhat_real = rhat_real, rhat_imaginary = rhat_imaginary,
                 cphi = cphi,
                 mean_auto = mean_auto, mean_cross = mean_cross,
                 mean_true_auto = mean_true_auto,
+                auto_per_realization = autos, cross_per_realization = crosses,
+                true_auto_per_realization = true_autos,
                 burn_in = burn_in, n_chains = np.array(n_chains), n_used = np.array(n_used),
                 n_realizations = len(n_chains), seeds = np.array(list(jobs_by_seed)),
                 params = np.asarray(first["params"]), param_names = np.array(PARAM_ORDER),

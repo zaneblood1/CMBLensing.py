@@ -37,6 +37,7 @@ A misspelled name is ignored and the default used. Each run writes the submissio
 | `nphi` | per-mode phi noise on the rfft2 grid; NaN where the mean cross is <= 0, 0 at the origin |
 | `nphi_error` | jackknife error |
 | `nphi_leave_one_out` | the N leave-one-out `nphi` the jackknife comes from, shape `(n_realizations, nside, nside // 2 + 1)` |
+| `auto_per_realization`, `cross_per_realization`, `true_auto_per_realization` | every realization's moments, shape `(n_realizations, nside, nside // 2 + 1)`, from which `nphi` and its jackknife can be rebuilt without the job files |
 | box / cosmology keys | `nside`, `theta_pix`, `noise_level`, `l_knee`, `pol`, `param_names`, `params` |
 
 Can be used in forecasting via `fisher_forecast --delensed_covariance <npz> --phi_noise map_joint_phi_noise.npz` (with the matching `--pol`) or as the noise source for [the delensed covariance](delensed-covariance.md). Its spectra are plotted by `measure_phi_noise/phi_noise_analysis.py` (see [Sampler Phi Noise](sampler-phi-noise.md#plotting-the-phi-noise-spectra)).

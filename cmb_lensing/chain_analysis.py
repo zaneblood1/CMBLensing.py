@@ -11,7 +11,8 @@ Output (default `<chain_dir>/chain_analysis_output/`):
     <param>/               per sampled parameter: autocorrelations, integrated autocorrelation
                            times, traces, per-map marginals, the histogram of per-map means
                            and the product distribution
-    joint_information/     z_scores.png, the chains' covariance / correlation matrices and
+    joint_information/     z_scores.png (the product distribution's numbers, the mean / std over
+                           maps of each parameter's R-hat and the burn-in), the chains' covariance / correlation matrices and
                            triangle_plot.png; with the forecast also its matrices and the
                            fisher-over-empirical ratios
 
@@ -40,7 +41,7 @@ from matplotlib.patches import Ellipse, Patch
 from matplotlib.colors import to_rgba
 from matplotlib.lines import Line2D
 from scipy.integrate import trapezoid
-from scipy.stats import gaussian_kde
+from scipy.stats import norm, sem
 from cmb_lensing.constants import GROUND_TRUTH, CAMB_LMAX
 from cmb_lensing.mcmc_diagnostics import gelman_rubin, autocorrelation, integrated_autocorrelation_time
 from cmb_lensing.camb_spectra import QE_FILTERS, DEFAULT_QE_FILTER, DEFAULT_POL
@@ -61,7 +62,7 @@ DEFAULT_THETA_PIX = 2.5
 DEFAULT_NOISE = 2.5
 DEFAULT_BURN_IN = 1000
 
-#the kde grids: points, and the padding past the samples as a fraction of their range
+#the density grids: points, and the padding past the samples as a fraction of their range
 GRID_SIZE = 1000
 GRID_PAD_FRACTION = 0.1
 #the multiplicative-mean plot's x range ends where the pdf drops below this fraction of its peak
@@ -70,6 +71,12 @@ PDF_XLIM_THRESHOLD = 1e-3
 N_BOOTSTRAP = 200
 BOOTSTRAP_SEED = 0
 HISTOGRAM_BINS = 20
+#figure width (inches) of z_scores.png
+Z_TABLE_WIDTH = 16
+TABLE_FONTSIZE = 11
+#decimals of the R-hat statistics in z_scores.png
+R_HAT_DECIMALS = 4
+TRACE_LEGEND_FONTSIZE = 11
 #decimals of the numbers printed in the mean histogram's legend and title
 LEGEND_DECIMALS = 7
 FIGURE_DPI = 150
@@ -197,7 +204,7 @@ def plot_autocorrelation_chains(chains_per_map, output_dir, param_name):
         acfs_per_map.append(acfs)
     plt.xlabel("Lag"); plt.ylabel("Auto-Correlation")
     plt.axhline(0, color = "black")
-    plt.title(f"{param_name} Auto-Correlation")
+    plt.title(f"{param_symbol(param_name)} Auto-Correlation")
     save_figure(output_dir, f"{param_name.lower()}_auto_correlation.png")
     return acfs_per_map
 
@@ -211,7 +218,7 @@ def plot_iat_per_chain(acfs_per_map, output_dir, param_name):
     mean_iat = np.nanmean(flat_iats)
     plt.axvline(mean_iat, label = f"Mean IAT = {mean_iat}", color = "black")
     plt.legend()
-    plt.title(f"{param_name} Integrated Auto Correlation Time per Chain")
+    plt.title(f"{param_symbol(param_name)} Integrated Auto Correlation Time per Chain")
     save_figure(output_dir, f"{param_name.lower()}_integrated_autocorrelation_times.png")
     return iats_per_chain
 
@@ -237,9 +244,9 @@ def plot_traces(chains, output_dir, param_name):
     for label, value in (("Mean", np.mean(lengths)), ("Std.", np.std(lengths)),
                          ("Min.", np.min(lengths)), ("Max.", np.max(lengths))):
         plt.plot([], [], label = f"{label} Num. Samples = {value}", color = "white")
-    plt.xlabel("Sample"); plt.ylabel("Value")
-    plt.title(f"{param_name} Markov Chain Traces")
-    plt.legend(loc = "upper left", fontsize = 6, ncol = 2); plt.grid(alpha = 0.2)
+    plt.xlabel("Sample Iteration"); plt.ylabel("Sample Value")
+    plt.title(f"{param_symbol(param_name)} Markov Chain Traces")
+    plt.legend(loc = "upper left", fontsize = TRACE_LEGEND_FONTSIZE, ncol = 2); plt.grid(alpha = 0.2)
     save_figure(output_dir, f"{param_name.lower()}_all_chain_trace.png")
     return
 
@@ -253,12 +260,13 @@ def density_grid(chains):
 def plot_marginals(chains, output_dir, ground_truth, param_name):
     grid = density_grid(chains)
     plt.figure()
-    for chain in chains:
-        plt.plot(grid, gaussian_kde(chain)(grid))
+    #the same normal per map that goes into the product distribution
+    for density in map_densities(chains, grid):
+        plt.plot(grid, density)
     plt.axvline(ground_truth, color = "black", label = f"Ground Truth = {ground_truth}")
     plt.legend()
-    plt.xlabel(f"{param_name} Value"); plt.ylabel("Density")
-    plt.title(f"{param_name} Marginals"); plt.grid(alpha = 0.2)
+    plt.xlabel(f"{param_symbol(param_name)} Value"); plt.ylabel("Probability Density")
+    plt.title(f"{param_symbol(param_name)} Per Map Posteriors"); plt.grid(alpha = 0.2)
     save_figure(output_dir, f"{param_name.lower()}_all_chain_marginals.png")
     return
 
@@ -282,13 +290,26 @@ def plot_mean_histogram(chains, output_dir, ground_truth, param_name):
                 label = f"+/- 1 Std of Means = {round(means_std, LEGEND_DECIMALS)}")
     plt.axvline(means_mean - means_std, color = "black")
     plt.xlabel("Mean Value"); plt.ylabel("Count")
-    plt.title(f"{param_name} Histogram of Marginal Means\n"
+    plt.title(f"{param_symbol(param_name)} Histogram of Marginal Means\n"
               f"std(Means) = {round(means_std, LEGEND_DECIMALS)} vs avg single-marginal std = "
               f"{round(avg_width, LEGEND_DECIMALS)}\n"
               f"std in single-marginal std = {round(widths_std, LEGEND_DECIMALS)}")
     plt.legend(); plt.grid(alpha = 0.2)
     save_figure(output_dir, f"{param_name.lower()}_mean_histogram.png")
     return means_std, avg_width, widths_std
+
+def per_map_z_scores(chains, ground_truth):
+    """Each map's (truth - posterior mean) / posterior std, one per map. For calibrated
+    posteriors they are independent draws from a unit normal."""
+    means = np.array([np.mean(chain) for chain in chains])
+    widths = np.array([np.std(chain, ddof = 1) for chain in chains])
+    return (ground_truth - means) / widths
+
+def map_densities(chains, grid):
+    """Each map's posterior density on the grid: the normal distribution with its samples'
+    mean and std. Their product is the inverse-variance weighted combination of the maps,
+    which does not rest on the sparsely sampled tails."""
+    return [norm.pdf(grid, np.mean(chain), np.std(chain, ddof = 1)) for chain in chains]
 
 def product_pdf(densities, grid):
     """The product of the per-map densities on one grid, renormalized after every factor so
@@ -309,15 +330,15 @@ def bootstrap_product_errors(chains, grid, ground_truth):
     """Monte Carlo errors on the product mean, std and z-score (truth - mean) / std from the
     finite chains. Every replicate resamples EVERY map's thinned chain with replacement at its
     own length (the maps themselves are never resampled: that would be the scatter between
-    maps, not chain noise), rebuilds each map's KDE and the product. The z-score is formed per
-    replicate, so its error carries the mean-std correlation. Valid because the chains are
-    thinned by their IAT, so their points are close to independent."""
+    maps, not chain noise), rebuilds each map's density (map_densities) and the product. The
+    z-score is formed per replicate, so its error carries the mean-std correlation. Valid
+    because the chains are thinned by their IAT, so their points are close to independent."""
     rng = np.random.default_rng(BOOTSTRAP_SEED)
     boot_means = np.zeros(N_BOOTSTRAP)
     boot_stds = np.zeros(N_BOOTSTRAP)
     for b in range(N_BOOTSTRAP):
-        densities = [gaussian_kde(rng.choice(chain, size = len(chain), replace = True))(grid)
-                     for chain in chains]
+        resampled = [rng.choice(chain, size = len(chain), replace = True) for chain in chains]
+        densities = map_densities(resampled, grid)
         boot_means[b], boot_stds[b] = product_moments(product_pdf(densities, grid), grid)
     boot_z_scores = (ground_truth - boot_means) / boot_stds
     return (np.std(boot_means, ddof = 1), np.std(boot_stds, ddof = 1),
@@ -332,10 +353,9 @@ def significant_digits(value):
 def plot_multiplicative_mean(chains, output_dir, ground_truth, param_name):
     """The product distribution's plot. Returns its mean, std and z-score with their bootstrap
     Monte Carlo errors."""
-    #the normalized product of the per-map densities (a gaussian_kde for each map)
+    #the normalized product of the per-map densities (map_densities: a normal per map)
     grid = density_grid(chains)
-    densities = [gaussian_kde(chain)(grid) for chain in chains]
-    pdf = product_pdf(densities, grid)
+    pdf = product_pdf(map_densities(chains, grid), grid)
     mode = grid[np.argmax(pdf)]
     mean, std = product_moments(pdf, grid)
     z_score = (ground_truth - mean) / std
@@ -357,8 +377,8 @@ def plot_multiplicative_mean(chains, output_dir, ground_truth, param_name):
     above = grid[pdf > PDF_XLIM_THRESHOLD * pdf.max()]
     plt.xlim(min(above.min(), ground_truth), max(above.max(), ground_truth))
 
-    plt.xlabel(f"{param_name} Value"); plt.ylabel("Density")
-    plt.title(f"{param_name} Combined Product Distribution")
+    plt.xlabel(f"{param_symbol(param_name)} Value"); plt.ylabel("Probability Density")
+    plt.title(f"{param_symbol(param_name)} Product Distribution")
     plt.legend(fontsize = 7.5); plt.grid(alpha = 0.2)
     save_figure(output_dir, f"{param_name.lower()}_mean_distributions.png")
     return mean, std, z_score, mean_error, std_error, z_error
@@ -388,10 +408,18 @@ def per_param_analysis(chains_per_map, ground_truth, param_name, output_dir,
     (product_mean, product_std, product_z_score, product_mean_error, product_std_error,
      product_z_error) = plot_multiplicative_mean(chains, output_dir, ground_truth, param_name)
 
+    map_z_scores = per_map_z_scores(chains, ground_truth)
+    print(f"{param_name} per-map z-scores = {map_z_scores}")
+    print(f"{param_name} std of the per-map z-scores = {np.std(map_z_scores, ddof = 1):.4f} "
+          f"(1 for calibrated posterior widths)")
+
     return {"product_mean": product_mean, "product_std": product_std,
             "product_z_score": product_z_score,
             "product_mean_error": product_mean_error, "product_std_error": product_std_error,
             "product_z_error": product_z_error,
+            "avg_map_z_score": np.mean(map_z_scores),
+            #standard error of the mean over maps: std of the per-map z-scores / sqrt(maps)
+            "avg_map_z_error": sem(map_z_scores),
             "avg_sigma_single": avg_width,
             #error on the average single-map width: the scatter of the widths over sqrt(maps)
             "avg_sigma_error": widths_std / np.sqrt(len(chains)),
@@ -547,36 +575,50 @@ def forecast_title(delensed_covariance, qe_filter, phi_noise):
 
 # ── Joint plots ───────────────────────────────────────────────────────────
 
-def plot_z_score_table(summaries, ground_truth, joint_dir):
+def save_table(row_labels, column_labels, cells, width, path):
+    """A table of text cells as a figure `width` inches wide, saved to path."""
+    figure, axis = plt.subplots(figsize = (width, 0.5 * (len(row_labels) + 1)))
+    axis.axis("off")
+    table = axis.table(cellText = cells, rowLabels = row_labels, colLabels = column_labels,
+                       cellLoc = "center", loc = "center")
+    table.auto_set_font_size(False)
+    table.set_fontsize(TABLE_FONTSIZE)
+    table.scale(1.0, 2.0)
+    table.auto_set_column_width(list(range(-1, len(column_labels))))
+    figure.savefig(path, dpi = FIGURE_DPI, bbox_inches = "tight")
+    plt.close(figure)
+    return
+
+def plot_z_score_table(summaries, ground_truth, burn_in, joint_dir):
     """z_scores.png in joint_dir: one row per sampled parameter, the ground truth next to its
     symbol, and the columns, a(b) = a +/- b in units of a's last digit (standard_notation)
 
     product mean        a(b), b its bootstrap Monte Carlo error (bootstrap_product_errors)
     product std         a(b), b its bootstrap Monte Carlo error
-    avg single-map std  a(b), b = std of the per-map stds / sqrt(number of maps)
     product z-score     (truth - product mean) / product std, a(b) with b the std of the
                         z-score formed in every bootstrap replicate
+    avg per-map z-score mean over maps of (truth - map mean) / map std, a(b) with
+                        b = std of the per-map z-scores / sqrt(number of maps)
+    mean / std of R-hat over maps, of the parameter's Gelman-Rubin R-hat (gelman_rubin_per_map,
+                        across each map's post-burn-in sub-chains)
+    burn-in             the sweeps removed from every sub-chain
     """
-    column_labels = ["Product Mean", "Product Std", "Avg. Single-Map Std", "Product Z-score"]
+    column_labels = ["Product Mean", "Product Std", "Product Z-score", "Avg. Per-Map Z-score",
+                     "Mean $\\hat{R}$", "Std. of $\\hat{R}$", "Burn-in"]
     row_labels = []
     cells = []
     for name, summary in summaries.items():
         row_labels.append(f"{param_symbol(name)}  (truth = {ground_truth[name]})")
         cells.append([standard_notation(summary["product_mean"], summary["product_mean_error"]),
                       standard_notation(summary["product_std"], summary["product_std_error"]),
-                      standard_notation(summary["avg_sigma_single"], summary["avg_sigma_error"]),
-                      standard_notation(summary["product_z_score"], summary["product_z_error"])])
+                      standard_notation(summary["product_z_score"], summary["product_z_error"]),
+                      standard_notation(summary["avg_map_z_score"], summary["avg_map_z_error"]),
+                      f"{np.nanmean(summary['r_hats']):.{R_HAT_DECIMALS}f}",
+                      f"{np.nanstd(summary['r_hats']):.{R_HAT_DECIMALS}f}",
+                      f"{burn_in}"])
 
-    figure, axis = plt.subplots(figsize = (11, 0.5 * (len(row_labels) + 1)))
-    axis.axis("off")
-    table = axis.table(cellText = cells, rowLabels = row_labels, colLabels = column_labels,
-                       cellLoc = "center", loc = "center")
-    table.auto_set_font_size(False)
-    table.set_fontsize(11)
-    table.scale(1.0, 2.0)
-    table.auto_set_column_width(list(range(-1, len(column_labels))))
-    figure.savefig(os.path.join(joint_dir, "z_scores.png"), dpi = FIGURE_DPI, bbox_inches = "tight")
-    plt.close(figure)
+    save_table(row_labels, column_labels, cells, Z_TABLE_WIDTH,
+               os.path.join(joint_dir, "z_scores.png"))
     return
 
 def plot_covariance_and_correlation(cov_mat, param_names, label, joint_dir, title = None):
@@ -584,6 +626,7 @@ def plot_covariance_and_correlation(cov_mat, param_names, label, joint_dir, titl
     in its box) for one posterior: the chains' (EMPIRICAL_LABEL) or the forecast's. `title`
     names the posterior in the plot titles (`label` when None)."""
     title = label if title is None else title
+    param_names = [param_symbol(name) for name in param_names]
     figure, axis = plt.subplots(figsize = (7.5, 6.5))
     annotated_heatmap(axis, cov_mat, param_names, f"{title}\ncovariance matrix", "Value")
     figure.tight_layout()
@@ -781,12 +824,13 @@ def joint_param_analysis(chains, joint_dir, forecast_cov_mat = None, forecast_na
                                         title = f"Forecast\n{forecast_name}")
         #per-entry ratios, coloured about 1 (agreement)
         ratio_label = f"{FISHER_LABEL}_over_{EMPIRICAL_LABEL}"
-        plot_annotated_matrix(forecast_cov_mat / measured_cov_mat, param_names,
+        symbols = [param_symbol(name) for name in param_names]
+        plot_annotated_matrix(forecast_cov_mat / measured_cov_mat, symbols,
                               f"Forecast / chains covariance\n{forecast_name}",
                               os.path.join(joint_dir, f"covariance_ratio_{ratio_label}.png"),
                               norm = matplotlib.colors.CenteredNorm(vcenter = 1))
         plot_annotated_matrix(correlation_from_covariance(forecast_cov_mat) /
-                              correlation_from_covariance(measured_cov_mat), param_names,
+                              correlation_from_covariance(measured_cov_mat), symbols,
                               f"Forecast / chains correlation\n{forecast_name}",
                               os.path.join(joint_dir, f"correlation_ratio_{ratio_label}.png"),
                               norm = matplotlib.colors.CenteredNorm(vcenter = 1))
@@ -834,7 +878,8 @@ def main(chain_dir, nside = DEFAULT_NSIDE, theta_pix = DEFAULT_THETA_PIX, noise 
     Returns:
         A dict: `param_names`, `map_seeds`, `chains` (load_chains' output), `summaries`
         (per parameter: the product mean / std / z-score with their errors, the average
-        single-map std, R-hat per map and the acceptance rate), `measured_covariance` with
+        single-map std, the average per-map z-score with its standard error over maps,
+        R-hat per map and the acceptance rate), `measured_covariance` with
         `measured_covariance_error` and `measured_sigma_error` (delete-one-map jackknife),
         `forecast_covariance` (None without run_fisher) and `out_dir`.
     """
@@ -854,7 +899,7 @@ def main(chain_dir, nside = DEFAULT_NSIDE, theta_pix = DEFAULT_THETA_PIX, noise 
     for name in param_names:
         summaries[name] = per_param_analysis(chains[name], ground_truth[name], name,
                                              os.path.join(out_dir, name.lower()), should_thin)
-    plot_z_score_table(summaries, ground_truth, joint_dir)
+    plot_z_score_table(summaries, ground_truth, burn_in, joint_dir)
 
     forecast_cov_mat = None
     forecast_name = ""

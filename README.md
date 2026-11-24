@@ -83,7 +83,7 @@ A larger experiment, averaging over many data map realizations to reduce cosmic 
 | `get_delensed_field_covariance/` | the empirical delensed covariance used by the forecast |
 | `camb_grid_generation/` | scripts that build the CAMB splines |
 | `runtime_comparison/` | `map_joint` timings, Python vs Julia |
-| `experimental_results/`, `paper/` | results and the accompanying paper |
+| `experimental_results/`, `paper/` | results (browsable in the [results visualizer](https://zaneblood1.github.io/CMBLensing.py/results/)) and the accompanying paper |
 
 ## Testing
 

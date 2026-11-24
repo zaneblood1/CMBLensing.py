@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **2026-11-19** Results visualizer on the docs site (`docs/results/`, built from `experimental_results/` by the MkDocs hook `experimental_results/build_results_site.py`). `experimental_results/` now follows the layout `<section>/<dataset>/`.
 - **2026-11-12** All large data (chain directories, delensed field covariances, map_joint and sampler phi noise, runtime comparison results) is stored next to the 5D CAMB grid on the Hugging Face dataset `zaneblood1/cmb_lensing_data`.
 - **2026-11-11** Polarization support (`pol = "I"`, `"P"`, `"IP"`) in the Fisher forecast, the empirical delensed covariance stencil and the fixed-theta sampler phi noise chains.
 - **2026-11-11** `python -m cmb_lensing.chain_analysis <chain_dir>` command line interface; `chain_analysis.py` now lives in the package.
@@ -35,6 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **2026-11-23** The merged `map_joint_phi_noise.npz` and `sampler_phi_noise.npz` store every realization's moments, and `phi_noise_analysis.py` rebuilds each N_phi from them (correlation estimator for `map_joint`, response estimator for the sampler).
+- **2026-11-23** `chain_analysis.py`'s product distribution is the product of one normal distribution per map, with bootstrap Monte Carlo errors.
 - **2026-11-11** The Fisher forecast always takes its field blocks from a measured delensed covariance (`--delensed_covariance` is required) and contracts per-mode covariance blocks, so one code path serves temperature, polarization and joint data.
 - **2026-11-11** One parameter ordering, `constants.PARAM_ORDER`, in every matrix, figure and output file.
 - **2026-11-11** `chain_analysis.py` is narrowed to MCMC diagnostics plus the comparison with one forecast (off by default, `--run_fisher`); it reads map seeds and sub-chain indices off the history file names.
@@ -51,6 +54,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Removed
 
+- **2026-11-23** Every local data copy, debug script and generated figure folder from the working tree; the Hugging Face dataset is the only store of data, downloaded into `cmb_lensing_data/` when needed.
+- **2026-11-23** `chain_analysis.py`'s KDE product distribution with its `--product_method` option, and the delete-one-map jackknife of the product errors. The chain `data/` folders under `experimental_results/lcdm_sampling/` (the chains are on Hugging Face).
 - **2026-11-11** Rotated-coordinate theta sampling (`reparameterize_lcdm`), the 1D CAMB splines, and the forecast's analytic CAMB delensing, iterated quadratic-estimate filter, gradient response and `nphi_source` options. Commit `b50d4cc` is the last one containing them.
 - **2026-10-28** `camb_splines/` from git (the grid is downloaded instead).
 - **2026-10-19** The low-memory grid evaluator, the checks in `merge_camb_grid.py`, and the band averaging and validation options of the map_joint phi noise measurement.

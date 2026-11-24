@@ -22,9 +22,9 @@ lcdm_chain_plots/
 debug/
 map_joint_phi_noise_*/
 sampler_phi_noise_data_*/
-convert_old_sampler_phi_noise.py
 phi_noise_plots*/
-debug_phi_noise*
-debug_fisher_covar_vs_cls.py
 fisher_output
 CODE_REVIEW_FINDINGS.md
+cmb_lensing/sampler_output*
+#the Hugging Face dataset download (docs/getting-started/data.md)
+cmb_lensing_data/

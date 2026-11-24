@@ -61,6 +61,14 @@ nav:
       - Fisher Forecast: api/fisher-forecast.md
       - Chain Analysis: api/chain-analysis.md
   - Testing: testing.md
+  - Results: results/index.html
+
+#the results visualizer (docs/results/): after every build the hook copies the figures in
+#experimental_results/ into the site and writes the manifest the page reads
+hooks:
+  - experimental_results/build_results_site.py
+watch:
+  - experimental_results
 
 plugins:
   - search
