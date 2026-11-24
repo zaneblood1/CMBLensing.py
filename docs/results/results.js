@@ -1,4 +1,4 @@
-//The results visualizer. Everything shown comes from manifest.json, which
+//The static results website.Everything shown comes from manifest.json, which
 //experimental_results/build_results_site.py writes from the folder layout
 //experimental_results/<section>/<dataset>/**.png at every docs build.
 

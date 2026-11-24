@@ -1,6 +1,6 @@
-# Delensed Covariance
+# Computing Delensed Covariance Matrices
 
-Measures the **empirical** per-mode covariance of the delensed field, and its finite difference in theta. It is the field block of [the Fisher forecast](../fisher-forecast.md), which cannot run without it.
+Measures the **empirical** per-mode covariance of the delensed field, and its finite difference in theta. It is the field block of [the Fisher forecast](../api/fisher-forecast.md), which cannot run without it.
 
 Each job uses one seed and runs at every stencil point \(\theta_0\) and \(\theta_0 \pm h_i\):
 

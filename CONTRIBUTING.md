@@ -65,7 +65,7 @@ setx CMBLENSING_JL_PATH "C:\path\to\CMBLensing.jl"
 
 `setx` only affects terminals opened afterwards, so close and reopen your terminal before running `pytest --generate`.
 
-See the [testing page](https://zaneblooddev.com/CMBLensing.py/testing/) of the documentation for details. The LCDM sampler, the Fisher forecast and the measurement modules are not yet covered by tests, and contributions there are especially welcome. The Fisher forecasting code also only supports forecasts for temperature data. Extending this to include polarization data as well would also be a good future project. 
+See the [unit tests page](https://zaneblooddev.com/CMBLensing.py/getting-started/unit-tests/) of the documentation for details. The LCDM sampler, the Fisher forecast and the measurement modules are not yet covered by tests, and contributions there are especially welcome. The Fisher forecasting code also only supports forecasts for temperature data. Extending this to include polarization data as well would also be a good future project. 
 
 ## Submitting a pull request
 

@@ -1,12 +1,12 @@
 # CMBLensing.py
 
-CMBLensing.py is the JAX port of the Julia package [CMBLensing.jl](https://github.com/marius311/CMBLensing.jl). It
+CMBLensing.py is the JAX port of the Julia package [CMBLensing.jl](https://github.com/marius311/CMBLensing.jl). With it you can:
 
-- **simulates** flat-sky CMB temperature and polarization fields, lensing potentials and noisy lensed data maps (`load_sim`),
-- **lenses**, inverse-lenses and adjoint-lenses fields with the LenseFlow ODE (`lense_flow`),
-- **reconstructs** the unlensed field and the lensing potential by joint MAP optimization (`map_joint`),
-- **samples** the LCDM parameters jointly with the field and the lensing potential by Gibbs sampling (`sample_joint`), extending the algorithm developed by [Millea et al. 2020](https://arxiv.org/abs/2002.00965),
-- **forecasts** the sampler's posterior widths with a Gaussian Fisher forecast (`fisher_forecast`).
+- **Simulate** flat-sky CMB temperature and polarization fields, lensing potentials and noisy lensed data maps (`load_sim`).
+- **Lens**, inverse-lens and adjoint-lens fields with the LenseFlow ODE (`lense_flow`).
+- **Reconstruct** the unlensed field and the lensing potential by joint MAP optimization (`map_joint`).
+- **Sample** the LCDM parameters jointly with the field and the lensing potential by Gibbs sampling (`sample_joint`), extending the algorithm developed by [Millea et al. 2020](https://arxiv.org/abs/2002.00965).
+- **Forecast** the sampler's posterior widths with a Gaussian Fisher forecast (`fisher_forecast`).
 
 All array operations run in JAX (float64), so the code runs on CPU and GPU and is differentiable where it needs to be.
 
@@ -15,27 +15,9 @@ All array operations run in JAX (float64), so the code runs on CPU and GPU and i
 | I want to... | Go to |
 |---|---|
 | install the package | [Installation](getting-started/installation.md) |
-| simulate a map and run `map_joint` | [MAP Estimation Tutorial](map_joint_tutorial.ipynb) |
-| learn more about sampling the LCDM parameters | [Sampling Tutorial](sample_joint_tutorial.ipynb), [LCDM Sampling](concepts/sample-joint.md) |
-| browse the figures of every run so far | [Results Visualizer](results/index.html) |
-| download the chains and other data behind the results | [Data](getting-started/data.md) |
-| run a full experiment on a cluster | [HPC Setup](getting-started/hpc-setup.md) |
-| compare sampler data to the Fisher forecast | [Fisher Forecast](fisher-forecast.md), [Chain Analysis](pipelines/chain-analysis.md) |
-| change the code | [Testing](testing.md) |
-
-## Repository layout
-
-```
-cmb_lensing/                    the Python package
-camb_splines/                   the 5D CAMB grid spline (gitignored, downloaded on first use)
-camb_grid_generation/           scripts that build the 5D grid
-get_lcdm_samples/               LCDM chains on the HPC (analysed by cmb_lensing/chain_analysis.py)
-measure_phi_noise/              phi_noise_analysis.py (the N_phi spectra plots) +
-  get_map_joint_phi_noise/        map_joint's per-mode N_phi
-  get_sampler_phi_noise/          the sampler's per-mode N_phi
-get_delensed_field_covariance/  the empirical delensed T covariance stencil
-runtime_comparison/             map_joint timing, Python vs Julia
-tests/                          A/B tests against CMBLensing.jl + the CAMB grid test
-docs/                           this site (Markdown pages + tutorial notebooks)
-paper/                          the paper source
-```
+| simulate a map and run `map_joint` | [MAP Estimation](map_joint_tutorial.ipynb) |
+| learn more about sampling the LCDM parameters | [Running a Single LCDM Chain](sample_joint_tutorial.ipynb) |
+| browse the results or download the chains and other data behind them | [Data Availability](getting-started/data.md) |
+| run a full experiment on a cluster | [HPC setup](getting-started/installation.md#hpc-setup) |
+| compare sampler data to the Fisher forecast | [Analyzing Chain Data](chain_analysis_tutorial.ipynb), [Fisher Forecast](api/fisher-forecast.md) |
+| change the code | [Unit Tests](getting-started/unit-tests.md) |

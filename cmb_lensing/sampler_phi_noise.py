@@ -23,7 +23,7 @@ fixed_theta_chain.chain_key(map_seed, chain_seed): `chain_seed` is given by the 
 default, drawn at random (as sample_lcdm.sample_joint does) and stored in the sidecar.
 Every phi sample is stored, un-thinned and with no burn-in cut; the burn-in is chosen at merge
 time, and the per-mode Gelman-Rubin R-hat across a realization's chains
-(measure_phi_noise/get_sampler_phi_noise/plot_sampler_convergence.py) checks it.
+(measure_phi_noise/phi_noise_analysis.py, plot_sampler_convergence) checks it.
 
 SELF-CONJUGATE COLUMNS (kx = 0 and kx = Nyquist) are measured like every other mode. The phi
 HMC runs on the Fourier phi, whose gradient carries anti-Hermitian content on exactly those two

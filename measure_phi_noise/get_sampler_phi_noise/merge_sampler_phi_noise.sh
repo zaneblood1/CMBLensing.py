@@ -26,7 +26,7 @@ out_dir_name=${out_dir_name:-sampler_phi_noise_output}
 chain_dir="$SLURM_SUBMIT_DIR/$out_dir_name"
 
 #sweeps cut from the start of every chain. Choose it from a pilot chain (e.g. where the logpdf
-#of a small sample_lcdm.py run plateaus), then confirm it with plot_sampler_convergence.py on
+#of a small sample_lcdm.py run plateaus), then confirm it with ../phi_noise_analysis.py (plot_sampler_convergence) on
 #the merged file: the mean R-hat across each map's chains should be ~1 in every L band
 burn_in=${burn_in:-300}
 

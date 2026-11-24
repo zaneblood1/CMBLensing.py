@@ -1,10 +1,10 @@
-The data and figures in these folders are maintained by hand, and the figures are what the [results visualizer](https://zaneblood1.github.io/CMBLensing.py/results/) shows.
+The data and figures in these folders are maintained by hand, and the figures are what the [static results website](https://zaneblood1.github.io/CMBLensing.py/results/) displays.
 
 ## Layout
 
 ```
 experimental_results/<section>/<dataset>/      e.g. lcdm_sampling/2.5uk_summer_2026/
-    *.png, <group>/*.png      the figures the visualizer shows; a sub-folder is one headed group
+    *.png, <group>/*.png      the figures the website shows; a sub-folder is one headed group
     SUMMARY.md                optional: shown above the figures (how the run was generated)
     data/                     optional: what the figures were made from
 ```
@@ -25,7 +25,7 @@ Take the folder of figures, rename it, drop it into its section, commit and push
 cp -r <chain_dir>/chain_analysis_output experimental_results/lcdm_sampling/<any name>
 
 #noise spectra: the plots of measure_phi_noise/phi_noise_analysis.py (and, if wanted, the
-#sampler_rhat_<noise>uk.png of plot_sampler_convergence.py)
+#sampler_rhat_<noise>uk.png of phi_noise_analysis.py)
 cp -r measure_phi_noise/phi_noise_plots/noise_level_2.5uk experimental_results/phi_noise/<any name>
 
 #runtime comparison: the folder runtime_comparison/performance_analysis.py writes

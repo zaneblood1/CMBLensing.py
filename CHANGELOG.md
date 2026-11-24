@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **2026-11-24** `PROJECT_SUMMARY.md`, a human-readable description of the code base and the repository, and the `/update-docs` skill (`.claude/skills/update-docs/SKILL.md`) that brings the documentation in line with the code.
 - **2026-11-19** Results visualizer on the docs site (`docs/results/`, built from `experimental_results/` by the MkDocs hook `experimental_results/build_results_site.py`). `experimental_results/` now follows the layout `<section>/<dataset>/`.
 - **2026-11-12** All large data (chain directories, delensed field covariances, map_joint and sampler phi noise, runtime comparison results) is stored next to the 5D CAMB grid on the Hugging Face dataset `zaneblood1/cmb_lensing_data`.
 - **2026-11-11** Polarization support (`pol = "I"`, `"P"`, `"IP"`) in the Fisher forecast, the empirical delensed covariance stencil and the fixed-theta sampler phi noise chains.
@@ -36,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **2026-11-24** `measure_phi_noise/get_sampler_phi_noise/plot_sampler_convergence.py` is merged into `measure_phi_noise/phi_noise_analysis.py`: `python phi_noise_analysis.py` (no arguments) now also writes the R-hat convergence plot `sampler_rhat_<noise>uk.png` (`plot_sampler_convergence`) into `phi_noise_plots/noise_level_<noise>uk/`, for the merged multi-chain files listed in `convergence_files` in its `__main__` block.
 - **2026-11-23** The merged `map_joint_phi_noise.npz` and `sampler_phi_noise.npz` store every realization's moments, and `phi_noise_analysis.py` rebuilds each N_phi from them (correlation estimator for `map_joint`, response estimator for the sampler).
 - **2026-11-23** `chain_analysis.py`'s product distribution is the product of one normal distribution per map, with bootstrap Monte Carlo errors.
 - **2026-11-11** The Fisher forecast always takes its field blocks from a measured delensed covariance (`--delensed_covariance` is required) and contracts per-mode covariance blocks, so one code path serves temperature, polarization and joint data.

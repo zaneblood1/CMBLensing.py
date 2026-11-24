@@ -11,7 +11,7 @@ covar_matrix_from_cls units from the posterior mean's response to the truth, NaN
 modes, 0 at the origin), its jackknife error `nphi_error`, the N leave-one-out N_phi
 `nphi_leave_one_out`, the per-mode R-hat across each
 realization's chains (`rhat_real`, `rhat_imaginary`), `cphi`, the mean and the per-realization moments and the box /
-cosmology metadata. Check the burn-in with plot_sampler_convergence.py on that file.
+cosmology metadata. Check the burn-in with ../phi_noise_analysis.py (plot_sampler_convergence) on that file.
 """
 
 import argparse

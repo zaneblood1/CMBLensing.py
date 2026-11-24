@@ -1,4 +1,4 @@
-"""Builds the results visualizer's figure tree and manifest from experimental_results/.
+"""Builds the static results website's figure tree and manifest from experimental_results/.
 
 The folder layout is the whole contract:
 

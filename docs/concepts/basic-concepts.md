@@ -1,4 +1,4 @@
-# Fields and Operators
+# Basic Concepts
 
 ## Fields
 
@@ -44,4 +44,26 @@ Fields and operators are `flax.struct.dataclass` pytrees, so they pass through `
 | `"I"` | `FlatS0` | `DiagonalScalar` | `DataSetT` |
 | `"P"` | `FlatS2` | `DiagonalEB` | `DataSetEB` |
 | `"IP"` | `FlatS02` | `BlockTEB` | `DataSetTEB` |
+
+## Simulating data
+
+`cmb_lensing.simulate.load_sim` is the main entry point. It
+
+1. runs CAMB for the requested cosmology,
+2. builds the field, phi and noise covariances in Fourier space,
+3. draws the unlensed field, phi and the noise,
+4. lenses the field with `primal_lense_flow`,
+5. returns a `DataSetT` / `DataSetEB` / `DataSetTEB` holding the fields, the operators and the simulated data.
+
+```python
+from cmb_lensing.simulate import load_sim
+data_set = load_sim(nside = 128,         #pixels per side
+                    theta_pix = 2.5,     #arcmin per pixel
+                    pol = "IP",          #"I", "P" or "IP"
+                    master_seed = 67,
+                    uk_arcmin_t = 5,     #white noise level in T (P is sqrt(2) higher)
+                    l_knee = 0)          #0 for pure white noise
+```
+
+Useful attributes of the returned data set: `unlensed_field`, `lensed_field`, `phi`, `data`, `field_covariance`, `phi_covariance`, `noise_covariance`, `mask`, `beam`, `mixing_d`, `mixing_g`, `quadratic_estimate`.
 

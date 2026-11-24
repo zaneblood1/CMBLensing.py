@@ -1,6 +1,6 @@
 # Chain Analysis
 
-See [Chain Analysis](../pipelines/chain-analysis.md) for the command-line interface and the [tutorial](../chain_analysis_tutorial.ipynb) for a worked example.
+See [Analyzing Chain Data](../chain_analysis_tutorial.ipynb) for a worked example, the command-line interface and its options.
 
 ::: cmb_lensing.chain_analysis.main
 

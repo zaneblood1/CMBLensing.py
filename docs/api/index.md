@@ -1,6 +1,6 @@
 # API Reference
 
-Reference pages for the functions and classes you call directly. They are generated from the docstrings in the code, so they always match the installed version. For the ideas behind them see [Core concepts](../concepts/fields.md); for worked examples see the [tutorials](../map_joint_tutorial.ipynb).
+Reference pages for the functions and classes you call directly. They are generated from the docstrings in the code, so they always match the installed version. For the ideas behind them and worked examples see the Tutorials, starting with [Basic Concepts](../concepts/basic-concepts.md).
 
 | Page | Contents |
 |---|---|
@@ -8,5 +8,5 @@ Reference pages for the functions and classes you call directly. They are genera
 | [MAP Estimation](map-joint.md) | `map_joint` |
 | [LCDM Sampling](sample-joint.md) | `sample_joint` |
 | [Fields, Operators and Data Sets](fields.md) | `FlatS0` / `FlatS2` / `FlatS02`, `DiagonalScalar` / `DiagonalEB` / `BlockTEB`, `DataSetT` / `DataSetEB` / `DataSetTEB` |
-| [Fisher Forecast](fisher-forecast.md) | `forecast` |
+| [Fisher Forecast](fisher-forecast.md) | what the forecast computes, its command line and `forecast` |
 | [Chain Analysis](chain-analysis.md) | `chain_analysis.main`, `load_chains`, `get_avg_covariance_matrix`, `get_forecasted_covariance` |

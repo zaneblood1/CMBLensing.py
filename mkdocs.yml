@@ -32,26 +32,19 @@ nav:
   - Home: index.md
   - Getting started:
       - Installation: getting-started/installation.md
-      - The CAMB Grid: getting-started/camb-grid.md
-      - Data: getting-started/data.md
-      - HPC Setup: getting-started/hpc-setup.md
-  - Core concepts:
-      - Fields and Operators: concepts/fields.md
-      - Simulating Data: concepts/load-sim.md
-      - MAP Estimation: concepts/map-joint.md
-      - LCDM Sampling: concepts/sample-joint.md
+      - Data Availability: getting-started/data.md
+      - Unit Tests: getting-started/unit-tests.md
   - Tutorials:
-      - MAP Joint: map_joint_tutorial.ipynb
-      - Sample Joint: sample_joint_tutorial.ipynb
-      - Chain Analysis: chain_analysis_tutorial.ipynb
+      - Basic Concepts: concepts/basic-concepts.md
+      - MAP Estimation: map_joint_tutorial.ipynb
+      - Running a Single LCDM Chain: sample_joint_tutorial.ipynb
+      - Analyzing Chain Data: chain_analysis_tutorial.ipynb
   - Pipelines:
       - Building the CAMB Grid: pipelines/camb-grid.md
       - LCDM Sampling on the HPC: pipelines/lcdm-chains.md
-      - MAP Joint Phi Noise: pipelines/map-joint-phi-noise.md
-      - Sampler Phi Noise: pipelines/sampler-phi-noise.md
-      - Delensed Covariances: pipelines/delensed-covariance.md
-      - Chain Analysis: pipelines/chain-analysis.md
-  - Fisher Forecast: fisher-forecast.md
+      - Measuring Noise in the MAP Estimates: pipelines/map-joint-phi-noise.md
+      - Measuring Noise in the Sampler: pipelines/sampler-phi-noise.md
+      - Computing Delensed Covariance Matrices: pipelines/delensed-covariance.md
   - API Reference:
       - api/index.md
       - Simulating Data: api/simulate.md
@@ -60,10 +53,8 @@ nav:
       - Fields, Operators and Data Sets: api/fields.md
       - Fisher Forecast: api/fisher-forecast.md
       - Chain Analysis: api/chain-analysis.md
-  - Testing: testing.md
-  - Results: results/index.html
 
-#the results visualizer (docs/results/): after every build the hook copies the figures in
+#the static results page (docs/results/): after every build the hook copies the figures in
 #experimental_results/ into the site and writes the manifest the page reads
 hooks:
   - experimental_results/build_results_site.py

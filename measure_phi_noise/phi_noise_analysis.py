@@ -1,3 +1,17 @@
+"""Plots of the measured lensing reconstruction noise N_phi.
+
+    python phi_noise_analysis.py
+
+For the box, noise levels and merged files set in __main__, writes into
+phi_noise_plots/noise_level_<noise>uk/:
+    phi_noise_spectra_<noise>uk.png, phi_noise_spectra_over_qe_<noise>uk.png
+        the phi noise spectra of map_joint and of the sampler against the box QE
+        (plot_phi_noise_vs_qe)
+    sampler_rhat_<noise>uk.png
+        the convergence check of the sampler phi noise chains (plot_sampler_convergence), at
+        the noise levels that have a merged multi-chain file
+"""
+
 import os
 import numpy as np
 import matplotlib
@@ -31,6 +45,12 @@ ESTIMATOR_R_SQUARED = {
 SPECTRA_TITLE_FONTSIZE = 15
 SPECTRA_LABEL_FONTSIZE = 15
 SPECTRA_LEGEND_FONTSIZE = 11
+#the convergence plot: R-hat below R_HAT_REFERENCE counts as converged (the usual modern threshold)
+R_HAT_REFERENCE = 1.01
+R_HAT_FIGURE_SIZE = (10, 6)
+R_HAT_DPI = 150
+R_HAT_TITLE_FONTSIZE = 13
+R_HAT_LABEL_FONTSIZE = 14
 
 def plot_dir(noise):
     """phi_noise_plots/noise_level_<noise>uk/ (created), next to this script."""
@@ -191,6 +211,70 @@ def plot_phi_noise_vs_qe(nside, theta_pix, noise, phi_noise_files, out_dir):
     plt.close(bottom_figure)
     print(f"wrote {path}")
 
+def band_mean_rhat(rhat_real, rhat_imaginary, ell_grid, edges):
+    """(n_maps, n_bands): each map's R-hat averaged over the real and imaginary parts of the
+    band's modes (NaN entries, e.g. the origin, left out)."""
+    index = np.digitize(ell_grid, edges) - 1
+    n_bands = len(edges) - 1
+    values = np.full((len(rhat_real), n_bands), np.nan)
+    for band in range(n_bands):
+        inside = index == band
+        if inside.any():
+            both_parts = np.concatenate([rhat_real[:, inside], rhat_imaginary[:, inside]], axis = 1)
+            with np.errstate(invalid = "ignore"):
+                values[:, band] = np.nanmean(both_parts, axis = 1)
+    return values
+
+def plot_sampler_convergence(merged_path, out_dir):
+    """Convergence check of the sampler phi noise chains: sampler_rhat_<noise>uk.png in out_dir,
+    from the merged sampler_phi_noise.npz (merge_sampler_phi_noise.py) at `merged_path`.
+
+    Per |L| band, the Gelman-Rubin R-hat across each data map's chains: for every map the R-hat
+    of the real and imaginary parts of the band's Fourier modes are averaged, and the plot
+    shows the mean of that over maps with +/- 1 standard deviation over maps as error bars.
+    Every band near 1 means the chains started at phi = 0 and at prior draws agree after the
+    burn-in; a band well above 1 means the burn-in (or the chain length) was too short there.
+    """
+    merged = np.load(merged_path)
+    nside = int(merged["nside"])
+    theta_pix = float(merged["theta_pix"])
+    noise = float(merged["noise_level"])
+    ell_grid = np.asarray(gen_ell_grid(nside, theta_pix)[0])
+    edges = band_edges(ell_grid)
+    centres = 0.5 * (edges[1:] + edges[:-1])
+
+    per_map = band_mean_rhat(np.asarray(merged["rhat_real"]), np.asarray(merged["rhat_imaginary"]),
+                             ell_grid, edges)
+    with np.errstate(invalid = "ignore"):
+        mean = np.nanmean(per_map, axis = 0)
+        spread = np.nanstd(per_map, axis = 0)
+    good = np.isfinite(mean)
+
+    figure, axis = plt.subplots(figsize = R_HAT_FIGURE_SIZE)
+    axis.errorbar(centres[good], mean[good], yerr = spread[good], fmt = "o", markersize = 4,
+                  capsize = 3, color = "C0", label = r"mean over maps $\pm$ 1 std over maps")
+    axis.axhline(R_HAT_REFERENCE, color = "C3", linestyle = "--", linewidth = 1,
+                 label = f"$\\hat R$ = {R_HAT_REFERENCE:g}")
+    axis.axhline(1.0, color = "0.5", linewidth = 0.8)
+    axis.set_xscale("log")
+    axis.set_xlabel(r"$L$ (band centre)", fontsize = R_HAT_LABEL_FONTSIZE)
+    axis.set_ylabel(r"Band-averaged Gelman-Rubin $\hat R$ across chains", fontsize = R_HAT_LABEL_FONTSIZE)
+    axis.set_title(f"Sampler phi chains | {int(merged['n_realizations'])} maps, "
+                   f"{int(np.min(merged['n_chains']))}-{int(np.max(merged['n_chains']))} chains "
+                   f"per map, burn-in {int(merged['burn_in'])} | nside {nside}, "
+                   f"{theta_pix:g}', {noise:g} $\\mu$K-arcmin", fontsize = R_HAT_TITLE_FONTSIZE)
+    axis.legend()
+    figure.tight_layout()
+    out_path = os.path.join(out_dir, f"sampler_rhat_{noise:g}uk.png")
+    figure.savefig(out_path, dpi = R_HAT_DPI)
+    plt.close(figure)
+    print(f"wrote {out_path}")
+
+    worst = np.nanargmax(np.where(good, mean, -np.inf))
+    print(f"worst band: L = {centres[worst]:.0f}, mean R-hat {mean[worst]:.4f} "
+          f"(std {spread[worst]:.4f}); {int(np.sum(mean[good] > R_HAT_REFERENCE))} of "
+          f"{int(np.sum(good))} bands have mean R-hat above {R_HAT_REFERENCE:g}")
+
 if __name__ == "__main__":
 
     #the box and noise level the merged phi noise files were measured at
@@ -202,7 +286,10 @@ if __name__ == "__main__":
     #dataset into <repository>/cmb_lensing_data (docs/getting-started/data.md). Each must hold the
     #per-realization moments. Edit to wherever the merged files are; drop an entry to skip it
     data_dir = os.path.join(HERE, "..", "cmb_lensing_data")
+    #merged sampler phi noise files of runs with several chains per map (they hold R-hat), by
+    #noise level: the convergence plot is drawn for these
     for noise in noise_levels:
+
         phi_noise_files = {
             "map_joint": os.path.join(data_dir, "map_joint_phi_noise_data",
                                       f"map_joint_phi_noise_output_{noise}uk", "map_joint_phi_noise.npz"),
@@ -211,3 +298,8 @@ if __name__ == "__main__":
                                          "sampler_phi_noise_response.npz"),
         }
         plot_phi_noise_vs_qe(nside, theta_pix, noise, phi_noise_files, plot_dir(noise))
+
+        convergence_file = os.path.join(data_dir, "sampler_phi_noise_data",
+                                        f"sampler_phi_noise_output_{noise}uk_multi_chain", 
+                                        "sampler_phi_noise.npz")
+        plot_sampler_convergence(convergence_file, plot_dir(noise))

@@ -23,7 +23,7 @@ source ../../hpc_submit.sh || exit 1
 #Gibbs sweep with theta HELD at the ground truth - (f, phi) are sampled, theta is not - and
 #stores EVERY phi sample (no burn-in cut, no thinning). Chain 0 of a map starts at phi = 0,
 #every other chain at its own draw from the C_phi prior, so the chains' agreement after the
-#burn-in (Gelman-Rubin R-hat per mode, plot_sampler_convergence.py) tests convergence.
+#burn-in (Gelman-Rubin R-hat per mode, phi_noise_analysis.py) tests convergence.
 #
 #The analysis burns every chain in, pools a map's chains into its posterior mean phi_mean,
 #and compares that with the realization's true phi. Per mode, with the averages taken over
