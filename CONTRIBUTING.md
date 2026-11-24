@@ -46,7 +46,7 @@ pytest                          #all tests
 pytest tests/test_lensing.py    #one file
 ```
 
-Most tests compare the Python output against CMBLensing.jl results stored in `tests/ground_truth_data/`. Many of them write comparison plots to `tests/test_generated_figures/` instead of asserting, so please also look at the plots (open `tests/index.html` through a local web server, e.g. VS Code Live Server): a test can pass while a plot shows a problem. `tests/test_camb_grid.py` is skipped if the 5D grid has not been downloaded.
+Most tests compare the Python output against CMBLensing.jl results stored in `tests/ground_truth_data/`. A test fails if a regression is introduced that makes the Python and Julia outputs differ past a threshold: each test file lists the differences measured when its thresholds were set, and a comparison may reach `REGRESSION_MARGIN` (2, in `tests/regression_thresholds.py`) times its measured difference. The tests also write comparison plots to `tests/test_generated_figures/`. Looking at them is not necessary, but they can help with debugging when a test fails (open `tests/index.html` through a local web server, e.g. VS Code Live Server). `tests/test_camb_grid.py` is skipped if the 5D grid has not been downloaded.
 
 Regenerating the Julia reference data requires [juliacall](https://juliapy.github.io/PythonCall.jl/stable/juliacall/) and a local CMBLensing.jl checkout, whose location is read from the `CMBLENSING_JL_PATH` environment variable.
 

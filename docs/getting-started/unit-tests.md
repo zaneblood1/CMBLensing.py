@@ -14,7 +14,7 @@ The Julia outputs come from commit [`8e75a7c`](https://github.com/marius311/CMBL
 
 The LCDM sampler, the Fisher forecast and the noise measurement modules have no tests.
 
-These comparisons are closer to validation benchmarks than to unit tests. They check whole functions against Julia, and many of them produce plots to inspect instead of failing on their own. Real unit tests, which check small pieces of the code in isolation and fail automatically when something breaks, are an area for future development and improvement.
+These comparisons are closer to validation benchmarks than to unit tests: they check whole functions against Julia. Each one fails when a regression is introduced that makes the Python and Julia versions differ past a threshold (see [When a test fails](#when-a-test-fails)). Unit tests that check small pieces of the code in isolation are an area for future development and improvement.
 
 ## Running the tests
 
@@ -30,7 +30,20 @@ Or run a single file:
 pytest tests/test_lensing.py
 ```
 
-Many tests write comparison plots into the folder `tests/test_generated_figures/` instead of asserting a result. A test can therefore pass while a plot shows a problem, so look at the plots. The page `tests/index.html` displays them; open it through a local server such as the VS Code Live Server extension.
+## When a test fails
+
+Every comparison measures a difference between the Python and the Julia output and fails when that difference exceeds a threshold. The thresholds are set from the differences measured on 2026-11-24, which each test file lists at its top (`MEASURED_NORM_DIFF`, `MEASURED_DECORRELATION`, ...): a comparison may reach `REGRESSION_MARGIN` (2) times its measured difference before it fails, and comparisons that agree to round-off are allowed `ROUND_OFF_TOLERANCE` (1e-12). Both constants are in `tests/regression_thresholds.py`.
+
+| Test file | Difference that is compared with the threshold |
+|---|---|
+| `test_covariance_matrices.py`, `test_lensing.py`, `test_gradients.py`, `test_wiener_filter.py`, `test_map_joint.py` | the norm of (Python - Julia) divided by the norm of the Julia output |
+| `test_lensing.py`, `test_gradients.py` | also 1 minus the cross correlation between the Python and Julia outputs, averaged over the multipole bins |
+| `test_logpdf.py` | the fractional difference of the two log-probabilities |
+| `test_simulated_cls.py` | the rms over the multipole bins of ln(C_l Python / C_l Julia). The two spectra are averages over independent sets of 100 simulations, so this difference is sample variance; the Python simulations are seeded so the test is reproducible |
+
+A failing test therefore means that a change to the code moved the Python output away from the Julia output. If the change is intended and the new difference is understood, update the measured value in the test file.
+
+The tests also write comparison plots into the folder `tests/test_generated_figures/` (the Python and Julia outputs, their difference and their cross correlation). The page `tests/index.html` displays them; open it through a local server such as the VS Code Live Server extension. Opening it is not necessary, since the tests fail on their own, but the plots can help with debugging when a test fails: they show where on the map, or at which multipoles, the two outputs differ.
 
 ## Regenerating the Julia data
 

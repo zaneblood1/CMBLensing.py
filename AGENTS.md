@@ -153,9 +153,20 @@ hpc_local.example.sh          template for the gitignored hpc_local.sh every HPC
 hpc_submit.sh                 submit_throttled, the queue-capped sbatch every driver uses (MAX_QUEUED_JOBS / SUBMIT_POLL_SECONDS)
 README.md, CONTRIBUTING.md, CITATION.cff, .gitattributes (`*.sh text eol=lf`, so a Windows checkout's scripts still run under bash)
 PROJECT_SUMMARY.md            human-readable description of what the code base and the repository do (added 2026-11-24)
-.claude/skills/update-docs/SKILL.md   the /update-docs command (the only tracked part of .claude/): brings CHANGELOG, PROJECT_SUMMARY,
-                              CLAUDE, AGENTS (a copy of CLAUDE.md but for its heading and the agent's name), CONTRIBUTING, README and
-                              the docs site in line with the code. It never edits CODE_REVIEW_FINDINGS.md
+.claude/skills/               the only tracked part of .claude/: the project's slash commands
+  update-docs/SKILL.md          /update-docs: brings CHANGELOG, PROJECT_SUMMARY, CLAUDE, AGENTS (a copy of CLAUDE.md but for its
+                                heading and the agent's name), CONTRIBUTING, README and the docs site in line with the code. It
+                                never edits CODE_REVIEW_FINDINGS.md
+  refresh-hpc/SKILL.md          /refresh-hpc <resnick|aces> (added 2026-11-24, NOT yet run on a cluster): deletes the checkout on
+                                that cluster and re-clones origin/master + pip install -e ., carrying over hpc_local.sh and
+                                camb_splines/; stops and asks when jobs run from the checkout or it holds other untracked output
+  refresh-hpc/hosts.md          the clusters both HPC skills know: ssh alias and repo directory on the cluster (recorded on first use)
+  run-pipeline/SKILL.md         /run-pipeline <resnick|aces> <sample_lcdm|sampler_noise|map_noise|delense_covariance|
+                                runtime_comparison|camb_grid> [--<setting>=<value> ...] (added 2026-11-24, NOT yet run on a cluster):
+                                launches that pipeline's driver under nohup on the cluster. Settings are the driver's own
+                                name=${name:-default} lines, read from the driver each time; its report is the cluster's
+                                submission_settings.txt read back. Both HPC skills assume two-factor authentication on every
+                                cluster: they announce each ssh call and wait for the phone approval (hosts.md)
 ```
 
 The `get_*` folders and `runtime_comparison/` were moved to the repo root on 2026-10-15 and are no longer gitignored; on 2026-11-03 `get_map_joint_phi_noise/` and `get_sampler_phi_noise/` moved into `measure_phi_noise/`.
@@ -437,7 +448,7 @@ runtime_comparison/python_performance_test.py ──► map_joint (Julia data vi
 
 ### Testing Approach
 
-Most tests are validation benchmarks comparing Python output against Julia (CMBLensing.jl) ground truth stored in `tests/ground_truth_data/*.npz`. They cover `load_sim`, lensing, logpdf, gradients, the Wiener filter and `map_joint`; **nothing tests the sampler**. Exceptions to the Julia pattern: `tests/test_camb_grid.py` checks the real 5D grid against direct CAMB (skipped when the grid file is absent). The forecast, `delensed_covariance` and `sampler_phi_noise` are untested (open review findings are listed in `CODE_REVIEW_FINDINGS.md` at the repo root). Many Julia tests produce comparison plots in `tests/test_generated_figures/` rather than hard assertions — visual inspection via the HTML viewer (`tests/index.html`, served with e.g. VS Code Live Server) is the primary verification method. `conftest.py` maps each `test_*` module to its `generate_*` module for `--generate`; `_preamble.py` sets `PYTHON_JULIAPKG_PROJECT` from the `CMBLENSING_JL_PATH` environment variable (a local CMBLensing.jl checkout), like `runtime_comparison/python_performance_test.py`. The full suite collects 49 tests.
+Most tests are validation benchmarks comparing Python output against Julia (CMBLensing.jl) ground truth stored in `tests/ground_truth_data/*.npz`. They cover `load_sim`, lensing, logpdf, gradients, the Wiener filter and `map_joint`; **nothing tests the sampler**. Exceptions to the Julia pattern: `tests/test_camb_grid.py` checks the real 5D grid against direct CAMB (skipped when the grid file is absent). The forecast, `delensed_covariance` and `sampler_phi_noise` are untested (open review findings are listed in `CODE_REVIEW_FINDINGS.md` at the repo root). Every Julia test asserts (since 2026-11-24): each test file lists the Python v.s. Julia differences measured that day (`MEASURED_NORM_DIFF` = |python - julia| / |julia|, `MEASURED_DECORRELATION` = 1 - bin-averaged cross correlation in test_lensing / test_gradients, `MEASURED_FRACTIONAL_DIFF` in test_logpdf, `MEASURED_RMS_LOG_CL_DIFF` in test_simulated_cls, whose simulations are seeded with `SIMULATION_SEED` and differ from Julia's by sample variance) and a comparison fails past `regression_thresholds.max_allowed(measured)` = `REGRESSION_MARGIN` (2) x measured, floored at `ROUND_OFF_TOLERANCE` (1e-12). When a difference changes on purpose, update the measured value. The Wiener filter and `map_joint` cross correlations are plotted but not asserted (zero-power bins make them NaN / inf). The comparison plots in `tests/test_generated_figures/` and their HTML viewer (`tests/index.html`, served with e.g. VS Code Live Server) are not needed to run the tests, only a debugging aid when one fails. `primal_power_spectra` drops empty ell bins before dividing (it used to emit 60 RuntimeWarnings per run). `conftest.py` maps each `test_*` module to its `generate_*` module for `--generate`; `_preamble.py` sets `PYTHON_JULIAPKG_PROJECT` from the `CMBLENSING_JL_PATH` environment variable (a local CMBLensing.jl checkout), like `runtime_comparison/python_performance_test.py`. The full suite collects 49 tests.
 
 ## Known issues (as of 2026-11-04 — delete entries as they are fixed)
 

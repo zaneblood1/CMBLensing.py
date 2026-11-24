@@ -13,6 +13,7 @@ from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
 from cmb_lensing.mixing import *
 from figure_utils import save_figure
+from regression_thresholds import max_allowed
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -23,9 +24,30 @@ with open(GROUND_TRUTH + "theta_pix.txt", "r") as file:
     THETA_PIX = float(file.read().strip())
 PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 
-#threshold values for unit tests
-MAX_NORM_DIFF = 1
-MIN_AVG_CORRELATION = 0
+#norm differences |python - julia| / |julia| measured on 2026-11-24 (the largest over the field's components)
+MEASURED_NORM_DIFF = {
+    "gradf_intensity_only": 4.2e-3,
+    "gradf_polarization_only": 3.8e-4,
+    "gradf_intensity_and_polarization": 4.0e-3,
+    "grad_phi_intensity_only": 5.1e-5,
+    "grad_phi_polarization_only": 2.5e-6,
+    "grad_phi_intensity_and_polarization": 5.8e-5,
+    "mixed_grad_phi_intensity_only": 3.2e-4,
+    "mixed_grad_phi_polarization_only": 1.1e-4,
+    "mixed_grad_phi_intensity_and_polarization": 2.3e-3,
+}
+#1 - (cross correlation between python and julia, averaged over the ell bins) measured on 2026-11-24
+MEASURED_DECORRELATION = {
+    "gradf_intensity_only": {"t": 6.9e-9},
+    "gradf_polarization_only": {"e": 4.2e-10, "b": 1.5e-13},
+    "gradf_intensity_and_polarization": {"t": 9.1e-9, "e": 1.2e-10, "b": 4.8e-14},
+    "grad_phi_intensity_only": {"phi": 1.8e-8},
+    "grad_phi_polarization_only": {"phi": 2.5e-9},
+    "grad_phi_intensity_and_polarization": {"phi": 2.7e-8},
+    "mixed_grad_phi_intensity_only": {"phi": 1.3e-7},
+    "mixed_grad_phi_polarization_only": {"phi": 1.8e-7},
+    "mixed_grad_phi_intensity_and_polarization": {"phi": 2.3e-5},
+}
 
 def test_gradf_intensity_only():
 
@@ -97,11 +119,11 @@ def test_gradf_intensity_only():
 
     #compare percent difference between prediction and ground truth
     perc_diff = jnp.max(percent_diff_2d(gradf_ground, gradf_predict))
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["gradf_intensity_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation = jnp.mean(gf_cross_gf)
-    assert avg_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation <= max_allowed(MEASURED_DECORRELATION["gradf_intensity_only"]["t"])
 
 def test_gradf_polarization_only():
     #load ground truth data
@@ -208,13 +230,13 @@ def test_gradf_polarization_only():
 
     #compare percent difference between prediction and ground truth
     perc_diff = jnp.max(percent_diff_2d(gradf_eb_ground, gradf_eb_predict))
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["gradf_polarization_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_e_correlation = jnp.mean(gfe_cross_gfe)
-    assert avg_e_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_e_correlation <= max_allowed(MEASURED_DECORRELATION["gradf_polarization_only"]["e"])
     avg_b_correlation = jnp.mean(gfb_cross_gfb)
-    assert avg_b_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_b_correlation <= max_allowed(MEASURED_DECORRELATION["gradf_polarization_only"]["b"])
 
 def test_gradf_intensity_and_polarization():
     #load ground truth data
@@ -370,15 +392,15 @@ def test_gradf_intensity_and_polarization():
 
     #compare percent difference between prediction and ground truth
     perc_diff = jnp.max(percent_diff_2d(gradf_teb_ground, gradf_teb_predict))
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["gradf_intensity_and_polarization"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_t_correlation = jnp.mean(gft_cross_gft)
-    assert avg_t_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_t_correlation <= max_allowed(MEASURED_DECORRELATION["gradf_intensity_and_polarization"]["t"])
     avg_e_correlation = jnp.mean(gfe_cross_gfe)
-    assert avg_e_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_e_correlation <= max_allowed(MEASURED_DECORRELATION["gradf_intensity_and_polarization"]["e"])
     avg_b_correlation = jnp.mean(gfb_cross_gfb)
-    assert avg_b_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_b_correlation <= max_allowed(MEASURED_DECORRELATION["gradf_intensity_and_polarization"]["b"])
 
 def test_grad_phi_intensity_only():
 
@@ -452,11 +474,11 @@ def test_grad_phi_intensity_only():
 
     #compare percent difference between prediction and ground truth
     perc_diff = jnp.max(percent_diff_2d(grad_phi_ground, grad_phi_predict))
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["grad_phi_intensity_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation = jnp.mean(gphi_cross_gphi)
-    assert avg_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation <= max_allowed(MEASURED_DECORRELATION["grad_phi_intensity_only"]["phi"])
 
 def test_grad_phi_polarization_only():
 
@@ -542,11 +564,11 @@ def test_grad_phi_polarization_only():
 
     #compare percent difference between prediction and ground truth
     perc_diff = jnp.max(percent_diff_2d(grad_phi_ground, grad_phi_predict))
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["grad_phi_polarization_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation = jnp.mean(gphi_cross_gphi)
-    assert avg_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation <= max_allowed(MEASURED_DECORRELATION["grad_phi_polarization_only"]["phi"])
 
 def test_grad_phi_intensity_and_polarization():
 
@@ -656,11 +678,11 @@ def test_grad_phi_intensity_and_polarization():
 
     #compare percent difference between prediction and ground truth
     perc_diff = jnp.max(percent_diff_2d(grad_phi_ground, grad_phi_predict))
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["grad_phi_intensity_and_polarization"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation = jnp.mean(gphi_cross_gphi)
-    assert avg_correlation > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation <= max_allowed(MEASURED_DECORRELATION["grad_phi_intensity_and_polarization"]["phi"])
 
 def test_mixed_grad_phi_intensity_only():
     #load ground truth data matrices
@@ -737,10 +759,10 @@ def test_mixed_grad_phi_intensity_only():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(mixed_grad_phi_ground, mixed_grad_phi_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(mixed_grad_phi_ground, mixed_grad_phi_predict)) <= max_allowed(MEASURED_NORM_DIFF["mixed_grad_phi_intensity_only"])
 
     #also assert that the average cross correlation is greater than our threshold
-    assert jnp.mean(gphi_cross_gphi) > MIN_AVG_CORRELATION
+    assert 1 - jnp.mean(gphi_cross_gphi) <= max_allowed(MEASURED_DECORRELATION["mixed_grad_phi_intensity_only"]["phi"])
 
 def test_mixed_grad_phi_polarization_only():
     #load ground truth data matrices
@@ -844,10 +866,10 @@ def test_mixed_grad_phi_polarization_only():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(mixed_grad_phi_ground, mixed_grad_phi_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(mixed_grad_phi_ground, mixed_grad_phi_predict)) <= max_allowed(MEASURED_NORM_DIFF["mixed_grad_phi_polarization_only"])
 
     #also assert that the average cross correlation is greater than our threshold
-    assert jnp.mean(gphi_cross_gphi) > MIN_AVG_CORRELATION
+    assert 1 - jnp.mean(gphi_cross_gphi) <= max_allowed(MEASURED_DECORRELATION["mixed_grad_phi_polarization_only"]["phi"])
 
 def test_mixed_grad_phi_intensity_and_polarization():
     #load ground truth data matrices
@@ -980,7 +1002,7 @@ def test_mixed_grad_phi_intensity_and_polarization():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(mixed_grad_phi_ground, mixed_grad_phi_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(mixed_grad_phi_ground, mixed_grad_phi_predict)) <= max_allowed(MEASURED_NORM_DIFF["mixed_grad_phi_intensity_and_polarization"])
 
     #also assert that the average cross correlation is greater than our threshold
-    assert jnp.mean(gphi_cross_gphi) > MIN_AVG_CORRELATION
+    assert 1 - jnp.mean(gphi_cross_gphi) <= max_allowed(MEASURED_DECORRELATION["mixed_grad_phi_intensity_and_polarization"]["phi"])

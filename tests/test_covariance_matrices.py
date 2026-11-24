@@ -12,6 +12,7 @@ from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
 from figure_utils import save_figure
+from regression_thresholds import max_allowed
 import matplotlib
 matplotlib.use("Agg")
 
@@ -24,9 +25,19 @@ with open(GROUND_TRUTH + "theta_pix.txt", "r") as file:
     THETA_PIX = float(file.read().strip())
 PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 
-#threshold values for unit tests
-MAX_NORM_DIFF = 1
-MIN_AVG_CORRELATION = 0
+#norm differences |python - julia| / |julia| measured on 2026-11-24
+MEASURED_NORM_DIFF = {
+    "noise_covariance": 2.4e-4,
+    "beam": 0,
+    "mask": 4.5e-5,
+    "field_covariance_tt": 2.2e-4,
+    "field_covariance_te": 4.4e-2,
+    "field_covariance_ee": 1.4e-5,
+    "field_covariance_bb": 6.7e-5,
+    "quadratic_estimate_I": 5.2e-5,
+    "quadratic_estimate_P": 6.7e-6,
+    "quadratic_estimate_IP": 6.7e-6,
+}
 CAMB_LMAX = 17_000
 CAMB_LMAX_PRIME = 5000
 
@@ -77,7 +88,7 @@ def test_noise_covariance_intensity_only():
     perc_diff = primal_percent_diff_2d(cn_ground, cn_predict)
     folder = FIGURE_PATH + "covariance_matrices/intensity_only/noise_covariance/"
     _plot_matrix_comparison(cn_ground, cn_predict, "Cn (I)", folder)
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["noise_covariance"])
 
 def test_noise_covariance_polarization_only():
     data_set = _get_dataset("P")
@@ -90,8 +101,8 @@ def test_noise_covariance_polarization_only():
     _plot_matrix_comparison(cn_bb_ground, cn_bb_predict, "Cn BB (P)", folder)
     perc_diff_ee = primal_percent_diff_2d(cn_ee_ground, cn_ee_predict)
     perc_diff_bb = primal_percent_diff_2d(cn_bb_ground, cn_bb_predict)
-    assert perc_diff_ee <= MAX_NORM_DIFF
-    assert perc_diff_bb <= MAX_NORM_DIFF
+    assert perc_diff_ee <= max_allowed(MEASURED_NORM_DIFF["noise_covariance"])
+    assert perc_diff_bb <= max_allowed(MEASURED_NORM_DIFF["noise_covariance"])
 
 def test_noise_covariance_intensity_and_polarization():
     data_set = _get_dataset("IP")
@@ -108,10 +119,10 @@ def test_noise_covariance_intensity_and_polarization():
     _plot_matrix_comparison(cn_te_ground, cn_te_predict, "Cn TE (IP)", folder)
     _plot_matrix_comparison(cn_ee_ground, cn_ee_predict, "Cn EE (IP)", folder)
     _plot_matrix_comparison(cn_bb_ground, cn_bb_predict, "Cn BB (IP)", folder)
-    assert primal_percent_diff_2d(cn_tt_ground, cn_tt_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(cn_te_ground, cn_te_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(cn_ee_ground, cn_ee_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(cn_bb_ground, cn_bb_predict) <= MAX_NORM_DIFF
+    assert primal_percent_diff_2d(cn_tt_ground, cn_tt_predict) <= max_allowed(MEASURED_NORM_DIFF["noise_covariance"])
+    assert primal_percent_diff_2d(cn_te_ground, cn_te_predict) <= max_allowed(MEASURED_NORM_DIFF["noise_covariance"])
+    assert primal_percent_diff_2d(cn_ee_ground, cn_ee_predict) <= max_allowed(MEASURED_NORM_DIFF["noise_covariance"])
+    assert primal_percent_diff_2d(cn_bb_ground, cn_bb_predict) <= max_allowed(MEASURED_NORM_DIFF["noise_covariance"])
 
 # ── Beam ────────────────────────────────────────────────────────────────
 
@@ -122,7 +133,7 @@ def test_beam_intensity_only():
     perc_diff = primal_percent_diff_2d(b_ground, b_predict)
     folder = FIGURE_PATH + "covariance_matrices/intensity_only/beam/"
     _plot_matrix_comparison(b_ground, b_predict, "Beam (I)", folder)
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["beam"])
 
 def test_beam_polarization_only():
     data_set = _get_dataset("P")
@@ -133,8 +144,8 @@ def test_beam_polarization_only():
     folder = FIGURE_PATH + "covariance_matrices/polarization_only/beam/"
     _plot_matrix_comparison(b_ee_ground, b_ee_predict, "Beam EE (P)", folder)
     _plot_matrix_comparison(b_bb_ground, b_bb_predict, "Beam BB (P)", folder)
-    assert primal_percent_diff_2d(b_ee_ground, b_ee_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(b_bb_ground, b_bb_predict) <= MAX_NORM_DIFF
+    assert primal_percent_diff_2d(b_ee_ground, b_ee_predict) <= max_allowed(MEASURED_NORM_DIFF["beam"])
+    assert primal_percent_diff_2d(b_bb_ground, b_bb_predict) <= max_allowed(MEASURED_NORM_DIFF["beam"])
 
 def test_beam_intensity_and_polarization():
     data_set = _get_dataset("IP")
@@ -151,10 +162,10 @@ def test_beam_intensity_and_polarization():
     _plot_matrix_comparison(b_te_ground, b_te_predict, "Beam TE (IP)", folder)
     _plot_matrix_comparison(b_ee_ground, b_ee_predict, "Beam EE (IP)", folder)
     _plot_matrix_comparison(b_bb_ground, b_bb_predict, "Beam BB (IP)", folder)
-    assert primal_percent_diff_2d(b_tt_ground, b_tt_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(b_te_ground, b_te_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(b_ee_ground, b_ee_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(b_bb_ground, b_bb_predict) <= MAX_NORM_DIFF
+    assert primal_percent_diff_2d(b_tt_ground, b_tt_predict) <= max_allowed(MEASURED_NORM_DIFF["beam"])
+    assert primal_percent_diff_2d(b_te_ground, b_te_predict) <= max_allowed(MEASURED_NORM_DIFF["beam"])
+    assert primal_percent_diff_2d(b_ee_ground, b_ee_predict) <= max_allowed(MEASURED_NORM_DIFF["beam"])
+    assert primal_percent_diff_2d(b_bb_ground, b_bb_predict) <= max_allowed(MEASURED_NORM_DIFF["beam"])
 
 # ── Mask ────────────────────────────────────────────────────────────────
 
@@ -165,7 +176,7 @@ def test_mask_intensity_only():
     perc_diff = primal_percent_diff_2d(m_ground, m_predict)
     folder = FIGURE_PATH + "covariance_matrices/intensity_only/mask/"
     _plot_matrix_comparison(m_ground, m_predict, "Mask (I)", folder)
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["mask"])
 
 def test_mask_polarization_only():
     data_set = _get_dataset("P")
@@ -176,8 +187,8 @@ def test_mask_polarization_only():
     folder = FIGURE_PATH + "covariance_matrices/polarization_only/mask/"
     _plot_matrix_comparison(m_ee_ground, m_ee_predict, "Mask EE (P)", folder)
     _plot_matrix_comparison(m_bb_ground, m_bb_predict, "Mask BB (P)", folder)
-    assert primal_percent_diff_2d(m_ee_ground, m_ee_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(m_bb_ground, m_bb_predict) <= MAX_NORM_DIFF
+    assert primal_percent_diff_2d(m_ee_ground, m_ee_predict) <= max_allowed(MEASURED_NORM_DIFF["mask"])
+    assert primal_percent_diff_2d(m_bb_ground, m_bb_predict) <= max_allowed(MEASURED_NORM_DIFF["mask"])
 
 def test_mask_intensity_and_polarization():
     data_set = _get_dataset("IP")
@@ -194,10 +205,10 @@ def test_mask_intensity_and_polarization():
     _plot_matrix_comparison(m_te_ground, m_te_predict, "Mask TE (IP)", folder)
     _plot_matrix_comparison(m_ee_ground, m_ee_predict, "Mask EE (IP)", folder)
     _plot_matrix_comparison(m_bb_ground, m_bb_predict, "Mask BB (IP)", folder)
-    assert primal_percent_diff_2d(m_tt_ground, m_tt_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(m_te_ground, m_te_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(m_ee_ground, m_ee_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(m_bb_ground, m_bb_predict) <= MAX_NORM_DIFF
+    assert primal_percent_diff_2d(m_tt_ground, m_tt_predict) <= max_allowed(MEASURED_NORM_DIFF["mask"])
+    assert primal_percent_diff_2d(m_te_ground, m_te_predict) <= max_allowed(MEASURED_NORM_DIFF["mask"])
+    assert primal_percent_diff_2d(m_ee_ground, m_ee_predict) <= max_allowed(MEASURED_NORM_DIFF["mask"])
+    assert primal_percent_diff_2d(m_bb_ground, m_bb_predict) <= max_allowed(MEASURED_NORM_DIFF["mask"])
 
 # ── Field Covariance ────────────────────────────────────────────────────
 
@@ -208,7 +219,7 @@ def test_field_covariance_intensity_only():
     perc_diff = primal_percent_diff_2d(cf_ground, cf_predict)
     folder = FIGURE_PATH + "covariance_matrices/intensity_only/field_covariance/"
     _plot_matrix_comparison(cf_ground, cf_predict, "Cf (I)", folder)
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["field_covariance_tt"])
 
 def test_field_covariance_polarization_only():
     data_set = _get_dataset("P")
@@ -219,8 +230,8 @@ def test_field_covariance_polarization_only():
     folder = FIGURE_PATH + "covariance_matrices/polarization_only/field_covariance/"
     _plot_matrix_comparison(cf_ee_ground, cf_ee_predict, "Cf EE (P)", folder)
     _plot_matrix_comparison(cf_bb_ground, cf_bb_predict, "Cf BB (P)", folder)
-    assert primal_percent_diff_2d(cf_ee_ground, cf_ee_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(cf_bb_ground, cf_bb_predict) <= MAX_NORM_DIFF
+    assert primal_percent_diff_2d(cf_ee_ground, cf_ee_predict) <= max_allowed(MEASURED_NORM_DIFF["field_covariance_ee"])
+    assert primal_percent_diff_2d(cf_bb_ground, cf_bb_predict) <= max_allowed(MEASURED_NORM_DIFF["field_covariance_bb"])
 
 def test_field_covariance_intensity_and_polarization():
     data_set = _get_dataset("IP")
@@ -237,10 +248,10 @@ def test_field_covariance_intensity_and_polarization():
     _plot_matrix_comparison(cf_te_ground, cf_te_predict, "Cf TE (IP)", folder)
     _plot_matrix_comparison(cf_ee_ground, cf_ee_predict, "Cf EE (IP)", folder)
     _plot_matrix_comparison(cf_bb_ground, cf_bb_predict, "Cf BB (IP)", folder)
-    assert primal_percent_diff_2d(cf_tt_ground, cf_tt_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(cf_te_ground, cf_te_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(cf_ee_ground, cf_ee_predict) <= MAX_NORM_DIFF
-    assert primal_percent_diff_2d(cf_bb_ground, cf_bb_predict) <= MAX_NORM_DIFF
+    assert primal_percent_diff_2d(cf_tt_ground, cf_tt_predict) <= max_allowed(MEASURED_NORM_DIFF["field_covariance_tt"])
+    assert primal_percent_diff_2d(cf_te_ground, cf_te_predict) <= max_allowed(MEASURED_NORM_DIFF["field_covariance_te"])
+    assert primal_percent_diff_2d(cf_ee_ground, cf_ee_predict) <= max_allowed(MEASURED_NORM_DIFF["field_covariance_ee"])
+    assert primal_percent_diff_2d(cf_bb_ground, cf_bb_predict) <= max_allowed(MEASURED_NORM_DIFF["field_covariance_bb"])
 
 # ── Quadratic Estimate ──────────────────────────────────────────────────
 
@@ -251,7 +262,7 @@ def test_quadratic_estimate_intensity_only():
     perc_diff = primal_percent_diff_2d(nphi_ground, qe_predict)
     folder = FIGURE_PATH + "covariance_matrices/intensity_only/quadratic_estimate/"
     _plot_matrix_comparison(nphi_ground, qe_predict, "QE (I)", folder)
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["quadratic_estimate_I"])
 
 def test_quadratic_estimate_polarization_only():
     data_set = _get_dataset("P")
@@ -260,7 +271,7 @@ def test_quadratic_estimate_polarization_only():
     perc_diff = primal_percent_diff_2d(nphi_ground, qe_predict)
     folder = FIGURE_PATH + "covariance_matrices/polarization_only/quadratic_estimate/"
     _plot_matrix_comparison(nphi_ground, qe_predict, "QE (P)", folder)
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["quadratic_estimate_P"])
 
 def test_quadratic_estimate_intensity_and_polarization():
     data_set = _get_dataset("IP")
@@ -269,4 +280,4 @@ def test_quadratic_estimate_intensity_and_polarization():
     perc_diff = primal_percent_diff_2d(nphi_ground, qe_predict)
     folder = FIGURE_PATH + "covariance_matrices/intensity_and_polarization/quadratic_estimate/"
     _plot_matrix_comparison(nphi_ground, qe_predict, "QE (IP)", folder)
-    assert perc_diff <= MAX_NORM_DIFF
+    assert perc_diff <= max_allowed(MEASURED_NORM_DIFF["quadratic_estimate_IP"])

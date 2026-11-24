@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **2026-11-24** Every Julia comparison test now fails on a regression: each test file lists the Python against Julia differences measured that day, and a comparison fails once its difference exceeds twice the measured value (`tests/regression_thresholds.py`). `test_simulated_cls.py`, which only wrote plots, is seeded and compares the averaged spectra with Julia's; `test_map_joint.py` also compares the lensing potential. The plots in `tests/test_generated_figures/` are now a debugging aid, not part of the check.
 - **2026-11-24** `measure_phi_noise/get_sampler_phi_noise/plot_sampler_convergence.py` is merged into `measure_phi_noise/phi_noise_analysis.py`: `python phi_noise_analysis.py` (no arguments) now also writes the R-hat convergence plot `sampler_rhat_<noise>uk.png` (`plot_sampler_convergence`) into `phi_noise_plots/noise_level_<noise>uk/`, for the merged multi-chain files listed in `convergence_files` in its `__main__` block.
 - **2026-11-23** The merged `map_joint_phi_noise.npz` and `sampler_phi_noise.npz` store every realization's moments, and `phi_noise_analysis.py` rebuilds each N_phi from them (correlation estimator for `map_joint`, response estimator for the sampler).
 - **2026-11-23** `chain_analysis.py`'s product distribution is the product of one normal distribution per map, with bootstrap Monte Carlo errors.
@@ -67,6 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **2026-11-24** `statistics.primal_power_spectra` no longer divides by zero for multipole bins that hold no modes (the source of the 60 `RuntimeWarning`s of a test run); the returned spectra are unchanged.
 - **2026-10-29** Fourier weight discrepancy in the band calculations of `chain_analysis.py`.
 - **2026-08-26** Lensing `num_steps` bug.
 - **2026-06-29** Mixed phi gradient: the anti-Hermitian content on the two self-conjugate rfft columns is kept by carrying phi in Fourier space through the whole gradient path, bringing the agreement with CMBLensing.jl from 2e-2 to 2e-4.

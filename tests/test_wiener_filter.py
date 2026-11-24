@@ -12,6 +12,7 @@ from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
 from figure_utils import save_figure
+from regression_thresholds import max_allowed
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -22,9 +23,12 @@ with open(GROUND_TRUTH + "theta_pix.txt", "r") as file:
     THETA_PIX = float(file.read().strip())
 PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 
-#threshold values for unit tests
-MAX_NORM_DIFF = 1
-MIN_AVG_CORRELATION = 0
+#norm differences |python - julia| / |julia| measured on 2026-11-24 (the largest over the field's components)
+MEASURED_NORM_DIFF = {
+    "wiener_filter_intensity_only": {"ffpp": 4.2e-6, "ffp0": 1.4e-15, "f0pp": 5.3e-6, "f0p0": 1.1e-15},
+    "wiener_filter_polarization_only": {"ffpp": 9.8e-6, "ffp0": 1.2e-14, "f0pp": 9.8e-6, "f0p0": 1.1e-15},
+    "wiener_filter_intensity_and_polarization": {"ffpp": 9.1e-6, "ffp0": 1.2e-14, "f0pp": 9.5e-6, "f0p0": 1.7e-15},
+}
 
 def test_wiener_filter_intensity_only():
 
@@ -225,10 +229,10 @@ def test_wiener_filter_intensity_only():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(wf_ffpp_ground, wf_ffpp_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_ffp0_ground, wf_ffp0_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(wf_ffpp_ground, wf_ffpp_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_intensity_only"]["ffpp"])
+    assert jnp.max(percent_diff_2d(wf_ffp0_ground, wf_ffp0_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_intensity_only"]["ffp0"])
+    assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_intensity_only"]["f0pp"])
+    assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_intensity_only"]["f0p0"])
 
 
 def test_wiener_filter_polarization_only():
@@ -562,10 +566,10 @@ def test_wiener_filter_polarization_only():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(wf_ffpp_ground, wf_ffpp_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_ffp0_ground, wf_ffp0_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(wf_ffpp_ground, wf_ffpp_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_polarization_only"]["ffpp"])
+    assert jnp.max(percent_diff_2d(wf_ffp0_ground, wf_ffp0_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_polarization_only"]["ffp0"])
+    assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_polarization_only"]["f0pp"])
+    assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_polarization_only"]["f0p0"])
 
 def test_wiener_filter_intensity_and_polarization():
 
@@ -1022,7 +1026,7 @@ def test_wiener_filter_intensity_and_polarization():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(wf_ffpp_ground, wf_ffpp_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_ffp0_ground, wf_ffp0_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= MAX_NORM_DIFF
-    assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(wf_ffpp_ground, wf_ffpp_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_intensity_and_polarization"]["ffpp"])
+    assert jnp.max(percent_diff_2d(wf_ffp0_ground, wf_ffp0_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_intensity_and_polarization"]["ffp0"])
+    assert jnp.max(percent_diff_2d(wf_f0pp_ground, wf_f0pp_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_intensity_and_polarization"]["f0pp"])
+    assert jnp.max(percent_diff_2d(wf_f0p0_ground, wf_f0p0_predict)) <= max_allowed(MEASURED_NORM_DIFF["wiener_filter_intensity_and_polarization"]["f0p0"])

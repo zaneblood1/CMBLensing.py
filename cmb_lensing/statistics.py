@@ -75,14 +75,11 @@ def primal_power_spectra(field_1, theta_pix, field_2 = None, delta_l = 50, lmax 
 
     cl, _ = np.histogram(ell_grid_masked, bins = l_edges, weights = weights * cl_obs)
     ell, _ = np.histogram(ell_grid_masked, bins = l_edges, weights = weights * ell_grid_masked)
-    cl_normalized = cl / normalization
-    ell_normalized = ell / normalization
 
-    #now we need to filter off the NaNs
-    cl_nan_mask = jnp.where(jnp.isnan(cl_normalized), False, True)
-    ell_nan_mask = jnp.where(jnp.isnan(cl_normalized), False, True)
-    cl_normalized = cl_normalized[cl_nan_mask]
-    ell_normalized = ell_normalized[ell_nan_mask]
+    #keep only the bins that hold at least one mode (an empty bin would be 0 / 0)
+    has_modes = normalization > 0
+    cl_normalized = cl[has_modes] / normalization[has_modes]
+    ell_normalized = ell[has_modes] / normalization[has_modes]
 
     return ell_normalized, cl_normalized
 

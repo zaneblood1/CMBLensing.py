@@ -11,6 +11,7 @@ from cmb_lensing.gradients import *
 from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
+from regression_thresholds import max_allowed
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -21,8 +22,15 @@ with open(GROUND_TRUTH + "theta_pix.txt", "r") as file:
     THETA_PIX = float(file.read().strip())
 PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 
-#threshold values for unit tests
-MAX_DIFF = 1
+#fractional differences |logpdf_python - logpdf_julia| / |logpdf_julia| measured on 2026-11-24
+MEASURED_FRACTIONAL_DIFF = {
+    "I": 2.6e-9,
+    "P": 7.2e-9,
+    "IP": 2.6e-8,
+}
+
+def fractional_diff(ground, predict):
+    return abs(predict - ground) / abs(ground)
 
 def test_logpdf_intensity_only():
 
@@ -50,7 +58,7 @@ def test_logpdf_intensity_only():
                               field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_I.txt", "r") as file:
         logpdf_t_ground = float(file.read().strip())
-    assert abs(logpdf_t_predict - logpdf_t_ground) < MAX_DIFF
+    assert fractional_diff(logpdf_t_ground, logpdf_t_predict) <= max_allowed(MEASURED_FRACTIONAL_DIFF["I"])
 
 def test_logpdf_polarization_only():
     #load ground truth unlensed polarization fields, data fields, and phi field
@@ -101,7 +109,7 @@ def test_logpdf_polarization_only():
                               field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_P.txt", "r") as file:
         logpdf_eb_ground = float(file.read().strip())
-    assert abs(logpdf_eb_predict - logpdf_eb_ground) < MAX_DIFF
+    assert fractional_diff(logpdf_eb_ground, logpdf_eb_predict) <= max_allowed(MEASURED_FRACTIONAL_DIFF["P"])
 
 def test_logpdf_intensity_and_polarization():
     #load ground truth unlensed intensity and polarization fields, data fields, and phi field
@@ -176,4 +184,4 @@ def test_logpdf_intensity_and_polarization():
                                 field_covariance, mask, beam)
     with open(GROUND_TRUTH + "logpdf_IP.txt", "r") as file:
         logpdf_teb_ground = float(file.read().strip())
-    assert abs(logpdf_teb_predict - logpdf_teb_ground) < MAX_DIFF
+    assert fractional_diff(logpdf_teb_ground, logpdf_teb_predict) <= max_allowed(MEASURED_FRACTIONAL_DIFF["IP"])

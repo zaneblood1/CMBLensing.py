@@ -12,6 +12,7 @@ from cmb_lensing.wiener_filter import *
 from cmb_lensing.map_joint import *
 from cmb_lensing.simulate import *
 from figure_utils import save_figure
+from regression_thresholds import max_allowed
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -22,10 +23,12 @@ with open(GROUND_TRUTH + "theta_pix.txt", "r") as file:
     THETA_PIX = float(file.read().strip())
 PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 
-#threshold values for unit tests
-MAX_NORM_DIFF = 1
-MIN_AVG_CORRELATION = 0
-
+#norm differences |python - julia| / |julia| measured on 2026-11-24 (the largest over the field's components)
+MEASURED_NORM_DIFF = {
+    "map_joint_intensity_only": {"field": 3.8e-3, "phi": 4.2e-2},
+    "map_joint_polarization_only": {"field": 2.1e-4, "phi": 7.8e-5},
+    "map_joint_intensity_and_polarization": {"field": 1.4e-3, "phi": 4.7e-3},
+}
 
 def test_map_joint_intensity_only():
 
@@ -167,7 +170,8 @@ def test_map_joint_intensity_only():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= max_allowed(MEASURED_NORM_DIFF["map_joint_intensity_only"]["field"])
+    assert jnp.max(percent_diff_2d(julia_phi_predict, python_phi_predict)) <= max_allowed(MEASURED_NORM_DIFF["map_joint_intensity_only"]["phi"])
 
 def test_map_joint_polarization_only():
 
@@ -380,7 +384,8 @@ def test_map_joint_polarization_only():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= max_allowed(MEASURED_NORM_DIFF["map_joint_polarization_only"]["field"])
+    assert jnp.max(percent_diff_2d(julia_phi_predict, python_phi_predict)) <= max_allowed(MEASURED_NORM_DIFF["map_joint_polarization_only"]["phi"])
 
 def test_map_joint_intensity_and_polarization():
 
@@ -664,5 +669,6 @@ def test_map_joint_intensity_and_polarization():
     plt.close()
 
     #compare percent difference between prediction and ground truth
-    assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= MAX_NORM_DIFF
+    assert jnp.max(percent_diff_2d(julia_field_predict, python_field_predict)) <= max_allowed(MEASURED_NORM_DIFF["map_joint_intensity_and_polarization"]["field"])
+    assert jnp.max(percent_diff_2d(julia_phi_predict, python_phi_predict)) <= max_allowed(MEASURED_NORM_DIFF["map_joint_intensity_and_polarization"]["phi"])
 

@@ -14,6 +14,7 @@ from cmb_lensing.simulate import *
 import matplotlib
 matplotlib.use("Agg")
 from figure_utils import save_figure
+from regression_thresholds import max_allowed
 
 #constants relating to the ground truth data
 GROUND_TRUTH = os.getcwd() + "/tests/ground_truth_data/"
@@ -24,9 +25,36 @@ with open(GROUND_TRUTH + "theta_pix.txt", "r") as file:
     THETA_PIX = float(file.read().strip())
 PIX_WIDTH = float(jnp.deg2rad(THETA_PIX / ARCMIN_PER_DEGREE))
 
-#threshold values for unit tests
-MAX_NORM_DIFF = 1
-MIN_AVG_CORRELATION = 0
+#norm differences |python - julia| / |julia| measured on 2026-11-24 (the largest over the field's components)
+MEASURED_NORM_DIFF = {
+    "forward_lensing_intensity_only": 2.9e-6,
+    "inverse_lensing_intensity_only": 3.2e-6,
+    "adjoint_lensing_intensity_only": 2.5e-5,
+    "inverse_adjoint_lensing_intensity_only": 2.9e-5,
+    "forward_lensing_polarization_only": 2.0e-5,
+    "inverse_lensing_polarization_only": 2.2e-5,
+    "adjoint_lensing_polarization_only": 5.0e-5,
+    "inverse_adjoint_lensing_polarization_only": 5.8e-5,
+    "forward_lensing_intensity_and_polarization": 9.9e-6,
+    "inverse_lensing_intensity_and_polarization": 1.1e-5,
+    "adjoint_lensing_intensity_and_polarization": 2.7e-5,
+    "inverse_adjoint_lensing_intensity_and_polarization": 3.0e-5,
+}
+#1 - (cross correlation between python and julia, averaged over the ell bins) measured on 2026-11-24
+MEASURED_DECORRELATION = {
+    "forward_lensing_intensity_only": {"t": 2.4e-8},
+    "inverse_lensing_intensity_only": {"t": 6.0e-7},
+    "adjoint_lensing_intensity_only": {"t": 7.1e-8},
+    "inverse_adjoint_lensing_intensity_only": {"t": 1.8e-4},
+    "forward_lensing_polarization_only": {"e": 6.1e-8, "b": 1.4e-8},
+    "inverse_lensing_polarization_only": {"e": 9.7e-7, "b": 3.0e-4},
+    "adjoint_lensing_polarization_only": {"e": 1.7e-7, "b": 2.1e-7},
+    "inverse_adjoint_lensing_polarization_only": {"e": 8.0e-5, "b": 8.8e-2},
+    "forward_lensing_intensity_and_polarization": {"t": 1.7e-8, "e": 2.1e-8, "b": 6.6e-9},
+    "inverse_lensing_intensity_and_polarization": {"t": 2.6e-7, "e": 3.6e-7, "b": 1.3e-4},
+    "adjoint_lensing_intensity_and_polarization": {"t": 6.2e-8, "e": 6.3e-8, "b": 5.8e-8},
+    "inverse_adjoint_lensing_intensity_and_polarization": {"t": 1.7e-4, "e": 1.9e-5, "b": 3.1e-2},
+}
 
 def test_forward_lensing_intensity_only():
 
@@ -91,11 +119,11 @@ def test_forward_lensing_intensity_only():
 
     #compare percent difference between prediction and ground truth
     lensed_t_perc_diff = percent_diff_2d(lensed_t_ground, lensed_t_predict)
-    assert lensed_t_perc_diff <= MAX_NORM_DIFF
+    assert lensed_t_perc_diff <= max_allowed(MEASURED_NORM_DIFF["forward_lensing_intensity_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_lt = jnp.mean(lt_cross_lt)
-    assert avg_correlation_lt > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_lt <= max_allowed(MEASURED_DECORRELATION["forward_lensing_intensity_only"]["t"])
 
 def test_inverse_lensing_intensity_only():
     #load ground truth unlensed intensity field and phi field
@@ -157,11 +185,11 @@ def test_inverse_lensing_intensity_only():
 
     #compare percent difference between prediction and ground truth
     unlensed_t_perc_diff = percent_diff_2d(unlensed_t_ground, unlensed_t_predict)
-    assert unlensed_t_perc_diff <= MAX_NORM_DIFF
+    assert unlensed_t_perc_diff <= max_allowed(MEASURED_NORM_DIFF["inverse_lensing_intensity_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_t = jnp.mean(t_cross_t)
-    assert avg_correlation_t > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_t <= max_allowed(MEASURED_DECORRELATION["inverse_lensing_intensity_only"]["t"])
 
 def test_adjoint_lensing_intensity_only():
     #load ground truth unlensed intensity field and phi field
@@ -223,11 +251,11 @@ def test_adjoint_lensing_intensity_only():
 
     #compare percent difference between prediction and ground truth
     adjoint_lensed_t_perc_diff = percent_diff_2d(adjoint_lensed_t_ground, adjoint_lensed_t_predict)
-    assert adjoint_lensed_t_perc_diff <= MAX_NORM_DIFF
+    assert adjoint_lensed_t_perc_diff <= max_allowed(MEASURED_NORM_DIFF["adjoint_lensing_intensity_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_alt = jnp.mean(alt_cross_alt)
-    assert avg_correlation_alt > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_alt <= max_allowed(MEASURED_DECORRELATION["adjoint_lensing_intensity_only"]["t"])
 
 def test_inverse_adjoint_lensing_intensity_only():
     #load ground truth unlensed intensity field and phi field
@@ -289,7 +317,11 @@ def test_inverse_adjoint_lensing_intensity_only():
 
     #compare percent difference between prediction and ground truth
     unlensed_t_perc_diff = percent_diff_2d(unlensed_t_ground, unlensed_t_predict)
-    assert unlensed_t_perc_diff <= MAX_NORM_DIFF
+    assert unlensed_t_perc_diff <= max_allowed(MEASURED_NORM_DIFF["inverse_adjoint_lensing_intensity_only"])
+
+    #also assert that the average cross correlation is greater than our threshold
+    avg_correlation_t = jnp.mean(t_cross_t)
+    assert 1 - avg_correlation_t <= max_allowed(MEASURED_DECORRELATION["inverse_adjoint_lensing_intensity_only"]["t"])
 
 def test_forward_lensing_polarization_only():
 
@@ -385,13 +417,13 @@ def test_forward_lensing_polarization_only():
 
     #compare percent difference between prediction and ground truth
     lensed_perc_diff = jnp.max(percent_diff_2d(lensed_qu_ground, lensed_qu_predict))
-    assert lensed_perc_diff <= MAX_NORM_DIFF
+    assert lensed_perc_diff <= max_allowed(MEASURED_NORM_DIFF["forward_lensing_polarization_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_le = jnp.mean(le_cross_le)
-    assert avg_correlation_le > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_le <= max_allowed(MEASURED_DECORRELATION["forward_lensing_polarization_only"]["e"])
     avg_correlation_lb = jnp.mean(lb_cross_lb)
-    assert avg_correlation_lb > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_lb <= max_allowed(MEASURED_DECORRELATION["forward_lensing_polarization_only"]["b"])
 
 def test_inverse_lensing_polarization_only():
     #load ground truth unlensed polarization fields and phi field
@@ -485,13 +517,13 @@ def test_inverse_lensing_polarization_only():
 
     #compare percent difference between prediction and ground truth
     unlensed_perc_diff = jnp.max(percent_diff_2d(unlensed_qu_ground, unlensed_qu_predict))
-    assert unlensed_perc_diff <= MAX_NORM_DIFF
+    assert unlensed_perc_diff <= max_allowed(MEASURED_NORM_DIFF["inverse_lensing_polarization_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_e = jnp.mean(e_cross_e)
-    assert avg_correlation_e > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_e <= max_allowed(MEASURED_DECORRELATION["inverse_lensing_polarization_only"]["e"])
     avg_correlation_b = jnp.mean(b_cross_b)
-    assert avg_correlation_b > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_b <= max_allowed(MEASURED_DECORRELATION["inverse_lensing_polarization_only"]["b"])
 
 def test_adjoint_lensing_polarization_only():
     #load ground truth unlensed polarization fields and phi field
@@ -585,13 +617,13 @@ def test_adjoint_lensing_polarization_only():
 
     #compare percent difference between prediction and ground truth
     adjoint_lensed_perc_diff = jnp.max(percent_diff_2d(adjoint_lensed_qu_ground, adjoint_lensed_qu_predict))
-    assert adjoint_lensed_perc_diff <= MAX_NORM_DIFF
+    assert adjoint_lensed_perc_diff <= max_allowed(MEASURED_NORM_DIFF["adjoint_lensing_polarization_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_ale = jnp.mean(ale_cross_ale)
-    assert avg_correlation_ale > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_ale <= max_allowed(MEASURED_DECORRELATION["adjoint_lensing_polarization_only"]["e"])
     avg_correlation_alb = jnp.mean(alb_cross_alb)
-    assert avg_correlation_alb > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_alb <= max_allowed(MEASURED_DECORRELATION["adjoint_lensing_polarization_only"]["b"])
 
 def test_inverse_adjoint_lensing_polarization_only():
     #load ground truth unlensed polarization fields and phi field
@@ -685,13 +717,13 @@ def test_inverse_adjoint_lensing_polarization_only():
 
     #compare percent difference between prediction and ground truth
     unlensed_perc_diff = jnp.max(percent_diff_2d(unlensed_qu_ground, unlensed_qu_predict))
-    assert unlensed_perc_diff <= MAX_NORM_DIFF
+    assert unlensed_perc_diff <= max_allowed(MEASURED_NORM_DIFF["inverse_adjoint_lensing_polarization_only"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_e = jnp.mean(e_cross_e)
-    assert avg_correlation_e > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_e <= max_allowed(MEASURED_DECORRELATION["inverse_adjoint_lensing_polarization_only"]["e"])
     avg_correlation_b = jnp.mean(b_cross_b)
-    assert avg_correlation_b > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_b <= max_allowed(MEASURED_DECORRELATION["inverse_adjoint_lensing_polarization_only"]["b"])
 
 def test_forward_lensing_intensity_and_polarization():
 
@@ -814,15 +846,15 @@ def test_forward_lensing_intensity_and_polarization():
 
     #compare percent difference between prediction and ground truth
     lensed_tqu_perc_diff = jnp.max(percent_diff_2d(lensed_tqu_ground, lensed_tqu_predict))
-    assert lensed_tqu_perc_diff <= MAX_NORM_DIFF
+    assert lensed_tqu_perc_diff <= max_allowed(MEASURED_NORM_DIFF["forward_lensing_intensity_and_polarization"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_lt = jnp.mean(lt_cross_lt)
-    assert avg_correlation_lt > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_lt <= max_allowed(MEASURED_DECORRELATION["forward_lensing_intensity_and_polarization"]["t"])
     avg_correlation_le = jnp.mean(le_cross_le)
-    assert avg_correlation_le > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_le <= max_allowed(MEASURED_DECORRELATION["forward_lensing_intensity_and_polarization"]["e"])
     avg_correlation_lb = jnp.mean(lb_cross_lb)
-    assert avg_correlation_lb > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_lb <= max_allowed(MEASURED_DECORRELATION["forward_lensing_intensity_and_polarization"]["b"])
 
 def test_inverse_lensing_intensity_and_polarization():
     #load ground truth unlensed intensity and polarization fields and phi field
@@ -943,15 +975,15 @@ def test_inverse_lensing_intensity_and_polarization():
 
     #compare percent difference between prediction and ground truth
     unlensed_tqu_perc_diff = jnp.max(percent_diff_2d(unlensed_tqu_ground, unlensed_tqu_predict))
-    assert unlensed_tqu_perc_diff <= MAX_NORM_DIFF
+    assert unlensed_tqu_perc_diff <= max_allowed(MEASURED_NORM_DIFF["inverse_lensing_intensity_and_polarization"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_t = jnp.mean(t_cross_t)
-    assert avg_correlation_t > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_t <= max_allowed(MEASURED_DECORRELATION["inverse_lensing_intensity_and_polarization"]["t"])
     avg_correlation_e = jnp.mean(e_cross_e)
-    assert avg_correlation_e > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_e <= max_allowed(MEASURED_DECORRELATION["inverse_lensing_intensity_and_polarization"]["e"])
     avg_correlation_b = jnp.mean(b_cross_b)
-    assert avg_correlation_b > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_b <= max_allowed(MEASURED_DECORRELATION["inverse_lensing_intensity_and_polarization"]["b"])
 
 def test_adjoint_lensing_intensity_and_polarization():
     #load ground truth unlensed intensity and polarization fields and phi field
@@ -1072,15 +1104,15 @@ def test_adjoint_lensing_intensity_and_polarization():
 
     #compare percent difference between prediction and ground truth
     adjoint_lensed_tqu_perc_diff = jnp.max(percent_diff_2d(adjoint_lensed_tqu_ground, adjoint_lensed_tqu_predict))
-    assert adjoint_lensed_tqu_perc_diff <= MAX_NORM_DIFF
+    assert adjoint_lensed_tqu_perc_diff <= max_allowed(MEASURED_NORM_DIFF["adjoint_lensing_intensity_and_polarization"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_alt = jnp.mean(alt_cross_alt)
-    assert avg_correlation_alt > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_alt <= max_allowed(MEASURED_DECORRELATION["adjoint_lensing_intensity_and_polarization"]["t"])
     avg_correlation_ale = jnp.mean(ale_cross_ale)
-    assert avg_correlation_ale > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_ale <= max_allowed(MEASURED_DECORRELATION["adjoint_lensing_intensity_and_polarization"]["e"])
     avg_correlation_alb = jnp.mean(alb_cross_alb)
-    assert avg_correlation_alb > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_alb <= max_allowed(MEASURED_DECORRELATION["adjoint_lensing_intensity_and_polarization"]["b"])
 
 def test_inverse_adjoint_lensing_intensity_and_polarization():
     #load ground truth unlensed intensity and polarization fields and phi field
@@ -1201,12 +1233,12 @@ def test_inverse_adjoint_lensing_intensity_and_polarization():
 
     #compare percent difference between prediction and ground truth
     unlensed_tqu_perc_diff = jnp.max(percent_diff_2d(unlensed_tqu_ground, unlensed_tqu_predict))
-    assert unlensed_tqu_perc_diff <= MAX_NORM_DIFF
+    assert unlensed_tqu_perc_diff <= max_allowed(MEASURED_NORM_DIFF["inverse_adjoint_lensing_intensity_and_polarization"])
 
     #also assert that the average cross correlation is greater than our threshold
     avg_correlation_t = jnp.mean(t_cross_t)
-    assert avg_correlation_t > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_t <= max_allowed(MEASURED_DECORRELATION["inverse_adjoint_lensing_intensity_and_polarization"]["t"])
     avg_correlation_e = jnp.mean(e_cross_e)
-    assert avg_correlation_e > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_e <= max_allowed(MEASURED_DECORRELATION["inverse_adjoint_lensing_intensity_and_polarization"]["e"])
     avg_correlation_b = jnp.mean(b_cross_b)
-    assert avg_correlation_b > MIN_AVG_CORRELATION
+    assert 1 - avg_correlation_b <= max_allowed(MEASURED_DECORRELATION["inverse_adjoint_lensing_intensity_and_polarization"]["b"])
