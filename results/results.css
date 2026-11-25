@@ -1,0 +1,322 @@
+:root {
+  /*white, like the background of the figures, so they blend into the page*/
+  --page: #ffffff;
+  --surface: #f6f7fa;
+  --border: #d9dce6;
+  --text: #1c1f2b;
+  --muted: #626878;
+  --accent: #3f51b5;
+  --accent-text: #ffffff;
+  /*the widest a figure is drawn*/
+  --figure-width: 80rem;
+  --toggles-width: 17rem;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  background: var(--page);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1.5rem 1.5rem 1rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--accent);
+}
+
+.docs-link {
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.docs-link:hover {
+  text-decoration: underline;
+}
+
+.layout {
+  display: flex;
+  align-items: flex-start;
+  border-top: 1px solid var(--border);
+}
+
+/*every toggle sits in one column on the left and stays in view while the figures scroll*/
+#toggles {
+  position: sticky;
+  top: 0;
+  flex: 0 0 var(--toggles-width);
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: 1.5rem 1rem 1.5rem 1.5rem;
+}
+
+.toggle-group + .toggle-group {
+  margin-top: 1.5rem;
+}
+
+.toggle-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.option {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.option:hover {
+  border-color: var(--accent);
+}
+
+.option.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+button:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*the section shown is one centred column: heading, summary, then the figures in order*/
+#sections {
+  flex: 1;
+  min-width: 0;
+  padding: 0 1.5rem 4rem;
+}
+
+.section {
+  max-width: var(--figure-width);
+  margin: 0 auto;
+  padding-top: 2.5rem;
+  text-align: center;
+}
+
+h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.35rem;
+  font-weight: 650;
+}
+
+h3 {
+  margin: 2.5rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.note {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/*max-width is set per figure by results.js (FIGURE_RULES), never wider than its own pixels*/
+.figure {
+  margin: 1.5rem auto 0;
+  width: fit-content;
+  max-width: 100%;
+}
+
+/*a collapsible group of figures (the LCDM sampler's joint information and parameters)*/
+.group {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+/*collapsed sections stack as a tight list*/
+.group + .group {
+  margin-top: 0;
+}
+
+.group[open] {
+  padding-bottom: 2rem;
+}
+
+.group:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.group > summary {
+  padding: 0.7rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.group > summary:hover {
+  color: var(--accent);
+}
+
+/*figures sharing a row, e.g. a parameter's autocorrelation and its IATs*/
+.figure-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.figure-row .figure {
+  flex: 1 1 20rem;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/*a data set's summary.md*/
+.summary {
+  margin: 1.25rem auto 0;
+  max-width: 46rem;
+  padding: 0.25rem 1.25rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.92rem;
+}
+
+.summary h1,
+.summary h2,
+.summary h3 {
+  margin: 1rem 0 0.4rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.summary p,
+.summary ul,
+.summary ol {
+  margin: 0.5rem 0;
+}
+
+.summary ul,
+.summary ol {
+  padding-left: 1.25rem;
+}
+
+.summary table {
+  width: 100%;
+  margin: 0.6rem 0;
+  border-collapse: collapse;
+}
+
+.summary th,
+.summary td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.summary th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.summary code {
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.figure button {
+  appearance: none;
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
+.figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#lightbox {
+  max-width: 96vw;
+  max-height: 96vh;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1c1f2b;
+}
+
+#lightbox::backdrop {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+#lightbox img {
+  display: block;
+  max-width: 96vw;
+  max-height: 96vh;
+  cursor: zoom-out;
+}
+
+/*too narrow for a side column: the toggles go above the figures*/
+@media (max-width: 56rem) {
+  .layout {
+    display: block;
+  }
+
+  #toggles {
+    position: static;
+    max-height: none;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .page-header,
+  #sections {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
