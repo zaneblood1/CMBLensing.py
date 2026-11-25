@@ -134,7 +134,8 @@ for ((a=0; a<log_a_nodes; a++)); do
             ombh2=$(node_value "$ombh2_min" "$ombh2_max" "$ombh2_nodes" "$c")
             for ((d=0; d<omch2_nodes; d++)); do
                 omch2=$(node_value "$omch2_min" "$omch2_max" "$omch2_nodes" "$d")
-                submit_throttled run_single_camb_grid.sh "$a" "$log_a" "$b" "$ns" "$c" "$ombh2" "$d" "$omch2" "${args[@]}"
+                #a rerun of the driver skips the jobs with a marker in $out_dir/submitted/
+                submit_once "$out_dir/submitted/${a}_${b}_${c}_${d}" run_single_camb_grid.sh "$a" "$log_a" "$b" "$ns" "$c" "$ombh2" "$d" "$omch2" "${args[@]}"
             done
         done
     done

@@ -30,6 +30,8 @@ By default the pipeline simulates 100 temperature maps of 128 x 128 pixels at 2.
 nohup bash measure_phi_noise/get_sampler_phi_noise/get_sampler_phi_noise.sh > submit.log 2>&1 &
 ```
 
+If the driver is interrupted before its last job is submitted (for example by a reboot of the login node), run the same command again with the same flags: chains already submitted are skipped, as for every driver (see the [submission throttle](../getting-started/installation.md#submission-throttle)).
+
 **Step 2.** Merge the chains, giving the number of iterations to remove from the start of each chain as burn-in. The merge is itself a Slurm job, submitted from the driver's folder. It can be run while chains are still going: it uses the iterations finished so far.
 
 ```bash

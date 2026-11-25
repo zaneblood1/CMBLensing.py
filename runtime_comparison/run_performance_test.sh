@@ -72,7 +72,9 @@ for pol_key in $pol_keys; do
                 #spawn a slurm job from a helper script that takes in (seed_id, map_size, trial_id, pol_key)
                 #and make sure this file writes to the proper folders... Do this for both julia and python
                 for job_script in julia_performance_test.sh python_performance_test.sh; do
-                    submit_throttled --time=${wall_hours}:00:00 $job_script $map_size $seed $trial $pol_key \
+                    #a rerun of the driver skips the jobs with a marker in $out_dir/submitted/
+                    submit_once "$out_dir/submitted/${job_script%.sh}_${pol_key}_${map_size}_${seed}_${trial}" \
+                        --time=${wall_hours}:00:00 $job_script $map_size $seed $trial $pol_key \
                         $theta_pix $noise_level "$out_dir"
                 done
             done

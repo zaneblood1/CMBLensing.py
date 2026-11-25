@@ -60,8 +60,10 @@ seed_prefix=$seed_prefix
 out_dir_name=$out_dir_name
 EOF
 
+#the driver can be rerun with the same arguments after an interruption: a job with a marker in
+#$out_dir/submitted/ is skipped (delete the marker to have it submitted again)
 for ((m=0; m<num_realizations; m++)); do
     map_seed=$((seed_prefix + m))
-    submit_throttled get_map_joint_phi_noise_1_realization.sh "$m" "$map_seed" "$nside" "$theta_pix" \
+    submit_once "$out_dir/submitted/$m" get_map_joint_phi_noise_1_realization.sh "$m" "$map_seed" "$nside" "$theta_pix" \
         "$noise_level" "$l_knee" "$map_joint_steps" "$out_dir" "$pol"
 done

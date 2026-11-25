@@ -121,8 +121,10 @@ args=(
 )
 
 #audit trail: the submission date and every setting, rewritten on every run; each chain's
-#random starting point is added below as it is submitted
+#random starting point is added below as it is submitted. The starting points of the chains
+#an earlier run of the driver submitted are carried over
 audit="$out_dir/submission_settings.txt"
+earlier_starting_points=$(sed '1,/^chain starting points/d' "$audit" 2> /dev/null)
 cat > "$audit" <<EOF
 submitted $(date "+%Y-%m-%d %H:%M:%S %Z") by $USER on $(hostname)
 nside=$nside
@@ -166,6 +168,9 @@ out_dir_name=$out_dir_name
 
 chain starting points (map_seed chain ombh2 omch2 theta_MC_100 logA ns):
 EOF
+if [ -n "$earlier_starting_points" ]; then
+    echo "$earlier_starting_points" >> "$audit"
+fi
 
 #draw a uniform random value in [min, max] using bash's $RANDOM (0..32767)
 rand_uniform() {
@@ -186,6 +191,13 @@ start_value() {
 for ((map=1; map<=num_maps; map++)); do
     map_seed=$(echo "$map_prefix * $map" | bc -l)
     for ((chain=1; chain<=num_chains; chain++)); do
+        #the driver can be rerun with the same arguments after an interruption: a chain with a
+        #marker is skipped before its starting point is drawn (delete the marker to have it
+        #submitted again)
+        marker="$out_dir/submitted/map_${map_seed}_chain_${chain}"
+        if [ -e "$marker" ]; then
+            continue
+        fi
         ombh2_init=$(start_value "$sample_ombh2" "$ombh2_min" "$ombh2_max" "$ombh2_ground")
         omch2_init=$(start_value "$sample_omch2" "$omch2_min" "$omch2_max" "$omch2_ground")
         theta_MC_100_init=$(start_value "$sample_theta_MC_100" "$theta_MC_100_min" "$theta_MC_100_max" "$theta_MC_100_ground")
@@ -193,7 +205,7 @@ for ((map=1; map<=num_maps; map++)); do
         ns_init=$(start_value "$sample_ns" "$ns_min" "$ns_max" "$ns_ground")
         echo "$map_seed $chain $ombh2_init $omch2_init $theta_MC_100_init $log_a_init $ns_init" >> "$audit"
         #random initializations for each parameter for each (map, phi) combination
-        submit_throttled run_single_lcdm_chain.sh "$map_seed" \
+        submit_once "$marker" run_single_lcdm_chain.sh "$map_seed" \
         "$chain" "$ombh2_init" "$omch2_init" "$theta_MC_100_init" \
         "$log_a_init" "$ns_init" "${args[@]}"
     done

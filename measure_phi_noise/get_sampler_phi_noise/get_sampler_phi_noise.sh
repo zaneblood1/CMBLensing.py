@@ -96,11 +96,15 @@ EOF
 #chain_seeds as an array; ${seeds[chain]} is empty past its end, i.e. a random seed
 read -r -a seeds <<< "$chain_seeds"
 
-#one job per (map seed, chain); the merge groups a map's chains by its map seed
+#one job per (map seed, chain); the merge groups a map's chains by its map seed.
+#The driver can be rerun with the same arguments after an interruption: a chain with a marker
+#in $out_dir/submitted/ is skipped. That includes a chain that timed out or failed (a second
+#job would overwrite its flushed sweeps); delete its marker to have it submitted again
 for ((m=0; m<num_maps; m++)); do
     map_seed=$((seed_prefix + m))
     for ((chain=0; chain<num_chains; chain++)); do
-        submit_throttled --time="$chain_time" --mem-per-cpu="$chain_mem" \
+        submit_once "$out_dir/submitted/${m}_c${chain}" \
+            --time="$chain_time" --mem-per-cpu="$chain_mem" \
             get_sampler_phi_noise_1_chain.sh "$m" "$map_seed" "$nside" "$theta_pix" \
             "$noise_level" "$l_knee" "$num_sweeps" "$out_dir" "$hmc_step_size" \
             "$hmc_num_steps" "$chain" "$pol" "${seeds[chain]}"

@@ -29,5 +29,43 @@ export SBATCH_MAIL_USER=you@example.edu
 export MAX_QUEUED_JOBS=89
 export SUBMIT_POLL_SECONDS=600
 
+#Shortcuts for the login shell. To have them at every login, add to ~/.bashrc:
+#    source /path/to/CMBLensing.py/hpc_local.sh
+#
+#run_driver <driver.sh> [--<name>=<value> ...]: start a driver under nohup, so it keeps
+#submitting after you log out. Its output goes to submit_<out_dir_name>.log in the driver's
+#folder (submit_<driver name>.log without an --out_dir_name). After a login node reboot, give
+#the same command again: the jobs already submitted are skipped (hpc_submit.sh's submit_once)
+#    run_driver get_lcdm_samples/sample_lcdm.sh --noise_level=5 --out_dir_name=lcdm_5uk
+run_driver() {
+    local driver="$1"
+    shift
+    local run_name
+    run_name=$(basename "$driver" .sh)
+    local argument
+    for argument in "$@"; do
+        if [[ "$argument" == --out_dir_name=* ]]; then
+            run_name="${argument#--out_dir_name=}"
+        fi
+    done
+    local log
+    log="$(dirname "$driver")/submit_$run_name.log"
+    nohup bash "$driver" "$@" > "$log" 2>&1 < /dev/null &
+    echo "driver started (process $!); follow it with: tail -f $log"
+}
+
+#kill_driver <text>: stop every running driver of yours whose command line holds the text (a
+#driver's file name stops all its runs, an out_dir_name stops that run). Without an argument
+#it only lists the running drivers. The jobs already submitted are NOT cancelled (scancel)
+#    kill_driver lcdm_5uk
+kill_driver() {
+    if [ -z "$1" ]; then
+        pgrep -u "$USER" -af "^bash .*\.sh"
+        return
+    fi
+    #list what is about to be stopped, then stop it
+    pgrep -u "$USER" -af "^bash .*$1" && pkill -u "$USER" -f "^bash .*$1"
+}
+
 #the CMBLensing.jl checkout, used only by runtime_comparison/
 export CMBLENSING_JL_PATH=/path/to/CMBLensing.jl

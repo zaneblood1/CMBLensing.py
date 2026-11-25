@@ -87,9 +87,12 @@ EOF
 
 #every job uses a distinct seed; load_covariance_directory refuses duplicates, so a loop
 #change that repeats one fails the merge loudly instead of double counting
+#
+#the driver can be rerun with the same arguments after an interruption: a job with a marker in
+#$out_dir/submitted/ is skipped (delete the marker to have it submitted again)
 for ((m=0; m<num_realizations; m++)); do
     map_seed=$((seed_prefix + m))
-    submit_throttled run_single_delensed_field_covariance.sh "$m" "$map_seed" "$nside" "$theta_pix" \
+    submit_once "$out_dir/submitted/$m" run_single_delensed_field_covariance.sh "$m" "$map_seed" "$nside" "$theta_pix" \
         "$noise_level" "$l_knee" "$step_sigma" "$qe_filter" "$pol" "$phi_noise" \
         "$out_dir" \
         $derivative_params

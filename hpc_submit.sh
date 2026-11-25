@@ -10,6 +10,9 @@
 #
 #(nohup ignores the hangup signal sent at logout; output goes to submit.log), or inside a tmux
 #session (detach with Ctrl-b d, reattach later with "tmux attach" on the same login node).
+#Neither survives a reboot of the login node. Every driver submits through submit_once, so it
+#can be rerun with the same arguments after any interruption: it submits only the jobs still
+#missing. hpc_local.example.sh has run_driver / kill_driver shortcuts for the nohup line.
 
 #queued + running jobs allowed at once, kept below the cluster's hard cap
 MAX_QUEUED_JOBS=${MAX_QUEUED_JOBS:-85}
@@ -35,4 +38,19 @@ submit_throttled() {
         echo "sbatch failed; retrying in $SUBMIT_POLL_SECONDS s" >&2
         sleep "$SUBMIT_POLL_SECONDS"
     done
+}
+
+#submit_throttled, unless the job was already submitted by an earlier run of the driver: the
+#first argument is a marker file, created when the job is handed to sbatch. Rerunning a driver
+#that was interrupted then submits only the jobs still missing. Delete a job's marker to have
+#it submitted again
+submit_once() {
+    local marker="$1"
+    shift
+    if [ -e "$marker" ]; then
+        return
+    fi
+    mkdir -p "$(dirname "$marker")"
+    touch "$marker"
+    submit_throttled "$@"
 }

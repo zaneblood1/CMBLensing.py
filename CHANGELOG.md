@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **2026-11-25** `submit_once` in `hpc_submit.sh`: `submit_throttled` behind a per-job marker file, so a driver that was interrupted (a logout without `nohup`, a login node reboot) can be rerun with the same arguments and submits only the jobs still missing. Every driver submits through it, with its markers in `<out_dir>/submitted/`; `sample_lcdm.sh` also carries the earlier chains' starting points over in `submission_settings.txt`.
+- **2026-11-25** `run_driver` and `kill_driver` shell functions in `hpc_local.example.sh`: start a driver under `nohup` with its log in `submit_<out_dir_name>.log`, and stop running drivers by a text in their command line.
 - **2026-11-24** `PROJECT_SUMMARY.md`, a human-readable description of the code base and the repository, and the `/update-docs` skill (`.claude/skills/update-docs/SKILL.md`) that brings the documentation in line with the code.
 - **2026-11-19** Results visualizer on the docs site (`docs/results/`, built from `experimental_results/` by the MkDocs hook `experimental_results/build_results_site.py`). `experimental_results/` now follows the layout `<section>/<dataset>/`.
 - **2026-11-12** All large data (chain directories, delensed field covariances, map_joint and sampler phi noise, runtime comparison results) is stored next to the 5D CAMB grid on the Hugging Face dataset `zaneblood1/cmb_lensing_data`.

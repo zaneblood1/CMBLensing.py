@@ -108,6 +108,20 @@ tail -f submit.log
 
 `nohup` ignores the hangup signal sent at logout, `> submit.log 2>&1` sends output and errors to the file, and `&` runs it in the background. Alternatively run the driver inside `tmux`, detach with `Ctrl-b d`, and reattach later with `tmux attach` (on the same login node).
 
+Neither survives a reboot of the login node. Every driver can be run again with the same flags after such an interruption: it records each job it submits as an empty file in `<output folder>/submitted/` and skips those, so only the missing jobs are submitted. A job that timed out or failed is skipped too; delete its file in `submitted/` to have it submitted again.
+
+`hpc_local.example.sh` also defines two shortcuts for the login shell. Add `source /path/to/CMBLensing.py/hpc_local.sh` to your `~/.bashrc` to have them at every login:
+
+```bash
+#the nohup line above; the output goes to get_lcdm_samples/submit_lcdm_5uk.log
+run_driver get_lcdm_samples/sample_lcdm.sh --noise_level=5 --out_dir_name=lcdm_5uk
+
+kill_driver               #list the running drivers
+kill_driver lcdm_5uk      #stop the drivers whose command line holds this text
+```
+
+`kill_driver` stops the driver only; cancel the jobs it already submitted with `scancel`.
+
 ## Building these docs locally
 
 ```bash
